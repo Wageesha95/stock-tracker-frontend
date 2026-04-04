@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTransactionsByCompany, getDividendsByCompany, getDashboardAll, getCompanies, getMarketDataHistory } from '../api';
-import { Transaction, Dividend, RealizedGainItem, Company, MarketData } from '../types';
+import { Transaction, Dividend, RealizedGainItem, Company, MarketData, PortfolioItem } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
 import ActionMenu from '../components/ActionMenu';
 import { deleteTransaction, deleteDividend, invalidate } from '../api';
@@ -17,6 +17,7 @@ export default function CompanyView() {
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [realizedItems, setRealizedItems] = useState<RealizedGainItem[]>([]);
   const [company, setCompany] = useState<Company | null>(null);
+  const [portfolioItem, setPortfolioItem] = useState<PortfolioItem | null>(null);
   const [marketHistory, setMarketHistory] = useState<MarketData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -32,6 +33,7 @@ export default function CompanyView() {
       setTransactions(txns.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setDividends(divs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setRealizedItems(dash.realizedItems.filter(r => r.companyCode === code));
+      setPortfolioItem(dash.portfolio.find((p: PortfolioItem) => p.companyCode === code) || null);
       setCompany(comps.find(c => c.code === code) || null);
       setMarketHistory(mh);
     });
@@ -146,6 +148,51 @@ export default function CompanyView() {
           )}
         </div>
       </div>
+
+      {portfolioItem && (
+        <div className="stats-grid" style={{ marginBottom: '1.25rem' }}>
+          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}>
+            <h3>Shares Held</h3>
+            <p className="stat-value">{portfolioItem.sharesHeld}</p>
+          </div>
+          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}>
+            <h3>Avg. Buy Price</h3>
+            <p className="stat-value">{fmt(portfolioItem.avgBuyPrice)}</p>
+          </div>
+          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}>
+            <h3>Last Trade</h3>
+            <p className="stat-value">{fmt(portfolioItem.lastTrade)}</p>
+          </div>
+          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}>
+            <h3>Total Invested</h3>
+            <p className="stat-value">{fmt(portfolioItem.totalInvested)}</p>
+          </div>
+          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}>
+            <h3>Current Value</h3>
+            <p className="stat-value">{fmt(portfolioItem.currentValue)}</p>
+          </div>
+          <div className="stat-card" style={{ borderLeftColor: portfolioItem.unrealizedGain >= 0 ? '#38a169' : '#e53e3e' }}>
+            <h3>Unrealized Gain</h3>
+            <p className={`stat-value ${gainClass(portfolioItem.unrealizedGain)}`}>
+              {gainSign(portfolioItem.unrealizedGain)}{fmt(portfolioItem.unrealizedGain)}
+            </p>
+            <small style={{ color: '#718096' }}>{gainSign(portfolioItem.unrealizedGainPercent)}{fmt(portfolioItem.unrealizedGainPercent)}%</small>
+          </div>
+          <div className="stat-card" style={{ borderLeftColor: portfolioItem.unrealizedDayGain >= 0 ? '#38a169' : '#e53e3e' }}>
+            <h3>Day Gain</h3>
+            <p className={`stat-value ${gainClass(portfolioItem.unrealizedDayGain)}`}>
+              {gainSign(portfolioItem.unrealizedDayGain)}{fmt(portfolioItem.unrealizedDayGain)}
+            </p>
+            <small style={{ color: '#718096' }}>{gainSign(portfolioItem.changePercent)}{fmt(portfolioItem.changePercent)}%</small>
+          </div>
+          <div className="stat-card" style={{ borderLeftColor: portfolioItem.realizedGain >= 0 ? '#38a169' : '#e53e3e' }}>
+            <h3>Realized Gain</h3>
+            <p className={`stat-value ${gainClass(portfolioItem.realizedGain)}`}>
+              {gainSign(portfolioItem.realizedGain)}{fmt(portfolioItem.realizedGain)}
+            </p>
+          </div>
+        </div>
+      )}
 
       {(valueChartData.length > 1 || sharesChartData.length > 1) && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
