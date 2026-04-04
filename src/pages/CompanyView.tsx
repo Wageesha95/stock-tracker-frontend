@@ -161,7 +161,7 @@ export default function CompanyView() {
                   <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
                   <Tooltip
                     contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
-                    formatter={(value: number, name: string) => [`LKR ${fmt(value)}`, name === 'invested' ? 'Invested' : 'Portfolio']}
+                    formatter={(value: any, name: any) => [`LKR ${fmt(value)}`, name === 'invested' ? 'Invested' : 'Portfolio']}
                     labelFormatter={l => l}
                   />
                   <Line type="monotone" dataKey="invested" stroke="#3182ce" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
@@ -180,7 +180,7 @@ export default function CompanyView() {
                   <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
                   <Tooltip
                     contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
-                    formatter={(value: number) => [value, 'Shares']}
+                    formatter={(value: any) => [value, 'Shares']}
                     labelFormatter={l => l}
                   />
                   <Line type="monotone" dataKey="shares" stroke="#805ad5" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />

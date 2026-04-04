@@ -303,7 +303,7 @@ export default function Sectors() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number) => `LKR ${fmt(value)}`}
+                    formatter={(value: any) => `LKR ${fmt(value)}`}
                   />
                   <Legend
                     layout="vertical"

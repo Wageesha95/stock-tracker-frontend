@@ -300,7 +300,7 @@ export default function Dashboard() {
                   />
                   <Tooltip
                     contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.85rem' }}
-                    formatter={(value: number) => [`LKR ${fmt(value)}`, 'Cumulative Invested']}
+                    formatter={(value: any) => [`LKR ${fmt(value)}`, 'Cumulative Invested']}
                     labelFormatter={l => `Date: ${l}`}
                   />
                   <Line

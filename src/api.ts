@@ -156,7 +156,7 @@ export const getDashboardAll = () => cached('dashboard-all', () => api.get<{
   opportunityCost: number;
   interestBreakdown: { companyCode: string; companyName: string; date: string; amount: number; days: number; interest: number }[];
   bankInterestRate: number;
-  sectors: { sector: string; companies: { companyCode: string; companyName: string; sharesHeld: number; currentValue: number; totalInvested: number; unrealizedGain: number; unrealizedGainPercent: number }[]; currentValue: number; totalInvested: number; unrealizedGain: number; companyCount: number }[];
+  sectors: { sector: string; companies: { companyCode: string; companyName: string; sharesHeld: number; currentValue: number; totalInvested: number; unrealizedGain: number; unrealizedGainPercent: number; unrealizedDayGain: number; changePercent: number }[]; currentValue: number; totalInvested: number; unrealizedGain: number; unrealizedDayGain: number; companyCount: number }[];
 }>('/dashboard/all').then(res => res.data));
 
 // Watchlists
