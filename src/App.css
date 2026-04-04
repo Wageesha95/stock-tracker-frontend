@@ -1177,13 +1177,21 @@ button:hover {
   }
 
   .portfolio-table {
-    min-width: 600px;
-    font-size: 0.8rem;
+    min-width: unset;
+    font-size: 0.75rem;
   }
 
   .portfolio-table th,
   .portfolio-table td {
-    padding: 0.4rem 0.5rem;
+    padding: 0.35rem 0.4rem;
+  }
+
+  .company-name {
+    display: none;
+  }
+
+  .company-code {
+    font-size: 0.75rem;
   }
 
   .form-card {
