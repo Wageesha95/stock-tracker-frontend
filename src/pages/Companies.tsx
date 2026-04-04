@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCompanies, getIndustryGroups, getMarketData, updateCompany, invalidate } from '../api';
 import { Company, IndustryGroup, MarketData } from '../types';
@@ -11,6 +11,8 @@ export default function Companies() {
   const [industryGroups, setIndustryGroups] = useState<IndustryGroup[]>([]);
   const [groups, setGroups] = useState<Record<string, string>>({});
   const [latestPrice, setLatestPrice] = useState<Record<string, number>>({});
+  const [priceChange, setPriceChange] = useState<Record<string, number>>({});
+  const [changePercent, setChangePercent] = useState<Record<string, number>>({});
   const [ytdChange, setYtdChange] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -31,6 +33,8 @@ export default function Companies() {
         });
 
         const prices: Record<string, number> = {};
+        const changes: Record<string, number> = {};
+        const changePcts: Record<string, number> = {};
         const ytd: Record<string, number> = {};
         const currentYear = new Date().getFullYear().toString();
 
@@ -38,8 +42,9 @@ export default function Companies() {
           const sorted = entries.sort((a, b) => b.tradeDate.localeCompare(a.tradeDate));
           const latest = sorted[0];
           prices[code] = latest.lastTrade;
+          changes[code] = latest.change;
+          changePcts[code] = latest.changePercent;
 
-          // YTD: find earliest entry this year
           const thisYear = sorted.filter(e => e.tradeDate.startsWith(currentYear));
           if (thisYear.length > 0) {
             const earliest = thisYear[thisYear.length - 1];
@@ -49,6 +54,8 @@ export default function Companies() {
           }
         }
         setLatestPrice(prices);
+        setPriceChange(changes);
+        setChangePercent(changePcts);
         setYtdChange(ytd);
       })
       .catch(console.error)
@@ -72,26 +79,32 @@ export default function Companies() {
   const [search, setSearch] = useState('');
   const [cSortKey, setCSortKey] = useState<'code' | 'name' | 'lastTrade' | 'ytd' | 'industry'>('code');
   const [cSortDir, setCSortDir] = useState<'asc' | 'desc'>('asc');
-  const handleCSort = (key: typeof cSortKey) => {
-    if (cSortKey === key) setCSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setCSortKey(key); setCSortDir(key === 'lastTrade' || key === 'ytd' ? 'desc' : 'asc'); }
-  };
+  const handleCSort = useCallback((key: typeof cSortKey) => {
+    setCSortKey(prev => {
+      if (prev === key) { setCSortDir(d => d === 'asc' ? 'desc' : 'asc'); return prev; }
+      setCSortDir(key === 'lastTrade' || key === 'ytd' ? 'desc' : 'asc');
+      return key;
+    });
+  }, []);
   const csi = (key: typeof cSortKey) => cSortKey === key ? (cSortDir === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
 
-  const filtered = companies.filter(c =>
-    search === '' ||
-    c.code.toLowerCase().includes(search.toLowerCase()) ||
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    (c.industryGroupId && groups[c.industryGroupId]?.toLowerCase().includes(search.toLowerCase()))
-  ).sort((a, b) => {
-    let cmp = 0;
-    if (cSortKey === 'code') cmp = a.code.localeCompare(b.code);
-    else if (cSortKey === 'name') cmp = a.name.localeCompare(b.name);
-    else if (cSortKey === 'lastTrade') cmp = (latestPrice[a.code] || 0) - (latestPrice[b.code] || 0);
-    else if (cSortKey === 'ytd') cmp = (ytdChange[a.code] || 0) - (ytdChange[b.code] || 0);
-    else if (cSortKey === 'industry') cmp = (groups[a.industryGroupId || ''] || '').localeCompare(groups[b.industryGroupId || ''] || '');
-    return cSortDir === 'asc' ? cmp : -cmp;
-  });
+  const searchLower = search.toLowerCase();
+  const filtered = useMemo(() => {
+    const list = search === '' ? companies : companies.filter(c =>
+      c.code.toLowerCase().includes(searchLower) ||
+      c.name.toLowerCase().includes(searchLower) ||
+      (c.industryGroupId && groups[c.industryGroupId]?.toLowerCase().includes(searchLower))
+    );
+    return [...list].sort((a, b) => {
+      let cmp = 0;
+      if (cSortKey === 'code') cmp = a.code.localeCompare(b.code);
+      else if (cSortKey === 'name') cmp = a.name.localeCompare(b.name);
+      else if (cSortKey === 'lastTrade') cmp = (latestPrice[a.code] || 0) - (latestPrice[b.code] || 0);
+      else if (cSortKey === 'ytd') cmp = (ytdChange[a.code] || 0) - (ytdChange[b.code] || 0);
+      else if (cSortKey === 'industry') cmp = (groups[a.industryGroupId || ''] || '').localeCompare(groups[b.industryGroupId || ''] || '');
+      return cSortDir === 'asc' ? cmp : -cmp;
+    });
+  }, [companies, searchLower, groups, latestPrice, ytdChange, cSortKey, cSortDir]);
 
   if (loading) return <p>Loading...</p>;
 
@@ -117,6 +130,7 @@ export default function Companies() {
                 <th className="sort-header" onClick={() => handleCSort('code')}>Code{csi('code')}</th>
                 <th className="sort-header" onClick={() => handleCSort('name')}>Name{csi('name')}</th>
                 <th className="sort-header text-right" onClick={() => handleCSort('lastTrade')}>Last Trade{csi('lastTrade')}</th>
+                <th className="text-right">Change</th>
                 <th className="sort-header text-right" onClick={() => handleCSort('ytd')}>YTD{csi('ytd')}</th>
                 <th className="sort-header" onClick={() => handleCSort('industry')}>Industry Group{csi('industry')}</th>
               </tr>
@@ -136,6 +150,13 @@ export default function Companies() {
                   <td>{c.name}</td>
                   <td className="text-right mono">
                     {latestPrice[c.code] != null ? latestPrice[c.code].toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '\u2014'}
+                  </td>
+                  <td className={`text-right mono ${priceChange[c.code] != null ? (priceChange[c.code] >= 0 ? 'gain-positive' : 'gain-negative') : ''}`}>
+                    {changePercent[c.code] != null ? (
+                      <span className={`gain-pill ${changePercent[c.code] >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
+                        {changePercent[c.code] >= 0 ? '+' : ''}{changePercent[c.code].toFixed(2)}%
+                      </span>
+                    ) : '\u2014'}
                   </td>
                   <td className="text-right mono">
                     {ytdChange[c.code] != null ? (
