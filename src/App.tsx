@@ -13,6 +13,7 @@ import Sectors from './pages/Sectors';
 import Login from './pages/Login';
 import AdminDashboard from './pages/AdminDashboard';
 import Watchlists from './pages/Watchlists';
+import RightsPage from './pages/Rights';
 import './App.css';
 
 function App() {
@@ -61,6 +62,7 @@ function App() {
                 <NavLink to="/" end>Dashboard</NavLink>
                 <NavLink to="/transactions">Transactions</NavLink>
                 <NavLink to="/dividends">Dividends</NavLink>
+                <NavLink to="/rights">Rights</NavLink>
                 <NavLink to="/watchlists">Watchlists</NavLink>
                 <NavLink to="/sectors">Sectors</NavLink>
                 <NavLink to="/companies">Companies</NavLink>
@@ -93,6 +95,7 @@ function App() {
             <Route path="/" element={isAdmin ? <AdminDashboard key={user.username} /> : <Dashboard key={user.username} />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/dividends" element={<Dividends />} />
+            <Route path="/rights" element={<RightsPage />} />
             <Route path="/company/:code" element={<CompanyView />} />
             <Route path="/watchlists" element={<Watchlists />} />
             <Route path="/sectors" element={<Sectors />} />

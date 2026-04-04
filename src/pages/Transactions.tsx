@@ -222,7 +222,7 @@ export default function Transactions() {
                     </div>
                   </td>
                   <td>
-                    <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : 'gain-pill-sell'}`}>
+                    <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : 'gain-pill-rights'}`}>
                       {t.type}
                     </span>
                   </td>
@@ -270,7 +270,7 @@ export default function Transactions() {
                       <tr key={t.id}>
                         <td>{t.date}</td>
                         <td>
-                          <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : 'gain-pill-sell'}`}>
+                          <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : 'gain-pill-rights'}`}>
                             {t.type}
                           </span>
                         </td>

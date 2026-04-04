@@ -180,6 +180,24 @@ export const getDashboardAll = () => cached('dashboard-all', () => api.get<{
   sectors: { sector: string; companies: { companyCode: string; companyName: string; sharesHeld: number; currentValue: number; totalInvested: number; unrealizedGain: number; unrealizedGainPercent: number; unrealizedDayGain: number; changePercent: number }[]; currentValue: number; totalInvested: number; unrealizedGain: number; unrealizedDayGain: number; companyCount: number }[];
 }>('/dashboard/all').then(res => res.data));
 
+// Rights
+export interface RightsData {
+  id: string;
+  companyCode: string;
+  date: string;
+  count: number;
+  price: number;
+  transactionId: string;
+  createdAt: string;
+}
+export const getRights = () => cached('rights', () => api.get<RightsData[]>('/rights').then(res => res.data));
+export const createRights = (data: { companyCode: string; date: string; count: number; price: number }) =>
+  api.post<RightsData>('/rights', data).then(res => { invalidate('rights', 'transactions', 'portfolio', 'dashboard-all'); return res.data; });
+export const updateRights = (id: string, data: { date: string; count: number; price: number }) =>
+  api.put<RightsData>(`/rights/${id}`, data).then(res => { invalidate('rights', 'transactions', 'portfolio', 'dashboard-all'); return res.data; });
+export const deleteRights = (id: string) =>
+  api.delete(`/rights/${id}`).then(res => { invalidate('rights', 'transactions', 'portfolio', 'dashboard-all'); return res; });
+
 // Watchlists
 export interface WatchlistData {
   id: string;

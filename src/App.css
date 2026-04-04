@@ -928,6 +928,11 @@ button:hover {
   color: #822727;
 }
 
+.gain-pill-rights {
+  background: #bee3f8;
+  color: #2a4365;
+}
+
 .gain-pill-cash {
   background: #c6f6d5;
   color: #22543d;
