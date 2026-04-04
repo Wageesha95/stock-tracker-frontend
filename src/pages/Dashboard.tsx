@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDashboardAll, getDividends, getMarketData, getTransactions, invalidate } from '../api';
-import { PortfolioItem, Dividend, RealizedGainItem, Transaction } from '../types';
+import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, invalidate } from '../api';
+import { PortfolioItem, Dividend, RealizedGainItem, Transaction, Company } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
@@ -27,6 +27,7 @@ export default function Dashboard() {
   const [activeSection, setActiveSection] = useState<'none' | 'holdings' | 'invested' | 'realized' | 'realizedProfit' | 'realizedLoss' | 'netRealized' | 'interest' | 'profit' | 'loss' | 'netUnrealized' | 'dayProfit' | 'dayLoss' | 'netDay' | 'cashDiv' | 'scripDiv'>('none');
   const [expandedInterest, setExpandedInterest] = useState<Set<string>>(new Set());
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [latestTradeDate, setLatestTradeDate] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -36,14 +37,15 @@ export default function Dashboard() {
   const [expandedRealizedCompanies, setExpandedRealizedCompanies] = useState<Set<string>>(new Set());
 
   const loadData = useCallback(() => {
-    return Promise.all([getDashboardAll(), getDividends(), getMarketData(), getTransactions()])
-      .then(([dash, d, md, txns]) => {
+    return Promise.all([getDashboardAll(), getDividends(), getMarketData(), getTransactions(), getCompanies()])
+      .then(([dash, d, md, txns, comps]) => {
         setPortfolio(dash.portfolio);
         setDividends(d);
         setRealizedItems(dash.realizedItems);
         setOpportunityCost(dash.opportunityCost);
         setInterestBreakdown(dash.interestBreakdown);
         setTransactions(txns);
+        setAllCompanies(comps);
         if (md.length > 0) {
           const latest = md.reduce((a, b) => a.tradeDate > b.tradeDate ? a : b);
           setLatestTradeDate(latest.tradeDate);
@@ -78,6 +80,14 @@ export default function Dashboard() {
   }, [filtered, sortKey, sortDir]);
 
   const [holdingsSearch, setHoldingsSearch] = useState('');
+  const [companySearch, setCompanySearch] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const companySuggestions = companySearch.length > 0
+    ? allCompanies.filter(c =>
+        c.code.toLowerCase().includes(companySearch.toLowerCase()) ||
+        c.name.toLowerCase().includes(companySearch.toLowerCase())
+      ).slice(0, 8)
+    : [];
   const holdingsFiltered = useMemo(() => {
     if (holdingsSearch === '') return sorted;
     const s = holdingsSearch.toLowerCase();
@@ -129,25 +139,63 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-        <h1 style={{ margin: 0 }}>Dashboard</h1>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          style={{
-            background: 'transparent',
-            border: '1.5px solid var(--border-input)',
-            borderRadius: '8px',
-            padding: '0.35rem 0.75rem',
-            fontSize: '0.85rem',
-            cursor: 'pointer',
-            color: 'var(--text-muted)',
-            transition: 'all 0.15s',
-          }}
-          title="Refresh data"
-        >
-          {refreshing ? 'Refreshing...' : '\u21BB Refresh'}
-        </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <h1 style={{ margin: 0 }}>Dashboard</h1>
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            style={{
+              background: 'transparent',
+              border: '1.5px solid var(--border-input)',
+              borderRadius: '8px',
+              padding: '0.35rem 0.75rem',
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              color: 'var(--text-muted)',
+              transition: 'all 0.15s',
+            }}
+            title="Refresh data"
+          >
+            {refreshing ? 'Refreshing...' : '\u21BB Refresh'}
+          </button>
+        </div>
+        <div style={{ position: 'relative' }}>
+          <input
+            className="search-bar"
+            value={companySearch}
+            onChange={e => { setCompanySearch(e.target.value); setShowSuggestions(true); }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+            placeholder="Find company..."
+            style={{ width: '220px' }}
+          />
+          {showSuggestions && companySuggestions.length > 0 && (
+            <div style={{
+              position: 'absolute', top: '100%', right: 0, zIndex: 100,
+              background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+              borderRadius: '8px', boxShadow: 'var(--shadow-dropdown)',
+              width: '280px', maxHeight: '300px', overflow: 'auto', marginTop: '0.25rem',
+            }}>
+              {companySuggestions.map(c => (
+                <div
+                  key={c.code}
+                  onMouseDown={() => { navigate(`/company/${c.code}`); setCompanySearch(''); setShowSuggestions(false); }}
+                  style={{
+                    padding: '0.5rem 0.75rem', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem',
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-dropdown-hover)')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                >
+                  <CompanyAvatar code={c.code} size={24} />
+                  <span style={{ fontWeight: 600 }}>{c.code}</span>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{c.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Row 1: Portfolio + Summary */}
