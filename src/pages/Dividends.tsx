@@ -37,7 +37,6 @@ export default function Dividends() {
     setEditShares(d.type === 'CASH' ? String(d.shares) : '');
     setEditScripShares(d.type === 'SCRIP' ? String(d.scripShares) : '');
     setEditTaxable(d.taxed !== false);
-    const gross = d.type === 'CASH' ? d.amount * d.shares : 0;
     setEditTotal(String(d.totalAmount));
   };
 
