@@ -171,7 +171,7 @@ export default function Transactions() {
         </form>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <div className="segmented-control">
           <button
             className={viewMode === 'list' ? 'active' : ''}
@@ -190,8 +190,7 @@ export default function Transactions() {
           className="search-bar"
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Search by company, type or date..."
-          style={{ flex: 1, minWidth: '180px' }}
+          placeholder="Search..."
         />
       </div>
 

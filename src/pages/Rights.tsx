@@ -130,13 +130,12 @@ export default function RightsPage() {
       </div>
 
       {rights.length >= 3 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
           <input
             className="search-bar"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by company or date..."
-            style={{ flex: 1, minWidth: '180px' }}
+            placeholder="Search..."
           />
         </div>
       )}
