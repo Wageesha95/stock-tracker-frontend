@@ -328,7 +328,7 @@ export default function Dividends() {
           <button className={divTab === 'cash' ? 'active' : ''} onClick={() => setDivTab('cash')}>Cash ({cashDivs.length})</button>
           <button className={divTab === 'scrip' ? 'active' : ''} onClick={() => setDivTab('scrip')}>Scrip ({scripDivs.length})</button>
         </div>
-        {sorted.length >= 5 && (
+        {dividends.length >= 5 && (
           <input className="search-bar" value={divSearch} onChange={e => setDivSearch(e.target.value)} placeholder="Search..." />
         )}
       </div>
