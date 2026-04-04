@@ -76,6 +76,8 @@ export default function CompanyView() {
         const avgAtSell = cumShares > 0 ? cumInvested / cumShares : 0;
         cumInvested -= avgAtSell * t.count;
         cumShares -= t.count;
+      } else {
+        throw new Error(`Unknown transaction type: ${t.type}`);
       }
       txPoints.push({ date: t.date, invested: Math.round(cumInvested * 100) / 100, shares: cumShares });
     }

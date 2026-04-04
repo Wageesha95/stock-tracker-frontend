@@ -284,6 +284,8 @@ export default function Dashboard() {
             const avg = cumShares > 0 ? cumCost / cumShares : 0;
             cumCost -= avg * t.count;
             cumShares -= t.count;
+          } else {
+            throw new Error(`Unknown transaction type: ${t.type}`);
           }
           return { date: t.date, invested: Math.round(cumCost * 100) / 100 };
         });

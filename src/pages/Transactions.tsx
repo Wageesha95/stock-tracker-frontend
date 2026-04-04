@@ -295,6 +295,8 @@ export default function Transactions() {
                 const avgAtSell = fifoShares > 0 ? fifoCost / fifoShares : 0;
                 fifoCost -= avgAtSell * t.count;
                 fifoShares -= t.count;
+              } else {
+                throw new Error(`Unknown transaction type: ${t.type}`);
               }
             }
             const avgPrice = fifoShares > 0 ? fifoCost / fifoShares : 0;
@@ -364,7 +366,7 @@ export default function Transactions() {
                   <tfoot>
                     <tr className="portfolio-total">
                       <td colSpan={2}>Total ({txns.length})</td>
-                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.type === 'SELL' ? -t.count : t.count), 0)}</td>
+                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' ? t.count : t.type === 'SELL' ? -t.count : (() => { throw new Error(`Unknown transaction type: ${t.type}`); })()), 0)}</td>
                       <td></td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + t.commission, 0).toFixed(2)}</td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + (t.count * t.price + t.commission), 0).toFixed(2)}</td>
@@ -444,7 +446,7 @@ export default function Transactions() {
                   <tfoot>
                     <tr className="portfolio-total">
                       <td colSpan={2}>Total ({txns.length})</td>
-                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.type === 'SELL' ? -t.count : t.count), 0)}</td>
+                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' ? t.count : t.type === 'SELL' ? -t.count : (() => { throw new Error(`Unknown transaction type: ${t.type}`); })()), 0)}</td>
                       <td></td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + t.commission, 0).toFixed(2)}</td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + (t.count * t.price + t.commission), 0).toFixed(2)}</td>
