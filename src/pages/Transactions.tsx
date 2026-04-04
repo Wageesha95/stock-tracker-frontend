@@ -276,10 +276,7 @@ export default function Transactions() {
           }, {});
           return Object.entries(grouped).map(([code, txns]) => {
             const buyTxns = txns.filter(t => t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND');
-            const sellTxns = txns.filter(t => t.type === 'SELL');
             const totalBought = buyTxns.reduce((s, t) => s + t.count, 0);
-            const totalSold = sellTxns.reduce((s, t) => s + t.count, 0);
-            const sharesHeld = totalBought - totalSold;
             const totalBuyCost = buyTxns.reduce((s, t) => s + t.count * t.price + t.commission, 0);
             const avgPrice = totalBought > 0 ? totalBuyCost / totalBought : 0;
             const lastTrade = marketMap[code]?.lastTrade || 0;

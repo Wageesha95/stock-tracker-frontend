@@ -160,6 +160,7 @@ export default function Dividends() {
   };
   const dsi = (key: typeof divSortKey) => divSortKey === key ? (divSortDir === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
   const [divSearch, setDivSearch] = useState('');
+  const [divTab, setDivTab] = useState<'cash' | 'scrip'>('cash');
 
   const sorted = [...dividends]
     .filter(d =>
@@ -318,14 +319,22 @@ export default function Dividends() {
         </form>
       </div>
 
-      {dividends.length >= 5 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-          <input className="search-bar" value={divSearch} onChange={e => setDivSearch(e.target.value)} placeholder="Search..." />
+      {(() => {
+        const cashDivs = sorted.filter(d => d.type === 'CASH');
+        const scripDivs = sorted.filter(d => d.type === 'SCRIP');
+        return (<>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <div className="segmented-control">
+          <button className={divTab === 'cash' ? 'active' : ''} onClick={() => setDivTab('cash')}>Cash ({cashDivs.length})</button>
+          <button className={divTab === 'scrip' ? 'active' : ''} onClick={() => setDivTab('scrip')}>Scrip ({scripDivs.length})</button>
         </div>
-      )}
+        {sorted.length >= 5 && (
+          <input className="search-bar" value={divSearch} onChange={e => setDivSearch(e.target.value)} placeholder="Search..." />
+        )}
+      </div>
 
-      {sorted.length === 0 ? (
-        <p>{dividends.length === 0 ? 'No dividends yet.' : 'No dividends match your search.'}</p>
+      {divTab === 'cash' && (cashDivs.length === 0 ? (
+        <p style={{ color: 'var(--text-muted)' }}>No cash dividends yet.</p>
       ) : (
         <div className="portfolio-table-wrap">
           <table className="portfolio-table">
@@ -333,16 +342,14 @@ export default function Dividends() {
               <tr>
                 <th className="sort-header" onClick={() => handleDivSort('date')}>Date{dsi('date')}</th>
                 <th className="sort-header" onClick={() => handleDivSort('companyCode')}>Company{dsi('companyCode')}</th>
-                <th className="sort-header" onClick={() => handleDivSort('type')}>Type{dsi('type')}</th>
                 <th className="sort-header text-right" onClick={() => handleDivSort('amount')}>Amount/Share{dsi('amount')}</th>
                 <th className="sort-header text-right" onClick={() => handleDivSort('shares')}>Shares{dsi('shares')}</th>
-                <th className="text-right">Scrip Shares</th>
                 <th className="sort-header text-right" onClick={() => handleDivSort('total')}>Total{dsi('total')}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {sorted.map(d => (
+              {cashDivs.map(d => (
                 <tr key={d.id}>
                   <td>{d.date}</td>
                   <td>
@@ -351,23 +358,13 @@ export default function Dividends() {
                       {d.companyCode}
                     </div>
                   </td>
-                  <td>
-                    <span className={`gain-pill ${d.type === 'CASH' ? 'gain-pill-cash' : 'gain-pill-scrip'}`}>
-                      {d.type}
-                    </span>
-                  </td>
-                  <td className="text-right mono">{d.type === 'CASH' ? d.amount.toFixed(2) : '-'}</td>
-                  <td className="text-right mono">{d.type === 'CASH' ? d.shares : '-'}</td>
-                  <td className="text-right mono">{d.type === 'SCRIP' ? d.scripShares : '-'}</td>
+                  <td className="text-right mono">{d.amount.toFixed(2)}</td>
+                  <td className="text-right mono">{d.shares}</td>
                   <td className="text-right mono">
-                    {d.type === 'CASH' ? (
-                      <>
-                        {d.totalAmount.toFixed(2)}
-                        {d.taxed === false && (
-                          <span style={{ color: '#d69e2e', fontSize: '0.65rem', marginLeft: '0.3rem' }} title="Untaxed">*</span>
-                        )}
-                      </>
-                    ) : `${d.scripShares} shares`}
+                    {d.totalAmount.toFixed(2)}
+                    {d.taxed === false && (
+                      <span style={{ color: '#d69e2e', fontSize: '0.65rem', marginLeft: '0.3rem' }} title="Untaxed">*</span>
+                    )}
                   </td>
                   <td>
                     <ActionMenu actions={[
@@ -378,9 +375,64 @@ export default function Dividends() {
                 </tr>
               ))}
             </tbody>
+            <tfoot>
+              <tr className="portfolio-total">
+                <td colSpan={2}>Total</td>
+                <td></td>
+                <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.shares, 0)}</td>
+                <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.totalAmount, 0).toFixed(2)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
           </table>
         </div>
-      )}
+      ))}
+
+      {divTab === 'scrip' && (scripDivs.length === 0 ? (
+        <p style={{ color: 'var(--text-muted)' }}>No scrip dividends yet.</p>
+      ) : (
+        <div className="portfolio-table-wrap">
+          <table className="portfolio-table">
+            <thead>
+              <tr>
+                <th className="sort-header" onClick={() => handleDivSort('date')}>Date{dsi('date')}</th>
+                <th className="sort-header" onClick={() => handleDivSort('companyCode')}>Company{dsi('companyCode')}</th>
+                <th className="text-right">Shares Received</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {scripDivs.map(d => (
+                <tr key={d.id}>
+                  <td>{d.date}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <CompanyAvatar code={d.companyCode} size={26} />
+                      {d.companyCode}
+                    </div>
+                  </td>
+                  <td className="text-right mono">{d.scripShares}</td>
+                  <td>
+                    <ActionMenu actions={[
+                      { label: 'Edit', onClick: () => openEdit(d) },
+                      { label: 'Delete', onClick: () => handleDelete(d.id), danger: true },
+                    ]} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="portfolio-total">
+                <td colSpan={2}>Total</td>
+                <td className="text-right mono">{scripDivs.reduce((s, d) => s + d.scripShares, 0)} shares</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      ))}
+      </>);
+      })()}
 
       {/* Edit Modal */}
       {editDividend && (
