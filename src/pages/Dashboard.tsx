@@ -24,7 +24,7 @@ export default function Dashboard() {
   const [realizedItems, setRealizedItems] = useState<RealizedGainItem[]>([]);
   const [opportunityCost, setOpportunityCost] = useState(0);
   const [interestBreakdown, setInterestBreakdown] = useState<InterestBreakdown[]>([]);
-  const [activeSection, setActiveSection] = useState<'none' | 'holdings' | 'invested' | 'realized' | 'realizedProfit' | 'realizedLoss' | 'netRealized' | 'interest' | 'profit' | 'loss' | 'netUnrealized' | 'dayProfit' | 'dayLoss' | 'netDay'>('none');
+  const [activeSection, setActiveSection] = useState<'none' | 'holdings' | 'invested' | 'realized' | 'realizedProfit' | 'realizedLoss' | 'netRealized' | 'interest' | 'profit' | 'loss' | 'netUnrealized' | 'dayProfit' | 'dayLoss' | 'netDay' | 'cashDiv' | 'scripDiv'>('none');
   const [expandedInterest, setExpandedInterest] = useState<Set<string>>(new Set());
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,12 +187,12 @@ export default function Dashboard() {
         <div className="card-group">
           <div className="card-group-label">Dividends</div>
           <div className="stats-grid">
-            <div className="stat-card" style={{ borderLeftColor: '#38a169' }}>
+            <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: '#38a169' }} onClick={() => !loading && setActiveSection(s => s === 'cashDiv' ? 'none' : 'cashDiv')} title="Click to show cash dividends">
               <h3>Cash</h3>
               <p className="stat-value">{v(<span className="gain-positive">LKR {fmt(totalDividends)}</span>)}</p>
               <small style={{ color: '#718096' }}>{v(<>{cashDividends.length} payments</>)}</small>
             </div>
-            <div className="stat-card" style={{ borderLeftColor: '#805ad5' }}>
+            <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: '#805ad5' }} onClick={() => !loading && setActiveSection(s => s === 'scripDiv' ? 'none' : 'scripDiv')} title="Click to show scrip dividends">
               <h3>Scrip</h3>
               <p className="stat-value">{v(<span style={{ color: '#805ad5' }}>{totalScripShares} shares</span>)}</p>
               <small style={{ color: '#718096' }}>{v(<>{scripDividends.length} issues</>)}</small>
@@ -845,6 +845,95 @@ export default function Dashboard() {
           </p>
         );
       })()}
+      {activeSection === 'cashDiv' && (
+        <>
+          <h2 style={{ marginTop: '2rem' }}>Cash Dividends</h2>
+          {cashDividends.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }}>No cash dividends yet.</p>
+          ) : (
+            <div className="portfolio-table-wrap">
+              <table className="portfolio-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Company</th>
+                    <th>Tax</th>
+                    <th className="text-right">Amount/Share</th>
+                    <th className="text-right">Shares</th>
+                    <th className="text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...cashDividends].sort((a, b) => b.date.localeCompare(a.date)).map((d, i) => (
+                    <tr key={i}>
+                      <td>{d.date}</td>
+                      <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${d.companyCode}`)}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <CompanyAvatar code={d.companyCode} size={26} />
+                          <span className="company-code">{d.companyCode}</span>
+                        </div>
+                      </td>
+                      <td style={{ fontSize: '0.8rem' }}>
+                        {d.taxed !== false ? <span className="gain-pill gain-pill-down" style={{ fontSize: '0.65rem' }}>Taxed</span> : <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                      </td>
+                      <td className="text-right mono">{d.amount.toFixed(2)}</td>
+                      <td className="text-right mono">{d.shares}</td>
+                      <td className="text-right mono">{d.totalAmount.toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="portfolio-total">
+                    <td colSpan={4}>Total ({cashDividends.length} payments)</td>
+                    <td className="text-right mono">{cashDividends.reduce((s, d) => s + d.shares, 0)}</td>
+                    <td className="text-right mono">{fmt(cashDividends.reduce((s, d) => s + d.totalAmount, 0))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+      {activeSection === 'scripDiv' && (
+        <>
+          <h2 style={{ marginTop: '2rem' }}>Scrip Dividends</h2>
+          {scripDividends.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }}>No scrip dividends yet.</p>
+          ) : (
+            <div className="portfolio-table-wrap">
+              <table className="portfolio-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Company</th>
+                    <th className="text-right">Shares Received</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...scripDividends].sort((a, b) => b.date.localeCompare(a.date)).map((d, i) => (
+                    <tr key={i}>
+                      <td>{d.date}</td>
+                      <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${d.companyCode}`)}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <CompanyAvatar code={d.companyCode} size={26} />
+                          <span className="company-code">{d.companyCode}</span>
+                        </div>
+                      </td>
+                      <td className="text-right mono">{d.scripShares}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="portfolio-total">
+                    <td colSpan={2}>Total ({scripDividends.length} issues)</td>
+                    <td className="text-right mono">{scripDividends.reduce((s, d) => s + d.scripShares, 0)} shares</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
