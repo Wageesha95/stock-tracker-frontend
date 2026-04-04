@@ -18,7 +18,7 @@ export default function Transactions() {
   const [count, setCount] = useState('');
   const [price, setPrice] = useState('');
   const [commission, setCommission] = useState('1.22');
-  const [viewMode, setViewMode] = useState<'list' | 'group'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'group' | 'date'>('list');
 
   const loadData = () => {
     Promise.all([getTransactions(), getCompanies(), getMarketData()])
@@ -211,7 +211,13 @@ export default function Transactions() {
             className={viewMode === 'group' ? 'active' : ''}
             onClick={() => setViewMode('group')}
           >
-            Group by Company
+            By Company
+          </button>
+          <button
+            className={viewMode === 'date' ? 'active' : ''}
+            onClick={() => setViewMode('date')}
+          >
+            By Date
           </button>
         </div>
         {transactions.length >= 5 && (
@@ -369,6 +375,87 @@ export default function Transactions() {
               </div>
             </div>
           );});
+        })()
+      )}
+      {viewMode === 'date' && (
+        (() => {
+          const byDate = sorted.reduce<Record<string, typeof sorted>>((acc, t) => {
+            (acc[t.date] = acc[t.date] || []).push(t);
+            return acc;
+          }, {});
+          const sortedDates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+          return sortedDates.map(date => {
+            const txns = byDate[date];
+            return (
+            <div key={date} className="group-card">
+              <div className="group-header">
+                <div className="group-header-left">
+                  <div>
+                    <div className="group-code">{date}</div>
+                    <div className="group-name">{txns.length} transaction{txns.length !== 1 ? 's' : ''}</div>
+                  </div>
+                </div>
+                <div className="group-header-stats">
+                  <div className="group-stat">
+                    <div className="group-stat-label">Total</div>
+                    <div className="group-stat-value">{txns.reduce((s, t) => s + (t.count * t.price + t.commission), 0).toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="portfolio-table-wrap">
+                <table className="portfolio-table">
+                  <thead>
+                    <tr>
+                      <th>Company</th>
+                      <th>Type</th>
+                      <th className="text-right">Count</th>
+                      <th className="text-right">Price</th>
+                      <th className="text-right">Commission</th>
+                      <th className="text-right">Total</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {txns.map(t => (
+                      <tr key={t.id}>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${t.companyCode}`)}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <CompanyAvatar code={t.companyCode} size={26} />
+                            {t.companyCode}
+                          </div>
+                        </td>
+                        <td>
+                          <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : 'gain-pill-scrip-div'}`}>
+                            {t.type === 'SCRIP_DIVIDEND' ? 'SCRIP' : t.type}
+                          </span>
+                        </td>
+                        <td className="text-right mono">{t.count}</td>
+                        <td className="text-right mono">{t.price.toFixed(2)}</td>
+                        <td className="text-right mono">{t.commission.toFixed(2)}</td>
+                        <td className="text-right mono">{(t.count * t.price + t.commission).toFixed(2)}</td>
+                        <td>
+                          <ActionMenu actions={[
+                            { label: 'Delete', onClick: () => handleDelete(t.id), danger: true },
+                          ]} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="portfolio-total">
+                      <td colSpan={2}>Total ({txns.length})</td>
+                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' ? t.count : -t.count), 0)}</td>
+                      <td></td>
+                      <td className="text-right mono">{txns.reduce((s, t) => s + t.commission, 0).toFixed(2)}</td>
+                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.count * t.price + t.commission), 0).toFixed(2)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+            );
+          });
         })()
       )}
     </div>
