@@ -17,6 +17,14 @@ const WATCHLIST_COLORS = [
   { name: 'Teal', value: '#319795' },
   { name: 'Pink', value: '#d53f8c' },
   { name: 'Yellow', value: '#d69e2e' },
+  { name: 'Indigo', value: '#5a67d8' },
+  { name: 'Cyan', value: '#0bc5ea' },
+  { name: 'Lime', value: '#68d391' },
+  { name: 'Coral', value: '#fc8181' },
+  { name: 'Sky', value: '#63b3ed' },
+  { name: 'Amber', value: '#f6ad55' },
+  { name: 'Rose', value: '#feb2b2' },
+  { name: 'Slate', value: '#718096' },
 ];
 
 export default function Watchlists() {
