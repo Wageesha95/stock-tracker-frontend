@@ -84,6 +84,7 @@ export default function Dividends() {
       setAmount('');
       setShares('');
       setScripShares('');
+      setCustomTotal('');
       loadData();
     } catch (err) {
       console.error('Failed to create dividend', err);
@@ -100,9 +101,12 @@ export default function Dividends() {
     }
   };
 
+  const [customTotal, setCustomTotal] = useState('');
+
   const grossAmount = type === 'CASH' ? (Number(amount) || 0) * (Number(shares) || 0) : 0;
   const taxAmount = taxable ? grossAmount * 0.15 : 0;
-  const totalAmount = grossAmount - taxAmount;
+  const calculatedTotal = grossAmount - taxAmount;
+  const totalAmount = customTotal !== '' ? Number(customTotal) : calculatedTotal;
 
   const sorted = [...dividends].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -221,13 +225,25 @@ export default function Dividends() {
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
               <div>Gross: LKR {grossAmount.toFixed(2)}</div>
               {taxable && <div style={{ color: '#e53e3e' }}>Tax (15%): -LKR {taxAmount.toFixed(2)}</div>}
-              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Net: LKR {totalAmount.toFixed(2)}</div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Suggested Net: LKR {calculatedTotal.toFixed(2)}</div>
+            </div>
+          )}
+          {type === 'CASH' && (
+            <div className="form-row">
+              <label>
+                Total Amount (editable)
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={customTotal !== '' ? customTotal : calculatedTotal.toFixed(2)}
+                  onChange={e => setCustomTotal(e.target.value)}
+                  onFocus={() => { if (customTotal === '') setCustomTotal(calculatedTotal.toFixed(2)); }}
+                />
+              </label>
             </div>
           )}
           <div className="form-row">
-            {type === 'CASH' && (
-              <span className="total-cost">Total Amount: {totalAmount.toFixed(2)}</span>
-            )}
             <button type="submit">Add Dividend</button>
           </div>
         </form>
