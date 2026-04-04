@@ -88,12 +88,9 @@ export default function Dividends() {
   // Auto-suggest shares when XD date or company changes
   const handleXdDateChange = (newXdDate: string) => {
     setXdDate(newXdDate);
-    if (newXdDate) {
-      setDate(newXdDate);
-      if (companyCode) {
-        const held = getSharesHeldAtDate(companyCode, newXdDate);
-        setShares(held > 0 ? String(held) : '');
-      }
+    if (newXdDate && companyCode) {
+      const held = getSharesHeldAtDate(companyCode, newXdDate);
+      setShares(held > 0 ? String(held) : '');
     }
   };
 
@@ -342,6 +339,7 @@ export default function Dividends() {
               <tr>
                 <th className="sort-header" onClick={() => handleDivSort('date')}>Date{dsi('date')}</th>
                 <th className="sort-header" onClick={() => handleDivSort('companyCode')}>Company{dsi('companyCode')}</th>
+                <th>Tax</th>
                 <th className="sort-header text-right" onClick={() => handleDivSort('amount')}>Amount/Share{dsi('amount')}</th>
                 <th className="sort-header text-right" onClick={() => handleDivSort('shares')}>Shares{dsi('shares')}</th>
                 <th className="sort-header text-right" onClick={() => handleDivSort('total')}>Total{dsi('total')}</th>
@@ -358,14 +356,12 @@ export default function Dividends() {
                       {d.companyCode}
                     </div>
                   </td>
+                  <td style={{ fontSize: '0.8rem' }}>
+                    {d.taxed !== false ? <span className="gain-pill gain-pill-down" style={{ fontSize: '0.65rem' }}>Taxed</span> : <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                  </td>
                   <td className="text-right mono">{d.amount.toFixed(2)}</td>
                   <td className="text-right mono">{d.shares}</td>
-                  <td className="text-right mono">
-                    {d.totalAmount.toFixed(2)}
-                    {d.taxed === false && (
-                      <span style={{ color: '#d69e2e', fontSize: '0.65rem', marginLeft: '0.3rem' }} title="Untaxed">*</span>
-                    )}
-                  </td>
+                  <td className="text-right mono">{d.totalAmount.toFixed(2)}</td>
                   <td>
                     <ActionMenu actions={[
                       { label: 'Edit', onClick: () => openEdit(d) },
@@ -377,7 +373,7 @@ export default function Dividends() {
             </tbody>
             <tfoot>
               <tr className="portfolio-total">
-                <td colSpan={2}>Total</td>
+                <td colSpan={3}>Total</td>
                 <td></td>
                 <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.shares, 0)}</td>
                 <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.totalAmount, 0).toFixed(2)}</td>
