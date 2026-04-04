@@ -1187,12 +1187,47 @@ button:hover {
   }
 
   .form-card {
-    padding: 1rem;
+    padding: 0.75rem;
+    margin-bottom: 1rem;
+  }
+
+  .form-card h2 {
+    font-size: 1rem;
+    margin-bottom: 0.75rem;
   }
 
   .form-row {
     flex-direction: column;
     gap: 0.5rem;
+  }
+
+  .form-row label {
+    min-width: unset;
+    width: 100%;
+  }
+
+  .form-row input,
+  .form-row select {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 1rem;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .form-row button[type="submit"] {
+    width: 100%;
+    padding: 0.6rem;
+    font-size: 0.9rem;
+  }
+
+  .total-cost {
+    font-size: 0.85rem;
+    text-align: center;
+    width: 100%;
+  }
+
+  .radio-group {
+    gap: 0.75rem;
   }
 
   .segmented-control {
