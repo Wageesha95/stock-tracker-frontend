@@ -76,6 +76,7 @@ export default function Dividends() {
         shares: type === 'CASH' ? Number(shares) : 0,
         scripShares: type === 'SCRIP' ? Number(scripShares) : 0,
         totalAmount,
+        taxed: type === 'CASH' ? taxable : undefined,
       });
       setXdDate('');
       setDate('');
@@ -286,7 +287,7 @@ export default function Dividends() {
                     {d.type === 'CASH' ? (
                       <>
                         {d.totalAmount.toFixed(2)}
-                        {d.amount * d.shares === d.totalAmount && (
+                        {d.taxed === false && (
                           <span style={{ color: '#d69e2e', fontSize: '0.65rem', marginLeft: '0.3rem' }} title="Untaxed">*</span>
                         )}
                       </>
