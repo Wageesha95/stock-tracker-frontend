@@ -21,6 +21,7 @@ export default function Dividends() {
 
   // Edit modal state
   const [editDividend, setEditDividend] = useState<Dividend | null>(null);
+  const [editXdDate, setEditXdDate] = useState('');
   const [editDate, setEditDate] = useState('');
   const [editType, setEditType] = useState<'CASH' | 'SCRIP'>('CASH');
   const [editAmount, setEditAmount] = useState('');
@@ -31,6 +32,7 @@ export default function Dividends() {
 
   const openEdit = (d: Dividend) => {
     setEditDividend(d);
+    setEditXdDate(d.xdDate || '');
     setEditDate(d.date);
     setEditType(d.type);
     setEditAmount(d.type === 'CASH' ? String(d.amount) : '');
@@ -47,6 +49,7 @@ export default function Dividends() {
         companyCode: editDividend.companyCode,
         type: editType,
         date: editDate,
+        xdDate: editXdDate || undefined,
         amount: editType === 'CASH' ? Number(editAmount) : 0,
         shares: editType === 'CASH' ? Number(editShares) : 0,
         scripShares: editType === 'SCRIP' ? Number(editScripShares) : 0,
@@ -114,6 +117,7 @@ export default function Dividends() {
         companyCode,
         type,
         date,
+        xdDate: xdDate || undefined,
         amount: type === 'CASH' ? Number(amount) : 0,
         shares: type === 'CASH' ? Number(shares) : 0,
         scripShares: type === 'SCRIP' ? Number(scripShares) : 0,
@@ -197,12 +201,10 @@ export default function Dividends() {
                 ))}
               </select>
             </label>
-            {type === 'CASH' && (
-              <label>
-                XD Date
-                <input type="date" value={xdDate} onChange={e => handleXdDateChange(e.target.value)} required />
-              </label>
-            )}
+            <label>
+              XD Date
+              <input type="date" value={xdDate} onChange={e => handleXdDateChange(e.target.value)} />
+            </label>
             <label>
               {type === 'CASH' ? 'Transaction Date' : 'Date'}
               <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
@@ -338,6 +340,7 @@ export default function Dividends() {
             <thead>
               <tr>
                 <th className="sort-header" onClick={() => handleDivSort('date')}>Date{dsi('date')}</th>
+                <th>XD Date</th>
                 <th className="sort-header" onClick={() => handleDivSort('companyCode')}>Company{dsi('companyCode')}</th>
                 <th>Tax</th>
                 <th className="sort-header text-right" onClick={() => handleDivSort('amount')}>Amount/Share{dsi('amount')}</th>
@@ -350,6 +353,7 @@ export default function Dividends() {
               {cashDivs.map(d => (
                 <tr key={d.id}>
                   <td>{d.date}</td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{d.xdDate || '\u2014'}</td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <CompanyAvatar code={d.companyCode} size={26} />
@@ -373,7 +377,7 @@ export default function Dividends() {
             </tbody>
             <tfoot>
               <tr className="portfolio-total">
-                <td colSpan={3}>Total</td>
+                <td colSpan={4}>Total</td>
                 <td></td>
                 <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.shares, 0)}</td>
                 <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.totalAmount, 0).toFixed(2)}</td>
@@ -392,6 +396,7 @@ export default function Dividends() {
             <thead>
               <tr>
                 <th className="sort-header" onClick={() => handleDivSort('date')}>Date{dsi('date')}</th>
+                <th>XD Date</th>
                 <th className="sort-header" onClick={() => handleDivSort('companyCode')}>Company{dsi('companyCode')}</th>
                 <th className="text-right">Shares Received</th>
                 <th></th>
@@ -401,6 +406,7 @@ export default function Dividends() {
               {scripDivs.map(d => (
                 <tr key={d.id}>
                   <td>{d.date}</td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{d.xdDate || '\u2014'}</td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <CompanyAvatar code={d.companyCode} size={26} />
@@ -419,7 +425,7 @@ export default function Dividends() {
             </tbody>
             <tfoot>
               <tr className="portfolio-total">
-                <td colSpan={2}>Total</td>
+                <td colSpan={3}>Total</td>
                 <td className="text-right mono">{scripDivs.reduce((s, d) => s + d.scripShares, 0)} shares</td>
                 <td></td>
               </tr>
@@ -449,7 +455,11 @@ export default function Dividends() {
             </div>
             <div className="form-row">
               <label>
-                Date
+                XD Date
+                <input type="date" value={editXdDate} onChange={e => setEditXdDate(e.target.value)} />
+              </label>
+              <label>
+                Transaction Date
                 <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} required />
               </label>
               <label>

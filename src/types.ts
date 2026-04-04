@@ -43,6 +43,7 @@ export interface Dividend {
   type: 'CASH' | 'SCRIP';
   amount: number;
   date: string;
+  xdDate?: string;
   shares: number;
   scripShares: number;
   totalAmount: number;
