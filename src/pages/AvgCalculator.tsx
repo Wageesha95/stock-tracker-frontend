@@ -18,10 +18,12 @@ export default function AvgCalculator() {
   // Calculate mode
   const [newShares, setNewShares] = useState('');
   const [newPrice, setNewPrice] = useState('');
+  const [newCommission, setNewCommission] = useState('');
 
   // Target mode
   const [targetAvg, setTargetAvg] = useState('');
   const [buyPrice, setBuyPrice] = useState('');
+  const [targetCommission, setTargetCommission] = useState('');
 
   useEffect(() => {
     Promise.all([getCompanies(), getDashboardAll()])
@@ -46,17 +48,20 @@ export default function AvgCalculator() {
   const calcResult = useMemo(() => {
     const shares = Number(newShares) || 0;
     const price = Number(newPrice) || 0;
+    const commission = Number(newCommission) || 0;
     if (shares <= 0 || price <= 0) return null;
+    const buyCost = shares * price + commission;
     const totalShares = currentShares + shares;
-    const totalCost = currentCost + shares * price;
+    const totalCost = currentCost + buyCost;
     const newAvg = totalShares > 0 ? totalCost / totalShares : 0;
-    return { totalShares, totalCost, newAvg, change: newAvg - currentAvg, changePercent: currentAvg > 0 ? ((newAvg - currentAvg) / currentAvg) * 100 : 0 };
-  }, [currentShares, currentCost, currentAvg, newShares, newPrice]);
+    return { totalShares, totalCost, buyCost, newAvg, change: newAvg - currentAvg, changePercent: currentAvg > 0 ? ((newAvg - currentAvg) / currentAvg) * 100 : 0 };
+  }, [currentShares, currentCost, currentAvg, newShares, newPrice, newCommission]);
 
   // Target mode result
   const targetResult = useMemo(() => {
     const target = Number(targetAvg) || 0;
     const price = Number(buyPrice) || 0;
+    const commission = Number(targetCommission) || 0;
     if (target <= 0 || price <= 0) return null;
     if (price >= target && target < currentAvg) {
       return { error: 'Buy price must be lower than target average to bring average down' };
@@ -64,20 +69,18 @@ export default function AvgCalculator() {
     if (price <= target && target > currentAvg) {
       return { error: 'Buy price must be higher than target average to bring average up' };
     }
-    // shares needed: (currentCost + shares * price) / (currentShares + shares) = target
-    // currentCost + shares * price = target * (currentShares + shares)
-    // currentCost + shares * price = target * currentShares + target * shares
-    // shares * price - target * shares = target * currentShares - currentCost
-    // shares * (price - target) = target * currentShares - currentCost
-    const sharesToBuy = (target * currentShares - currentCost) / (price - target);
+    // (currentCost + shares * price + commission) / (currentShares + shares) = target
+    // shares * (price - target) = target * currentShares - currentCost - commission
+    const sharesToBuy = (target * currentShares - currentCost + commission) / (price - target);
     if (sharesToBuy <= 0 || !isFinite(sharesToBuy)) {
       return { error: 'Not possible with given price and target' };
     }
-    const totalShares = currentShares + Math.ceil(sharesToBuy);
-    const totalCost = currentCost + Math.ceil(sharesToBuy) * price;
+    const shares = Math.ceil(sharesToBuy);
+    const totalCost = currentCost + shares * price + commission;
+    const totalShares = currentShares + shares;
     const actualAvg = totalShares > 0 ? totalCost / totalShares : 0;
-    return { sharesToBuy: Math.ceil(sharesToBuy), cost: Math.ceil(sharesToBuy) * price, totalShares, totalCost, actualAvg };
-  }, [currentShares, currentCost, currentAvg, targetAvg, buyPrice]);
+    return { sharesToBuy: shares, cost: shares * price + commission, totalShares, totalCost, actualAvg };
+  }, [currentShares, currentCost, currentAvg, targetAvg, buyPrice, targetCommission]);
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gainClass = (n: number) => (n >= 0 ? 'gain-positive' : 'gain-negative');
@@ -123,7 +126,7 @@ export default function AvgCalculator() {
                           setSelectedCode(c.code);
                           setCompanySearch('');
                           setShowDropdown(false);
-                          setNewShares(''); setNewPrice(''); setTargetAvg(''); setBuyPrice('');
+                          setNewShares(''); setNewPrice(''); setNewCommission(''); setTargetAvg(''); setBuyPrice(''); setTargetCommission('');
                         }}
                         style={{
                           padding: '0.5rem 0.75rem', cursor: 'pointer',
@@ -192,6 +195,10 @@ export default function AvgCalculator() {
                 Buy Price
                 <input type="number" step="0.01" min="0" value={newPrice} onChange={e => setNewPrice(e.target.value)} placeholder="e.g. 120.00" />
               </label>
+              <label>
+                Commission
+                <input type="number" step="0.01" min="0" value={newCommission} onChange={e => setNewCommission(e.target.value)} placeholder="0.00" />
+              </label>
             </div>
 
             {calcResult && (
@@ -225,7 +232,7 @@ export default function AvgCalculator() {
                         <td style={{ fontWeight: 600 }}>Total Invested</td>
                         <td className="text-right mono">{fmt(currentCost)}</td>
                         <td className="text-right mono">{fmt(calcResult.totalCost)}</td>
-                        <td className="text-right mono">+{fmt(Number(newShares) * Number(newPrice))}</td>
+                        <td className="text-right mono">+{fmt(calcResult.buyCost)}</td>
                       </tr>
                     </tbody>
                   </table>
@@ -245,6 +252,10 @@ export default function AvgCalculator() {
               <label>
                 Buy Price
                 <input type="number" step="0.01" min="0" value={buyPrice} onChange={e => setBuyPrice(e.target.value)} placeholder="e.g. 120.00" />
+              </label>
+              <label>
+                Commission
+                <input type="number" step="0.01" min="0" value={targetCommission} onChange={e => setTargetCommission(e.target.value)} placeholder="0.00" />
               </label>
             </div>
 
