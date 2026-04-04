@@ -145,26 +145,26 @@ export default function AvgCalculator() {
         </div>
 
         {current && (
-          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: '1.5rem', padding: '1rem', background: 'var(--bg-thead)', borderRadius: '8px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-              <CompanyAvatar code={selectedCode} size={40} />
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '1.1rem' }}>{selectedCode}</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{companies.find(c => c.code === selectedCode)?.name}</div>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem', padding: '0.75rem', background: 'var(--bg-thead)', borderRadius: '8px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+              <CompanyAvatar code={selectedCode} size={36} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: '1rem' }}>{selectedCode}</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{companies.find(c => c.code === selectedCode)?.name}</div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Shares</div>
-                <div style={{ fontWeight: 700 }}>{currentShares}</div>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', flex: 1, justifyContent: 'flex-end' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Shares</div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{currentShares}</div>
               </div>
-              <div>
-                <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Avg. Price</div>
-                <div style={{ fontWeight: 700 }}>{fmt(currentAvg)}</div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Avg. Price</div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{fmt(currentAvg)}</div>
               </div>
-              <div>
-                <div style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Total Invested</div>
-                <div style={{ fontWeight: 700 }}>LKR {fmt(currentCost)}</div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Invested</div>
+                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{fmt(currentCost)}</div>
               </div>
             </div>
           </div>
