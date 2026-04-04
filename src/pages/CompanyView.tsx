@@ -283,8 +283,8 @@ export default function CompanyView() {
                   <tr key={t.id}>
                     <td>{t.date}</td>
                     <td>
-                      <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : 'gain-pill-sell'}`}>
-                        {t.type}
+                      <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : 'gain-pill-scrip-div'}`}>
+                        {t.type === 'SCRIP_DIVIDEND' ? 'SCRIP' : t.type}
                       </span>
                     </td>
                     <td className="text-right mono">{t.count}</td>
@@ -303,7 +303,7 @@ export default function CompanyView() {
                 <tr className="portfolio-total">
                   <td colSpan={2}>Summary</td>
                   <td className="text-right mono">
-                    {transactions.reduce((s, t) => s + (t.type === 'BUY' ? t.count : -t.count), 0)} net
+                    {transactions.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' ? t.count : t.type === 'SELL' ? -t.count : (() => { throw new Error(`Unknown type: ${t.type}`); })()), 0)} net
                   </td>
                   <td></td>
                   <td className="text-right mono">
