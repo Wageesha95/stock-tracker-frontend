@@ -29,9 +29,6 @@ export default function RightsPage() {
       .then(([r, comps]) => {
         setRights(r);
         setCompanies(comps);
-        if (comps.length > 0 && !companyCode) {
-          setCompanyCode(comps[0].code);
-        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));

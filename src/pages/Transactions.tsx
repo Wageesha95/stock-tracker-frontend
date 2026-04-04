@@ -33,9 +33,6 @@ export default function Transactions() {
           }
         });
         setMarketMap(map);
-        if (comps.length > 0 && !companyCode) {
-          setCompanyCode(comps[0].code);
-        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));

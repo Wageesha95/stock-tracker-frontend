@@ -32,8 +32,6 @@ export default function AvgCalculator() {
         const map: Record<string, PortfolioItem> = {};
         dash.portfolio.forEach((p: PortfolioItem) => { map[p.companyCode] = p; });
         setPortfolioMap(map);
-        const held = dash.portfolio.filter((p: PortfolioItem) => p.sharesHeld > 0);
-        if (held.length > 0 && !selectedCode) setSelectedCode(held[0].companyCode);
       })
       .catch(console.error)
       .finally(() => setLoading(false));

@@ -76,9 +76,6 @@ export default function Dividends() {
         setDividends(divs);
         setCompanies(comps);
         setTransactions(txns);
-        if (comps.length > 0 && !companyCode) {
-          setCompanyCode(comps[0].code);
-        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
