@@ -17,15 +17,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     getMe()
       .then(setUser)
-      .catch(() => setUser(null))
+      .catch(() => {
+        localStorage.removeItem('token');
+        setUser(null);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   const login = async (username: string, password: string) => {
     const u = await apiLogin(username, password);
-    setUser(u);
+    setUser({ id: u.id, username: u.username, role: u.role });
   };
 
   const logout = async () => {
