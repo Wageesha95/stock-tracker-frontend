@@ -3,14 +3,23 @@ import { AuthUser, Company, StockPrice, Transaction, Dividend, PortfolioItem, Re
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8080/api',
-  withCredentials: true,
 });
 
-// 401 interceptor — redirect to login on session expiry
+// Add JWT token to every request
+api.interceptors.request.use(config => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// 401 interceptor — clear token and redirect to login
 api.interceptors.response.use(
   response => response,
   error => {
     if (error.response?.status === 401 && !error.config.url?.includes('/auth/')) {
+      localStorage.removeItem('token');
       window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -19,9 +28,14 @@ api.interceptors.response.use(
 
 // Auth
 export const login = (username: string, password: string) =>
-  api.post<AuthUser>('/auth/login', { username, password }).then(res => res.data);
-export const logout = () =>
-  api.post('/auth/logout').then(res => res.data);
+  api.post<AuthUser & { token: string }>('/auth/login', { username, password }).then(res => {
+    localStorage.setItem('token', res.data.token);
+    return res.data;
+  });
+export const logout = () => {
+  localStorage.removeItem('token');
+  return api.post('/auth/logout').then(res => res.data);
+};
 export const getMe = () =>
   api.get<AuthUser>('/auth/me').then(res => res.data);
 
