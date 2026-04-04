@@ -306,6 +306,16 @@ export default function Transactions() {
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot>
+                    <tr className="portfolio-total">
+                      <td colSpan={2}>Total ({txns.length})</td>
+                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' ? t.count : -t.count), 0)}</td>
+                      <td className="text-right mono"></td>
+                      <td className="text-right mono">{txns.reduce((s, t) => s + t.commission, 0).toFixed(2)}</td>
+                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.count * t.price + t.commission), 0).toFixed(2)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             </div>
