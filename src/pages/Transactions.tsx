@@ -280,14 +280,18 @@ export default function Transactions() {
             const lastTrade = marketMap[code]?.lastTrade || 0;
             return (
             <div key={code} style={{ marginBottom: '2rem' }}>
-              <div className="group-header" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <CompanyAvatar code={code} size={24} />
-                  {code}
-                </div>
-                <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.8rem', opacity: 0.85 }}>
-                  <span>Avg: <strong>{avgPrice.toFixed(2)}</strong></span>
-                  {lastTrade > 0 && <span>Last: <strong>{lastTrade.toFixed(2)}</strong></span>}
+              <div className="group-header" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <CompanyAvatar code={code} size={28} />
+                <span style={{ fontWeight: 700 }}>{code}</span>
+                <div style={{ display: 'flex', gap: '0.5rem', marginLeft: '0.5rem' }}>
+                  <span style={{ background: 'rgba(255,255,255,0.15)', padding: '0.15rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem' }}>
+                    Avg {avgPrice.toFixed(2)}
+                  </span>
+                  {lastTrade > 0 && (
+                    <span style={{ background: 'rgba(255,255,255,0.15)', padding: '0.15rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem' }}>
+                      Last {lastTrade.toFixed(2)}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="portfolio-table-wrap" style={{ borderRadius: '0 0 12px 12px' }}>
