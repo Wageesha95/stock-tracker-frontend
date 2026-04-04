@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { getCompanies, getDashboardAll } from '../api';
 import { Company, PortfolioItem } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -10,6 +10,10 @@ export default function AvgCalculator() {
 
   const [selectedCode, setSelectedCode] = useState('');
   const [mode, setMode] = useState<'calculate' | 'target'>('calculate');
+
+  const [companySearch, setCompanySearch] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Calculate mode
   const [newShares, setNewShares] = useState('');
@@ -90,11 +94,53 @@ export default function AvgCalculator() {
         <div className="form-row">
           <label>
             Company
-            <select value={selectedCode} onChange={e => { setSelectedCode(e.target.value); setNewShares(''); setNewPrice(''); setTargetAvg(''); setBuyPrice(''); }}>
-              {holdingCompanies.map(c => (
-                <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
-              ))}
-            </select>
+            <div style={{ position: 'relative' }} ref={dropdownRef}>
+              <input
+                className="search-bar"
+                value={companySearch}
+                onChange={e => { setCompanySearch(e.target.value); setShowDropdown(true); }}
+                onFocus={() => setShowDropdown(true)}
+                onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                placeholder={selectedCode ? `${selectedCode}` : 'Type to search...'}
+                style={{ width: '100%' }}
+              />
+              {showDropdown && companySearch.length > 0 && (() => {
+                const s = companySearch.toLowerCase();
+                const matches = holdingCompanies.filter(c =>
+                  c.code.toLowerCase().includes(s) || c.name.toLowerCase().includes(s)
+                ).slice(0, 8);
+                return matches.length > 0 ? (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                    background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                    borderRadius: '8px', boxShadow: 'var(--shadow-dropdown)',
+                    maxHeight: '250px', overflow: 'auto', marginTop: '0.25rem',
+                  }}>
+                    {matches.map(c => (
+                      <div
+                        key={c.code}
+                        onMouseDown={() => {
+                          setSelectedCode(c.code);
+                          setCompanySearch('');
+                          setShowDropdown(false);
+                          setNewShares(''); setNewPrice(''); setTargetAvg(''); setBuyPrice('');
+                        }}
+                        style={{
+                          padding: '0.5rem 0.75rem', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-dropdown-hover)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <CompanyAvatar code={c.code} size={24} />
+                        <span style={{ fontWeight: 600 }}>{c.code}</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{c.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
+            </div>
           </label>
         </div>
 
