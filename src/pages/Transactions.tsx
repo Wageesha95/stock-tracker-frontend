@@ -297,7 +297,7 @@ export default function Transactions() {
             return (
             <div key={code} className="group-card">
               <div className="group-header">
-                <div className="group-header-left">
+                <div className="group-header-left" style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${code}`)}>
                   <CompanyAvatar code={code} size={32} />
                   <div>
                     <div className="group-code">{code}</div>
