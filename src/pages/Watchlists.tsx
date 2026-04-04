@@ -9,22 +9,18 @@ import { MarketData, Company, PortfolioItem } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 const WATCHLIST_COLORS = [
-  { name: 'Blue', value: '#3182ce' },
-  { name: 'Green', value: '#38a169' },
-  { name: 'Orange', value: '#dd6b20' },
-  { name: 'Red', value: '#e53e3e' },
-  { name: 'Purple', value: '#805ad5' },
-  { name: 'Teal', value: '#319795' },
-  { name: 'Pink', value: '#d53f8c' },
-  { name: 'Yellow', value: '#d69e2e' },
-  { name: 'Indigo', value: '#5a67d8' },
-  { name: 'Cyan', value: '#0bc5ea' },
-  { name: 'Lime', value: '#68d391' },
-  { name: 'Coral', value: '#fc8181' },
-  { name: 'Sky', value: '#63b3ed' },
-  { name: 'Amber', value: '#f6ad55' },
-  { name: 'Rose', value: '#feb2b2' },
-  { name: 'Slate', value: '#718096' },
+  '#3182ce', '#2b6cb0', '#63b3ed',
+  '#38a169', '#2f855a', '#68d391',
+  '#dd6b20', '#c05621', '#f6ad55',
+  '#e53e3e', '#c53030', '#fc8181',
+  '#805ad5', '#6b46c1', '#b794f4',
+  '#319795', '#2c7a7b', '#81e6d9',
+  '#d53f8c', '#b83280', '#fbb6ce',
+  '#d69e2e', '#b7791f', '#faf089',
+  '#5a67d8', '#4c51bf', '#a3bffa',
+  '#0bc5ea', '#00b5d8', '#76e4f7',
+  '#718096', '#4a5568', '#a0aec0',
+  '#2d3748',
 ];
 
 export default function Watchlists() {
@@ -39,7 +35,7 @@ export default function Watchlists() {
   // Create form
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newColor, setNewColor] = useState(WATCHLIST_COLORS[0].value);
+  const [newColor, setNewColor] = useState(WATCHLIST_COLORS[0]);
 
   // Settings panel
   const [showSettings, setShowSettings] = useState(false);
@@ -96,7 +92,7 @@ export default function Watchlists() {
     setWatchlists(prev => [...prev, wl]);
     setActiveId(wl.id);
     setNewName('');
-    setNewColor(WATCHLIST_COLORS[0].value);
+    setNewColor(WATCHLIST_COLORS[0]);
     setShowCreate(false);
   };
 
@@ -120,7 +116,7 @@ export default function Watchlists() {
   const openSettings = () => {
     if (!active) return;
     setEditName(active.name);
-    setEditColor(active.color || WATCHLIST_COLORS[0].value);
+    setEditColor(active.color || WATCHLIST_COLORS[0]);
     setConfirmDelete(false);
     setShowSettings(true);
   };
@@ -170,7 +166,7 @@ export default function Watchlists() {
       <h1>Watchlists</h1>
 
       {/* Watchlist nav tabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
         {watchlists.map(wl => {
           const isActive = activeId === wl.id;
           const color = (wl.color && wl.color.startsWith('#')) ? wl.color : '#3182ce';
@@ -179,18 +175,23 @@ export default function Watchlists() {
               key={wl.id}
               onClick={() => { setActiveId(wl.id); setShowSettings(false); setShowCreate(false); }}
               style={{
-                padding: '0.4rem 1rem',
-                borderRadius: '6px',
-                border: `2px solid ${color}`,
+                padding: '0.4rem 0.85rem',
+                borderRadius: '20px',
+                border: isActive ? `2px solid ${color}` : '2px solid var(--border-color)',
                 background: isActive ? color : 'transparent',
-                color: isActive ? 'white' : color,
+                color: isActive ? 'white' : 'var(--text-primary)',
                 cursor: 'pointer',
-                fontSize: '0.85rem',
+                fontSize: '0.82rem',
                 fontWeight: isActive ? 600 : 400,
                 transition: 'all 0.15s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem',
               }}
             >
+              {!isActive && <span style={{ width: 8, height: 8, borderRadius: '50%', background: color, flexShrink: 0 }} />}
               {wl.name}
+              <span style={{ opacity: 0.6, fontSize: '0.7rem' }}>({wl.companyCodes?.length || 0})</span>
             </button>
           );
         })}
@@ -228,17 +229,18 @@ export default function Watchlists() {
               </label>
               <label>
                 Color
-                <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.25rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, 22px)', gap: '4px', marginTop: '0.25rem' }}>
                   {WATCHLIST_COLORS.map(c => (
                     <div
-                      key={c.value}
-                      onClick={() => setNewColor(c.value)}
-                      title={c.name}
+                      key={c}
+                      onClick={() => setNewColor(c)}
                       style={{
-                        width: 26, height: 26, borderRadius: '50%', background: c.value, cursor: 'pointer',
-                        border: newColor === c.value ? '3px solid var(--text-primary)' : '2px solid transparent',
-                        boxSizing: 'border-box',
+                        width: 22, height: 22, borderRadius: '4px', background: c, cursor: 'pointer',
+                        border: newColor === c ? '2.5px solid var(--text-primary)' : '1px solid transparent',
+                        boxSizing: 'border-box', transition: 'transform 0.1s',
                       }}
+                      onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.2)')}
+                      onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
                     />
                   ))}
                 </div>
@@ -331,17 +333,18 @@ export default function Watchlists() {
                 </label>
                 <label>
                   Color
-                  <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.25rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, 22px)', gap: '4px', marginTop: '0.25rem' }}>
                     {WATCHLIST_COLORS.map(c => (
                       <div
-                        key={c.value}
-                        onClick={() => setEditColor(c.value)}
-                        title={c.name}
+                        key={c}
+                        onClick={() => setEditColor(c)}
                         style={{
-                          width: 26, height: 26, borderRadius: '50%', background: c.value, cursor: 'pointer',
-                          border: editColor === c.value ? '3px solid var(--text-primary)' : '2px solid transparent',
-                          boxSizing: 'border-box',
+                          width: 22, height: 22, borderRadius: '4px', background: c, cursor: 'pointer',
+                          border: editColor === c ? '2.5px solid var(--text-primary)' : '1px solid transparent',
+                          boxSizing: 'border-box', transition: 'transform 0.1s',
                         }}
+                        onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.2)')}
+                        onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
                       />
                     ))}
                   </div>
