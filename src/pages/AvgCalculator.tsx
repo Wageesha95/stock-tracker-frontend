@@ -153,18 +153,18 @@ export default function AvgCalculator() {
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{companies.find(c => c.code === selectedCode)?.name}</div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap', flex: 1, justifyContent: 'flex-end' }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Shares</div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{currentShares}</div>
+            <div style={{ display: 'flex', flex: 1, justifyContent: 'space-evenly' }}>
+              <div style={{ textAlign: 'center', padding: '0.25rem 0.75rem' }}>
+                <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>Shares</div>
+                <div style={{ fontWeight: 700, fontSize: '1rem' }}>{currentShares}</div>
               </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Avg. Price</div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{fmt(currentAvg)}</div>
+              <div style={{ textAlign: 'center', padding: '0.25rem 0.75rem' }}>
+                <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>Avg. Price</div>
+                <div style={{ fontWeight: 700, fontSize: '1rem' }}>{fmt(currentAvg)}</div>
               </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Invested</div>
-                <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{fmt(currentCost)}</div>
+              <div style={{ textAlign: 'center', padding: '0.25rem 0.75rem' }}>
+                <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>Invested</div>
+                <div style={{ fontWeight: 700, fontSize: '1rem' }}>{fmt(currentCost)}</div>
               </div>
             </div>
           </div>
