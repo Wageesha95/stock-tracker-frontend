@@ -277,10 +277,21 @@ export default function Transactions() {
             return acc;
           }, {});
           return Object.entries(grouped).map(([code, txns]) => {
-            const buyTxns = txns.filter(t => t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND');
-            const totalBought = buyTxns.reduce((s, t) => s + t.count, 0);
-            const totalBuyCost = buyTxns.reduce((s, t) => s + t.count * t.price + t.commission, 0);
-            const avgPrice = totalBought > 0 ? totalBuyCost / totalBought : 0;
+            // FIFO avg price calculation
+            const chronological = [...txns].sort((a, b) => a.date.localeCompare(b.date));
+            let fifoShares = 0;
+            let fifoCost = 0;
+            for (const t of chronological) {
+              if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND') {
+                fifoShares += t.count;
+                fifoCost += t.count * t.price + t.commission;
+              } else if (t.type === 'SELL') {
+                const avgAtSell = fifoShares > 0 ? fifoCost / fifoShares : 0;
+                fifoCost -= avgAtSell * t.count;
+                fifoShares -= t.count;
+              }
+            }
+            const avgPrice = fifoShares > 0 ? fifoCost / fifoShares : 0;
             const lastTrade = marketMap[code]?.lastTrade || 0;
             const comp = companies.find(x => x.code === code);
             return (

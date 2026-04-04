@@ -64,17 +64,17 @@ export default function CompanyView() {
   const { valueChartData, sharesChartData } = useMemo(() => {
     const sortedTx = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
 
-    // Build cumulative invested + shares over time
+    // Build cumulative invested + shares over time (FIFO)
     let cumInvested = 0;
     let cumShares = 0;
     const txPoints: { date: string; invested: number; shares: number }[] = [];
     for (const t of sortedTx) {
-      const amount = t.count * t.price + t.commission;
-      if (t.type === 'BUY') {
-        cumInvested += amount;
+      if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND') {
+        cumInvested += t.count * t.price + t.commission;
         cumShares += t.count;
-      } else {
-        cumInvested -= amount;
+      } else if (t.type === 'SELL') {
+        const avgAtSell = cumShares > 0 ? cumInvested / cumShares : 0;
+        cumInvested -= avgAtSell * t.count;
         cumShares -= t.count;
       }
       txPoints.push({ date: t.date, invested: Math.round(cumInvested * 100) / 100, shares: cumShares });
