@@ -475,8 +475,8 @@ export default function Dashboard() {
       })()}
 
       {activeSection === 'holdings' && (<>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <h2>Portfolio Holdings</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <h2 style={{ margin: 0 }}>Portfolio Holdings</h2>
         {tableSearchBar(filtered.length)}
       </div>
       {holdingsFiltered.length === 0 ? (
