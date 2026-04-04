@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { AuthUser } from '../types';
 import { login as apiLogin, logout as apiLogout, getMe } from '../api';
 
@@ -13,7 +13,11 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>(null!);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    // Restore user from localStorage immediately to prevent flash
+    const saved = localStorage.getItem('user');
+    return saved ? JSON.parse(saved) : null;
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,23 +27,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     getMe()
-      .then(setUser)
+      .then(u => {
+        setUser(u);
+        localStorage.setItem('user', JSON.stringify(u));
+      })
       .catch(() => {
         localStorage.removeItem('token');
+        localStorage.removeItem('user');
         setUser(null);
       })
       .finally(() => setLoading(false));
   }, []);
 
-  const login = async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string) => {
     const u = await apiLogin(username, password);
-    setUser({ id: u.id, username: u.username, role: u.role });
-  };
+    const authUser = { id: u.id, username: u.username, role: u.role };
+    localStorage.setItem('user', JSON.stringify(authUser));
+    setUser(authUser);
+  }, []);
 
-  const logout = async () => {
-    await apiLogout();
+  const logout = useCallback(async () => {
+    await apiLogout().catch(() => {});
+    localStorage.removeItem('user');
     setUser(null);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ user, loading, isAdmin: user?.role === 'ADMIN', login, logout }}>
