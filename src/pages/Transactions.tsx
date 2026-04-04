@@ -275,8 +275,13 @@ export default function Transactions() {
             return acc;
           }, {});
           return Object.entries(grouped).map(([code, txns]) => {
-            const totalShares = txns.reduce((s, t) => s + t.count, 0);
-            const avgPrice = totalShares > 0 ? txns.reduce((s, t) => s + t.count * t.price + t.commission, 0) / totalShares : 0;
+            const buyTxns = txns.filter(t => t.type === 'BUY' || t.type === 'RIGHTS');
+            const sellTxns = txns.filter(t => t.type === 'SELL');
+            const totalBought = buyTxns.reduce((s, t) => s + t.count, 0);
+            const totalSold = sellTxns.reduce((s, t) => s + t.count, 0);
+            const sharesHeld = totalBought - totalSold;
+            const totalBuyCost = buyTxns.reduce((s, t) => s + t.count * t.price + t.commission, 0);
+            const avgPrice = totalBought > 0 ? totalBuyCost / totalBought : 0;
             const lastTrade = marketMap[code]?.lastTrade || 0;
             const comp = companies.find(x => x.code === code);
             return (
