@@ -129,24 +129,36 @@ export default function CompanyView() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{
-            background: 'transparent', border: '1.5px solid var(--border-input)',
-            borderRadius: '8px', padding: '0.3rem 0.6rem', cursor: 'pointer',
-            color: 'var(--text-muted)', fontSize: '0.85rem',
-          }}
-        >
-          &larr; Back
-        </button>
-        <CompanyAvatar code={code || ''} size={56} />
-        <div>
-          <h1 style={{ margin: 0 }}>{code}</h1>
-          {company && company.name !== code && (
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{company.name}</span>
-          )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <button
+            onClick={() => navigate(-1)}
+            style={{
+              background: 'transparent', border: '1.5px solid var(--border-input)',
+              borderRadius: '8px', padding: '0.3rem 0.6rem', cursor: 'pointer',
+              color: 'var(--text-muted)', fontSize: '0.85rem',
+            }}
+          >
+            &larr; Back
+          </button>
+          <CompanyAvatar code={code || ''} size={56} />
+          <div>
+            <h1 style={{ margin: 0 }}>{code}</h1>
+            {company && company.name !== code && (
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{company.name}</span>
+            )}
+          </div>
         </div>
+        {portfolioItem && portfolioItem.lastTrade > 0 && (
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-stat-value)' }}>
+              {fmt(portfolioItem.lastTrade)}
+            </div>
+            <div className={gainClass(portfolioItem.change)} style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+              {gainSign(portfolioItem.change)}{fmt(portfolioItem.change)} ({gainSign(portfolioItem.changePercent)}{fmt(portfolioItem.changePercent)}%)
+            </div>
+          </div>
+        )}
       </div>
 
       {portfolioItem && (
