@@ -282,7 +282,16 @@ export default function Dividends() {
                   <td className="text-right mono">{d.type === 'CASH' ? d.amount.toFixed(2) : '-'}</td>
                   <td className="text-right mono">{d.type === 'CASH' ? d.shares : '-'}</td>
                   <td className="text-right mono">{d.type === 'SCRIP' ? d.scripShares : '-'}</td>
-                  <td className="text-right mono">{d.type === 'CASH' ? d.totalAmount.toFixed(2) : `${d.scripShares} shares`}</td>
+                  <td className="text-right mono">
+                    {d.type === 'CASH' ? (
+                      <>
+                        {d.totalAmount.toFixed(2)}
+                        {d.amount * d.shares === d.totalAmount && (
+                          <span style={{ color: '#d69e2e', fontSize: '0.65rem', marginLeft: '0.3rem' }} title="Untaxed">*</span>
+                        )}
+                      </>
+                    ) : `${d.scripShares} shares`}
+                  </td>
                   <td>
                     <ActionMenu actions={[
                       { label: 'Delete', onClick: () => handleDelete(d.id), danger: true },
