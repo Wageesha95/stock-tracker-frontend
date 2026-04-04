@@ -30,7 +30,7 @@ export interface Transaction {
   id: string;
   companyCode: string;
   date: string;
-  type: 'BUY' | 'SELL' | 'RIGHTS';
+  type: 'BUY' | 'SELL' | 'RIGHTS' | 'SCRIP_DIVIDEND';
   count: number;
   price: number;
   commission: number;

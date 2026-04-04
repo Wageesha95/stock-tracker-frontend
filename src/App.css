@@ -933,6 +933,11 @@ button:hover {
   color: #2a4365;
 }
 
+.gain-pill-scrip-div {
+  background: #e9d8fd;
+  color: #553c9a;
+}
+
 .gain-pill-cash {
   background: #c6f6d5;
   color: #22543d;
