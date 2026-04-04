@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getTransactions, getCompanies, getMarketData, createTransaction, deleteTransaction } from '../api';
 import { Transaction, Company, MarketData } from '../types';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 export default function Transactions() {
+  const navigate = useNavigate();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [marketMap, setMarketMap] = useState<Record<string, MarketData>>({});
@@ -243,7 +245,7 @@ export default function Transactions() {
               {sorted.map(t => (
                 <tr key={t.id}>
                   <td>{t.date}</td>
-                  <td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${t.companyCode}`)}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <CompanyAvatar code={t.companyCode} size={26} />
                       {t.companyCode}
@@ -251,7 +253,7 @@ export default function Transactions() {
                   </td>
                   <td>
                     <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : 'gain-pill-scrip-div'}`}>
-                      {t.type}
+                      {t.type === 'SCRIP_DIVIDEND' ? 'SCRIP' : t.type}
                     </span>
                   </td>
                   <td className="text-right mono">{t.count}</td>
@@ -327,7 +329,7 @@ export default function Transactions() {
                         <td>{t.date}</td>
                         <td>
                           <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : 'gain-pill-scrip-div'}`}>
-                            {t.type}
+                            {t.type === 'SCRIP_DIVIDEND' ? 'SCRIP' : t.type}
                           </span>
                         </td>
                         <td className="text-right mono">{t.count}</td>

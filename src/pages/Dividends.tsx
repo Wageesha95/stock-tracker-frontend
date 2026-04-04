@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend } from '../api';
 import { Dividend, Company, Transaction } from '../types';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 export default function Dividends() {
+  const navigate = useNavigate();
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -354,7 +356,7 @@ export default function Dividends() {
                 <tr key={d.id}>
                   <td>{d.date}</td>
                   <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{d.xdDate || '\u2014'}</td>
-                  <td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${d.companyCode}`)}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <CompanyAvatar code={d.companyCode} size={26} />
                       {d.companyCode}
@@ -407,7 +409,7 @@ export default function Dividends() {
                 <tr key={d.id}>
                   <td>{d.date}</td>
                   <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{d.xdDate || '\u2014'}</td>
-                  <td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${d.companyCode}`)}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <CompanyAvatar code={d.companyCode} size={26} />
                       {d.companyCode}

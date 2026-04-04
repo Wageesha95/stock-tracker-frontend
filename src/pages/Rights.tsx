@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getRights, createRights, updateRights, deleteRights, getCompanies, RightsData } from '../api';
 import { Company } from '../types';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 export default function RightsPage() {
+  const navigate = useNavigate();
   const [rights, setRights] = useState<RightsData[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -175,7 +177,7 @@ export default function RightsPage() {
               {sorted.map(r => (
                 <tr key={r.id}>
                   <td>{r.date}</td>
-                  <td>
+                  <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${r.companyCode}`)}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <CompanyAvatar code={r.companyCode} size={26} />
                       {r.companyCode}
