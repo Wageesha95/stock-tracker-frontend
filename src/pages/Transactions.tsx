@@ -280,17 +280,21 @@ export default function Transactions() {
             const lastTrade = marketMap[code]?.lastTrade || 0;
             return (
             <div key={code} style={{ marginBottom: '2rem' }}>
-              <div className="group-header" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <CompanyAvatar code={code} size={28} />
-                <span style={{ fontWeight: 700 }}>{code}</span>
-                <div style={{ display: 'flex', gap: '0.5rem', marginLeft: '0.5rem' }}>
-                  <span style={{ background: 'rgba(255,255,255,0.15)', padding: '0.15rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem' }}>
-                    Avg. Price {avgPrice.toFixed(2)}
-                  </span>
+              <div className="group-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <CompanyAvatar code={code} size={28} />
+                  <span style={{ fontWeight: 700, fontSize: '1rem' }}>{code}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', letterSpacing: '0.2px' }}>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ opacity: 0.6, fontSize: '0.65rem', textTransform: 'uppercase' }}>Avg. Price</div>
+                    <div style={{ fontWeight: 700 }}>{avgPrice.toFixed(2)}</div>
+                  </div>
                   {lastTrade > 0 && (
-                    <span style={{ background: 'rgba(255,255,255,0.15)', padding: '0.15rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem' }}>
-                      Last Trade {lastTrade.toFixed(2)}
-                    </span>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ opacity: 0.6, fontSize: '0.65rem', textTransform: 'uppercase' }}>Last Trade</div>
+                      <div style={{ fontWeight: 700 }}>{lastTrade.toFixed(2)}</div>
+                    </div>
                   )}
                 </div>
               </div>
