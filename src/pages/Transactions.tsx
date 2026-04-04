@@ -278,29 +278,36 @@ export default function Transactions() {
             const totalShares = txns.reduce((s, t) => s + t.count, 0);
             const avgPrice = totalShares > 0 ? txns.reduce((s, t) => s + t.count * t.price + t.commission, 0) / totalShares : 0;
             const lastTrade = marketMap[code]?.lastTrade || 0;
+            const comp = companies.find(x => x.code === code);
             return (
-            <div key={code} style={{ marginBottom: '2rem' }}>
-              <div className="group-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                  <CompanyAvatar code={code} size={28} />
-                  <span style={{ fontWeight: 700, fontSize: '1rem' }}>{code}</span>
-                  {(() => { const c = companies.find(x => x.code === code); return c && c.name !== code ? <span style={{ opacity: 0.6, fontSize: '0.8rem' }}>{c.name}</span> : null; })()}
+            <div key={code} className="group-card">
+              <div className="group-header">
+                <div className="group-header-left">
+                  <CompanyAvatar code={code} size={32} />
+                  <div>
+                    <div className="group-code">{code}</div>
+                    {comp && comp.name !== code && <div className="group-name">{comp.name}</div>}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', letterSpacing: '0.2px' }}>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ opacity: 0.6, fontSize: '0.65rem', textTransform: 'uppercase' }}>Avg. Price</div>
-                    <div style={{ fontWeight: 700 }}>{avgPrice.toFixed(2)}</div>
+                <div className="group-header-stats">
+                  <div className="group-stat">
+                    <div className="group-stat-label">Avg. Price</div>
+                    <div className="group-stat-value">{avgPrice.toFixed(2)}</div>
                   </div>
                   {lastTrade > 0 && (
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ opacity: 0.6, fontSize: '0.65rem', textTransform: 'uppercase' }}>Last Trade</div>
-                      <div style={{ fontWeight: 700 }}>{lastTrade.toFixed(2)}</div>
+                    <div className="group-stat">
+                      <div className="group-stat-label">Last Trade</div>
+                      <div className="group-stat-value">{lastTrade.toFixed(2)}</div>
                     </div>
                   )}
+                  <div className="group-stat">
+                    <div className="group-stat-label">Trades</div>
+                    <div className="group-stat-value">{txns.length}</div>
+                  </div>
                 </div>
               </div>
-              <div className="portfolio-table-wrap" style={{ borderRadius: '0 0 12px 12px' }}>
-                <table className="portfolio-table" style={{ borderRadius: '0 0 12px 12px' }}>
+              <div className="portfolio-table-wrap">
+                <table className="portfolio-table">
                   <thead>
                     <tr>
                       <th>Date</th>

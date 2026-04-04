@@ -925,19 +925,74 @@ button:hover {
 }
 
 /* Group Header (grouped transactions) */
-.group-header {
-  background: var(--bg-group-gradient);
-  color: white;
-  padding: 0.6rem 1rem;
-  border-radius: 8px 8px 0 0;
-  font-size: 1rem;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  margin-top: 1.5rem;
+.group-card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  margin-bottom: 1.25rem;
 }
 
-.group-header:first-of-type {
-  margin-top: 0;
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1.5px solid var(--border-color);
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.group-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.group-header-left .group-code {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text-company-code);
+}
+
+.group-header-left .group-name {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.group-header-stats {
+  display: flex;
+  gap: 1.25rem;
+}
+
+.group-stat {
+  text-align: right;
+}
+
+.group-stat-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 0.1rem;
+}
+
+.group-stat-value {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text-stat-value);
+}
+
+.group-card .portfolio-table-wrap {
+  border-radius: 0;
+}
+
+.group-card .portfolio-table {
+  border-radius: 0;
+}
+
+.group-card .portfolio-table thead tr {
+  background: var(--bg-thead);
 }
 
 /* Type pills for BUY/SELL/CASH/SCRIP */
