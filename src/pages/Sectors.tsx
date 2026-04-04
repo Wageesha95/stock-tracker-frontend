@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardAll, getIndustryGroups, getCompanies, createIndustryGroup, updateIndustryGroup, deleteIndustryGroup, invalidate } from '../api';
 import { IndustryGroup, Company } from '../types';
@@ -368,9 +368,8 @@ export default function Sectors() {
                   const allocation = getAllocation(sec.currentValue);
                   const colorIdx = sectorColorMap[sec.sector] ?? 0;
                   return (
-                    <>{/* Fragment for adjacent rows */}
+                    <React.Fragment key={sec.sector}>
                       <tr
-                        key={sec.sector}
                         onClick={() => setExpandedSector(isExpanded ? null : sec.sector)}
                         style={{ cursor: 'pointer' }}
                       >
@@ -485,7 +484,7 @@ export default function Sectors() {
                           </td>
                         </tr>
                       ))}
-                    </>
+                    </React.Fragment>
                   );
                 })}
               </tbody>
