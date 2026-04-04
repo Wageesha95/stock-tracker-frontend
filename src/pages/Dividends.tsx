@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react';
-import { getDividends, getCompanies, createDividend, deleteDividend } from '../api';
-import { Dividend, Company } from '../types';
+import { getDividends, getCompanies, getTransactions, createDividend, deleteDividend } from '../api';
+import { Dividend, Company, Transaction } from '../types';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 export default function Dividends() {
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [companyCode, setCompanyCode] = useState('');
+  const [xdDate, setXdDate] = useState('');
   const [date, setDate] = useState('');
   const [type, setType] = useState<'CASH' | 'SCRIP'>('CASH');
   const [amount, setAmount] = useState('');
@@ -18,16 +20,44 @@ export default function Dividends() {
   const [taxable, setTaxable] = useState(true);
 
   const loadData = () => {
-    Promise.all([getDividends(), getCompanies()])
-      .then(([divs, comps]) => {
+    Promise.all([getDividends(), getCompanies(), getTransactions()])
+      .then(([divs, comps, txns]) => {
         setDividends(divs);
         setCompanies(comps);
+        setTransactions(txns);
         if (comps.length > 0 && !companyCode) {
           setCompanyCode(comps[0].code);
         }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  // Calculate shares held for a company just before a given date
+  const getSharesHeldAtDate = (code: string, beforeDate: string): number => {
+    return transactions
+      .filter(t => t.companyCode === code && t.date < beforeDate)
+      .reduce((total, t) => total + (t.type === 'BUY' ? t.count : -t.count), 0);
+  };
+
+  // Auto-suggest shares when XD date or company changes
+  const handleXdDateChange = (newXdDate: string) => {
+    setXdDate(newXdDate);
+    if (newXdDate) {
+      setDate(newXdDate);
+      if (companyCode) {
+        const held = getSharesHeldAtDate(companyCode, newXdDate);
+        setShares(held > 0 ? String(held) : '');
+      }
+    }
+  };
+
+  const handleCompanyChange = (newCode: string) => {
+    setCompanyCode(newCode);
+    if (xdDate) {
+      const held = getSharesHeldAtDate(newCode, xdDate);
+      setShares(held > 0 ? String(held) : '');
+    }
   };
 
   useEffect(() => {
@@ -49,6 +79,7 @@ export default function Dividends() {
         scripShares: type === 'SCRIP' ? Number(scripShares) : 0,
         totalAmount: gross - tax,
       });
+      setXdDate('');
       setDate('');
       setAmount('');
       setShares('');
@@ -89,7 +120,7 @@ export default function Dividends() {
           <div className="form-row">
             <label>
               Company
-              <select value={companyCode} onChange={e => setCompanyCode(e.target.value)} required>
+              <select value={companyCode} onChange={e => handleCompanyChange(e.target.value)} required>
                 {companies.map(c => (
                   <option key={c.id} value={c.code}>
                     {c.code} - {c.name}
@@ -98,7 +129,11 @@ export default function Dividends() {
               </select>
             </label>
             <label>
-              Date
+              XD Date
+              <input type="date" value={xdDate} onChange={e => handleXdDateChange(e.target.value)} required />
+            </label>
+            <label>
+              Transaction Date
               <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
             </label>
             <label>
@@ -149,6 +184,11 @@ export default function Dividends() {
                   onChange={e => setShares(e.target.value)}
                   required
                 />
+                {xdDate && companyCode && (
+                  <small style={{ color: 'var(--text-muted)' }}>
+                    Held before XD: {getSharesHeldAtDate(companyCode, xdDate)}
+                  </small>
+                )}
               </label>
             </div>
           ) : (
