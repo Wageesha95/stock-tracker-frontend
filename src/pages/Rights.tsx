@@ -4,6 +4,7 @@ import { getRights, createRights, updateRights, deleteRights, getCompanies, Righ
 import { Company } from '../types';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
+import CompanySearchSelect from '../components/CompanySearchSelect';
 
 export default function RightsPage() {
   const navigate = useNavigate();
@@ -119,11 +120,7 @@ export default function RightsPage() {
           <div className="form-row">
             <label>
               Company
-              <select value={companyCode} onChange={e => setCompanyCode(e.target.value)} required>
-                {companies.map(c => (
-                  <option key={c.id} value={c.code}>{c.code} - {c.name}</option>
-                ))}
-              </select>
+              <CompanySearchSelect companies={companies} value={companyCode} onChange={setCompanyCode} />
             </label>
             <label>
               Date

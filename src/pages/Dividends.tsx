@@ -4,6 +4,7 @@ import { getDividends, getCompanies, getTransactions, createDividend, updateDivi
 import { Dividend, Company, Transaction } from '../types';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
+import CompanySearchSelect from '../components/CompanySearchSelect';
 
 export default function Dividends() {
   const navigate = useNavigate();
@@ -195,13 +196,7 @@ export default function Dividends() {
           <div className="form-row">
             <label>
               Company
-              <select value={companyCode} onChange={e => handleCompanyChange(e.target.value)} required>
-                {companies.map(c => (
-                  <option key={c.id} value={c.code}>
-                    {c.code} - {c.name}
-                  </option>
-                ))}
-              </select>
+              <CompanySearchSelect companies={companies} value={companyCode} onChange={handleCompanyChange} />
             </label>
             <label>
               XD Date
