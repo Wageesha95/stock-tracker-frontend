@@ -85,10 +85,11 @@ export default function Companies() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0 }}>Companies ({filtered.length})</h1>
         <input
+          className="search-bar"
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search by code, name or industry..."
-          style={{ flex: 1, minWidth: '200px', padding: '0.5rem 0.75rem', fontSize: '0.9rem' }}
+          style={{ flex: 1, minWidth: '200px' }}
         />
       </div>
 

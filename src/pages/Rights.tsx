@@ -132,10 +132,11 @@ export default function RightsPage() {
       {rights.length >= 3 && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
           <input
+            className="search-bar"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by company or date..."
-            style={{ flex: 1, minWidth: '180px', padding: '0.4rem 0.75rem', fontSize: '0.85rem' }}
+            style={{ flex: 1, minWidth: '180px' }}
           />
         </div>
       )}
