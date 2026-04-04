@@ -134,6 +134,8 @@ export const getDividendsByCompany = (code: string) =>
   cached(`dividends:${code}`, () => api.get<Dividend[]>(`/dividends/company/${code}`).then(res => res.data));
 export const createDividend = (data: Omit<Dividend, 'id' | 'createdAt'>) =>
   api.post<Dividend>('/dividends', data).then(res => { invalidate('dividends'); return res.data; });
+export const updateDividend = (id: string, data: Omit<Dividend, 'id' | 'createdAt'>) =>
+  api.put<Dividend>(`/dividends/${id}`, data).then(res => { invalidate('dividends'); return res.data; });
 export const deleteDividend = (id: string) =>
   api.delete(`/dividends/${id}`).then(res => { invalidate('dividends'); return res; });
 

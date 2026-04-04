@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getDividends, getCompanies, getTransactions, createDividend, deleteDividend } from '../api';
+import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend } from '../api';
 import { Dividend, Company, Transaction } from '../types';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -18,6 +18,52 @@ export default function Dividends() {
   const [shares, setShares] = useState('');
   const [scripShares, setScripShares] = useState('');
   const [taxable, setTaxable] = useState(true);
+
+  // Edit modal state
+  const [editDividend, setEditDividend] = useState<Dividend | null>(null);
+  const [editDate, setEditDate] = useState('');
+  const [editType, setEditType] = useState<'CASH' | 'SCRIP'>('CASH');
+  const [editAmount, setEditAmount] = useState('');
+  const [editShares, setEditShares] = useState('');
+  const [editScripShares, setEditScripShares] = useState('');
+  const [editTaxable, setEditTaxable] = useState(true);
+  const [editTotal, setEditTotal] = useState('');
+
+  const openEdit = (d: Dividend) => {
+    setEditDividend(d);
+    setEditDate(d.date);
+    setEditType(d.type);
+    setEditAmount(d.type === 'CASH' ? String(d.amount) : '');
+    setEditShares(d.type === 'CASH' ? String(d.shares) : '');
+    setEditScripShares(d.type === 'SCRIP' ? String(d.scripShares) : '');
+    setEditTaxable(d.taxed !== false);
+    const gross = d.type === 'CASH' ? d.amount * d.shares : 0;
+    setEditTotal(String(d.totalAmount));
+  };
+
+  const handleEditSubmit = async () => {
+    if (!editDividend) return;
+    try {
+      await updateDividend(editDividend.id, {
+        companyCode: editDividend.companyCode,
+        type: editType,
+        date: editDate,
+        amount: editType === 'CASH' ? Number(editAmount) : 0,
+        shares: editType === 'CASH' ? Number(editShares) : 0,
+        scripShares: editType === 'SCRIP' ? Number(editScripShares) : 0,
+        totalAmount: Number(editTotal),
+        taxed: editType === 'CASH' ? editTaxable : undefined,
+      });
+      setEditDividend(null);
+      loadData();
+    } catch (err) {
+      console.error('Failed to update dividend', err);
+    }
+  };
+
+  const editGross = editType === 'CASH' ? (Number(editAmount) || 0) * (Number(editShares) || 0) : 0;
+  const editTax = editTaxable ? editGross * 0.15 : 0;
+  const editCalculatedTotal = editGross - editTax;
 
   const loadData = () => {
     Promise.all([getDividends(), getCompanies(), getTransactions()])
@@ -295,6 +341,7 @@ export default function Dividends() {
                   </td>
                   <td>
                     <ActionMenu actions={[
+                      { label: 'Edit', onClick: () => openEdit(d) },
                       { label: 'Delete', onClick: () => handleDelete(d.id), danger: true },
                     ]} />
                   </td>
@@ -302,6 +349,94 @@ export default function Dividends() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editDividend && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }} onClick={() => setEditDividend(null)}>
+          <div style={{
+            background: 'var(--bg-card)', borderRadius: '12px', padding: '1.5rem',
+            width: '100%', maxWidth: '480px', margin: '1rem', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 1rem' }}>Edit Dividend</h2>
+            <div style={{ marginBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+                <CompanyAvatar code={editDividend.companyCode} size={32} />
+                <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{editDividend.companyCode}</span>
+              </div>
+            </div>
+            <div className="form-row">
+              <label>
+                Date
+                <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} required />
+              </label>
+              <label>
+                Type
+                <div className="radio-group">
+                  <label className="radio-label">
+                    <input type="radio" checked={editType === 'CASH'} onChange={() => setEditType('CASH')} /> Cash
+                  </label>
+                  <label className="radio-label">
+                    <input type="radio" checked={editType === 'SCRIP'} onChange={() => setEditType('SCRIP')} /> Scrip
+                  </label>
+                </div>
+              </label>
+            </div>
+            {editType === 'CASH' ? (
+              <>
+                <div className="form-row">
+                  <label>
+                    Amount per Share (LKR)
+                    <input type="number" step="0.01" min="0" value={editAmount} onChange={e => setEditAmount(e.target.value)} required />
+                  </label>
+                  <label>
+                    Shares Held
+                    <input type="number" min="1" value={editShares} onChange={e => setEditShares(e.target.value)} required />
+                  </label>
+                </div>
+                <div className="form-row">
+                  <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={editTaxable} onChange={e => setEditTaxable(e.target.checked)} />
+                    Taxable (15% WHT)
+                  </label>
+                </div>
+                {editGross > 0 && (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                    <div>Gross: LKR {editGross.toFixed(2)}</div>
+                    {editTaxable && <div style={{ color: '#e53e3e' }}>Tax (15%): -LKR {editTax.toFixed(2)}</div>}
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Suggested Net: LKR {editCalculatedTotal.toFixed(2)}</div>
+                  </div>
+                )}
+                <div className="form-row">
+                  <label>
+                    Total Amount (editable)
+                    <input type="number" step="0.01" min="0" value={editTotal} onChange={e => setEditTotal(e.target.value)} />
+                  </label>
+                </div>
+              </>
+            ) : (
+              <div className="form-row">
+                <label>
+                  Shares Received (Free)
+                  <input type="number" min="1" value={editScripShares} onChange={e => setEditScripShares(e.target.value)} required />
+                </label>
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <button onClick={() => setEditDividend(null)} style={{
+                padding: '0.5rem 1rem', borderRadius: '6px', border: '1.5px solid var(--border-input)',
+                background: 'transparent', cursor: 'pointer', fontSize: '0.85rem',
+              }}>Cancel</button>
+              <button onClick={handleEditSubmit} style={{
+                padding: '0.5rem 1rem', borderRadius: '6px', border: 'none',
+                background: '#3182ce', color: 'white', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
+              }}>Save</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
