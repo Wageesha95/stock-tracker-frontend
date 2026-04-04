@@ -77,6 +77,13 @@ export default function Dashboard() {
     });
   }, [filtered, sortKey, sortDir]);
 
+  const [holdingsSearch, setHoldingsSearch] = useState('');
+  const holdingsFiltered = useMemo(() => {
+    if (holdingsSearch === '') return sorted;
+    const s = holdingsSearch.toLowerCase();
+    return sorted.filter(p => p.companyCode.toLowerCase().includes(s) || p.companyName.toLowerCase().includes(s));
+  }, [sorted, holdingsSearch]);
+
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -414,9 +421,19 @@ export default function Dashboard() {
       })()}
 
       {activeSection === 'holdings' && (<>
-      <h2>Portfolio Holdings</h2>
-      {sorted.length === 0 ? (
-        <p>No holdings yet. Add transactions to see your portfolio.</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <h2>Portfolio Holdings</h2>
+        {filtered.length >= 5 && (
+          <input
+            className="search-bar"
+            value={holdingsSearch}
+            onChange={e => setHoldingsSearch(e.target.value)}
+            placeholder="Search..."
+          />
+        )}
+      </div>
+      {holdingsFiltered.length === 0 ? (
+        <p>{filtered.length === 0 ? 'No holdings yet. Add transactions to see your portfolio.' : 'No holdings match your search.'}</p>
       ) : (
         <div className="portfolio-table-wrap">
           <table className="portfolio-table">
@@ -455,7 +472,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {sorted.map(p => {
+              {holdingsFiltered.map(p => {
                 const hasMarket = p.lastTrade > 0;
                 return (
                   <tr key={p.companyCode}>
