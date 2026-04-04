@@ -276,7 +276,7 @@ export default function Transactions() {
           }, {});
           return Object.entries(grouped).map(([code, txns]) => {
             const totalShares = txns.reduce((s, t) => s + t.count, 0);
-            const avgPrice = totalShares > 0 ? txns.reduce((s, t) => s + t.count * t.price, 0) / totalShares : 0;
+            const avgPrice = totalShares > 0 ? txns.reduce((s, t) => s + t.count * t.price + t.commission, 0) / totalShares : 0;
             const lastTrade = marketMap[code]?.lastTrade || 0;
             return (
             <div key={code} style={{ marginBottom: '2rem' }}>
