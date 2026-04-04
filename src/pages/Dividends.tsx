@@ -50,8 +50,8 @@ export default function Dividends() {
         amount: editType === 'CASH' ? Number(editAmount) : 0,
         shares: editType === 'CASH' ? Number(editShares) : 0,
         scripShares: editType === 'SCRIP' ? Number(editScripShares) : 0,
-        totalAmount: Number(editTotal),
-        taxed: editType === 'CASH' ? editTaxable : undefined,
+        totalAmount: editType === 'CASH' ? Number(editTotal) : 0,
+        taxed: editType === 'CASH' ? editTaxable : true,
       });
       setEditDividend(null);
       loadData();
