@@ -284,6 +284,7 @@ export default function Transactions() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                   <CompanyAvatar code={code} size={28} />
                   <span style={{ fontWeight: 700, fontSize: '1rem' }}>{code}</span>
+                  {(() => { const c = companies.find(x => x.code === code); return c && c.name !== code ? <span style={{ opacity: 0.6, fontSize: '0.8rem' }}>{c.name}</span> : null; })()}
                 </div>
                 <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', letterSpacing: '0.2px' }}>
                   <div style={{ textAlign: 'right' }}>
