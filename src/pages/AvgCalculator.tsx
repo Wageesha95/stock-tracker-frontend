@@ -18,12 +18,12 @@ export default function AvgCalculator() {
   // Calculate mode
   const [newShares, setNewShares] = useState('');
   const [newPrice, setNewPrice] = useState('');
-  const [newCommission, setNewCommission] = useState('');
+  const [newCommission, setNewCommission] = useState('1.22');
 
   // Target mode
   const [targetAvg, setTargetAvg] = useState('');
   const [buyPrice, setBuyPrice] = useState('');
-  const [targetCommission, setTargetCommission] = useState('');
+  const [targetCommission, setTargetCommission] = useState('1.22');
 
   useEffect(() => {
     Promise.all([getCompanies(), getDashboardAll()])
@@ -126,7 +126,7 @@ export default function AvgCalculator() {
                           setSelectedCode(c.code);
                           setCompanySearch('');
                           setShowDropdown(false);
-                          setNewShares(''); setNewPrice(''); setNewCommission(''); setTargetAvg(''); setBuyPrice(''); setTargetCommission('');
+                          setNewShares(''); setNewPrice(''); setNewCommission('1.22'); setTargetAvg(''); setBuyPrice(''); setTargetCommission('1.22');
                         }}
                         style={{
                           padding: '0.5rem 0.75rem', cursor: 'pointer',
