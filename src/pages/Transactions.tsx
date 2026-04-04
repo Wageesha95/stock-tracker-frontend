@@ -276,7 +276,7 @@ export default function Transactions() {
             </tbody>
           </table>
         </div>
-      ) : (
+      ) : viewMode === 'group' ? (
         (() => {
           const grouped = sorted.reduce<Record<string, typeof sorted>>((acc, t) => {
             (acc[t.companyCode] = acc[t.companyCode] || []).push(t);
@@ -376,8 +376,8 @@ export default function Transactions() {
             </div>
           );});
         })()
-      )}
-      {viewMode === 'date' && (
+      ) : null}
+      {viewMode === 'date' && sorted.length > 0 && (
         (() => {
           const byDate = sorted.reduce<Record<string, typeof sorted>>((acc, t) => {
             (acc[t.date] = acc[t.date] || []).push(t);
