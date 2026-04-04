@@ -79,9 +79,14 @@ export default function Dashboard() {
     });
   }, [filtered, sortKey, sortDir]);
 
-  const [holdingsSearch, setHoldingsSearch] = useState('');
   const [companySearch, setCompanySearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [tableSearch, setTableSearch] = useState('');
+  useEffect(() => { setTableSearch(''); }, [activeSection]);
+  const tableSearchBar = (count: number) => count >= 5 ? (
+    <input className="search-bar" value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder="Search..." />
+  ) : null;
+  const ms = (s: string) => tableSearch === '' || s.toLowerCase().includes(tableSearch.toLowerCase());
   const companySuggestions = companySearch.length > 0
     ? allCompanies.filter(c =>
         c.code.toLowerCase().includes(companySearch.toLowerCase()) ||
@@ -89,10 +94,9 @@ export default function Dashboard() {
       ).slice(0, 8)
     : [];
   const holdingsFiltered = useMemo(() => {
-    if (holdingsSearch === '') return sorted;
-    const s = holdingsSearch.toLowerCase();
-    return sorted.filter(p => p.companyCode.toLowerCase().includes(s) || p.companyName.toLowerCase().includes(s));
-  }, [sorted, holdingsSearch]);
+    if (tableSearch === '') return sorted;
+    return sorted.filter(p => ms(p.companyCode) || ms(p.companyName));
+  }, [sorted, tableSearch]);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -473,17 +477,10 @@ export default function Dashboard() {
       {activeSection === 'holdings' && (<>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
         <h2>Portfolio Holdings</h2>
-        {filtered.length >= 5 && (
-          <input
-            className="search-bar"
-            value={holdingsSearch}
-            onChange={e => setHoldingsSearch(e.target.value)}
-            placeholder="Search..."
-          />
-        )}
+        {tableSearchBar(filtered.length)}
       </div>
       {holdingsFiltered.length === 0 ? (
-        <p>{filtered.length === 0 ? 'No holdings yet. Add transactions to see your portfolio.' : 'No holdings match your search.'}</p>
+        <p>{filtered.length === 0 ? 'No holdings yet.' : 'No holdings match your search.'}</p>
       ) : (
         <div className="portfolio-table-wrap">
           <table className="portfolio-table">
@@ -603,7 +600,8 @@ export default function Dashboard() {
         const items = activeSection === 'netRealized' ? realizedItems : activeSection === 'realizedProfit' ? realizedProfitItems : realizedLossItems;
         const title = activeSection === 'netRealized' ? 'All Realized Trades' : activeSection === 'realizedProfit' ? 'Realized Profits' : 'Realized Losses';
         const total = items.reduce((s, r) => s + r.realizedGain, 0);
-        const sortedItems = [...items].sort((a, b) => Math.abs(b.realizedGain) - Math.abs(a.realizedGain));
+        const filteredItems = items.filter(r => ms(r.companyCode) || ms(r.companyName));
+        const sortedItems = [...filteredItems].sort((a, b) => Math.abs(b.realizedGain) - Math.abs(a.realizedGain));
 
         // Group by company
         const grouped = items.reduce<Record<string, typeof items>>((acc, r) => {
@@ -630,9 +628,10 @@ export default function Dashboard() {
 
         return items.length > 0 ? (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '2rem' }}>
-              <h2 style={{ margin: 0 }}>{title}</h2>
-              <div className="segmented-control">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '2rem', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <h2 style={{ margin: 0 }}>{title}</h2>
+                <div className="segmented-control">
                 <button className={realizedViewMode === 'list' ? 'active' : ''} onClick={() => setRealizedViewMode('list')}>
                   List
                 </button>
@@ -640,6 +639,8 @@ export default function Dashboard() {
                   By Company
                 </button>
               </div>
+              </div>
+              {tableSearchBar(items.length)}
             </div>
 
             {realizedViewMode === 'list' ? (
@@ -784,10 +785,14 @@ export default function Dashboard() {
         const items = activeSection === 'netUnrealized' ? filtered.filter(p => p.unrealizedGain !== 0) : activeSection === 'profit' ? profitItems : lossItems;
         const title = activeSection === 'netUnrealized' ? 'All Unrealized' : activeSection === 'profit' ? 'Unrealized Profits' : 'Unrealized Losses';
         const total = items.reduce((s, p) => s + p.unrealizedGain, 0);
-        const sortedItems = [...items].sort((a, b) => Math.abs(b.unrealizedGain) - Math.abs(a.unrealizedGain));
+        const filteredUItems = items.filter(p => ms(p.companyCode) || ms(p.companyName));
+        const sortedItems = [...filteredUItems].sort((a, b) => Math.abs(b.unrealizedGain) - Math.abs(a.unrealizedGain));
         return items.length > 0 ? (
           <>
-            <h2 style={{ marginTop: '2rem' }}>{title}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <h2 style={{ margin: 0 }}>{title}</h2>
+              {tableSearchBar(items.length)}
+            </div>
             <div className="portfolio-table-wrap">
               <table className="portfolio-table">
                 <thead>
@@ -856,10 +861,14 @@ export default function Dashboard() {
         const items = activeSection === 'netDay' ? filtered.filter(p => p.unrealizedDayGain !== 0) : activeSection === 'dayProfit' ? dayProfitItems : dayLossItems;
         const title = activeSection === 'netDay' ? 'All Day Changes' : activeSection === 'dayProfit' ? 'Day Gainers' : 'Day Losers';
         const total = items.reduce((s, p) => s + p.unrealizedDayGain, 0);
-        const sortedItems = [...items].sort((a, b) => Math.abs(b.unrealizedDayGain) - Math.abs(a.unrealizedDayGain));
+        const filteredDItems = items.filter(p => ms(p.companyCode) || ms(p.companyName));
+        const sortedItems = [...filteredDItems].sort((a, b) => Math.abs(b.unrealizedDayGain) - Math.abs(a.unrealizedDayGain));
         return items.length > 0 ? (
           <>
-            <h2 style={{ marginTop: '2rem' }}>{title}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <h2 style={{ margin: 0 }}>{title}</h2>
+              {tableSearchBar(items.length)}
+            </div>
             <div className="portfolio-table-wrap">
               <table className="portfolio-table">
                 <thead>
@@ -921,7 +930,10 @@ export default function Dashboard() {
       })()}
       {activeSection === 'cashDiv' && (
         <>
-          <h2 style={{ marginTop: '2rem' }}>Cash Dividends</h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <h2 style={{ margin: 0 }}>Cash Dividends</h2>
+            {tableSearchBar(cashDividends.length)}
+          </div>
           {cashDividends.length === 0 ? (
             <p style={{ color: 'var(--text-muted)' }}>No cash dividends yet.</p>
           ) : (
@@ -938,7 +950,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...cashDividends].sort((a, b) => b.date.localeCompare(a.date)).map((d, i) => (
+                  {[...cashDividends].filter(d => ms(d.companyCode)).sort((a, b) => b.date.localeCompare(a.date)).map((d, i) => (
                     <tr key={i}>
                       <td>{d.date}</td>
                       <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${d.companyCode}`)}>
@@ -970,7 +982,10 @@ export default function Dashboard() {
       )}
       {activeSection === 'scripDiv' && (
         <>
-          <h2 style={{ marginTop: '2rem' }}>Scrip Dividends</h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <h2 style={{ margin: 0 }}>Scrip Dividends</h2>
+            {tableSearchBar(scripDividends.length)}
+          </div>
           {scripDividends.length === 0 ? (
             <p style={{ color: 'var(--text-muted)' }}>No scrip dividends yet.</p>
           ) : (
@@ -984,7 +999,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...scripDividends].sort((a, b) => b.date.localeCompare(a.date)).map((d, i) => (
+                  {[...scripDividends].filter(d => ms(d.companyCode)).sort((a, b) => b.date.localeCompare(a.date)).map((d, i) => (
                     <tr key={i}>
                       <td>{d.date}</td>
                       <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${d.companyCode}`)}>
