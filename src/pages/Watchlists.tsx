@@ -229,7 +229,7 @@ export default function Watchlists() {
               </label>
               <label>
                 Color
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, 22px)', gap: '4px', marginTop: '0.25rem' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '0.25rem', maxWidth: '300px' }}>
                   {WATCHLIST_COLORS.map(c => (
                     <div
                       key={c}
@@ -333,7 +333,7 @@ export default function Watchlists() {
                 </label>
                 <label>
                   Color
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, 22px)', gap: '4px', marginTop: '0.25rem' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '0.25rem', maxWidth: '300px' }}>
                     {WATCHLIST_COLORS.map(c => (
                       <div
                         key={c}
