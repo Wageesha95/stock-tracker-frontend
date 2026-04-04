@@ -68,8 +68,6 @@ export default function Dividends() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const gross = type === 'CASH' ? Number(amount) * Number(shares) : 0;
-      const tax = taxable ? gross * 0.15 : 0;
       await createDividend({
         companyCode,
         type,
@@ -77,7 +75,7 @@ export default function Dividends() {
         amount: type === 'CASH' ? Number(amount) : 0,
         shares: type === 'CASH' ? Number(shares) : 0,
         scripShares: type === 'SCRIP' ? Number(scripShares) : 0,
-        totalAmount: gross - tax,
+        totalAmount,
       });
       setXdDate('');
       setDate('');
