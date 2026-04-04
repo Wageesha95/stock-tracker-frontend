@@ -168,7 +168,7 @@ export default function Dashboard() {
             onFocus={() => setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
             placeholder="Find company..."
-            style={{ width: '220px' }}
+            style={{ width: '280px' }}
           />
           {showSuggestions && companySuggestions.length > 0 && (
             <div style={{
