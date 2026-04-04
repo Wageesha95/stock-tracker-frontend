@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { getTransactions, getCompanies, createTransaction, deleteTransaction } from '../api';
-import { Transaction, Company } from '../types';
+import { getTransactions, getCompanies, getMarketData, createTransaction, deleteTransaction } from '../api';
+import { Transaction, Company, MarketData } from '../types';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 export default function Transactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [marketMap, setMarketMap] = useState<Record<string, MarketData>>({});
   const [loading, setLoading] = useState(true);
 
   const [companyCode, setCompanyCode] = useState('');
@@ -18,10 +19,17 @@ export default function Transactions() {
   const [viewMode, setViewMode] = useState<'list' | 'group'>('list');
 
   const loadData = () => {
-    Promise.all([getTransactions(), getCompanies()])
-      .then(([txns, comps]) => {
+    Promise.all([getTransactions(), getCompanies(), getMarketData()])
+      .then(([txns, comps, md]) => {
         setTransactions(txns);
         setCompanies(comps);
+        const map: Record<string, MarketData> = {};
+        md.forEach(m => {
+          if (!map[m.companyCode] || m.tradeDate > map[m.companyCode].tradeDate) {
+            map[m.companyCode] = m;
+          }
+        });
+        setMarketMap(map);
         if (comps.length > 0 && !companyCode) {
           setCompanyCode(comps[0].code);
         }
@@ -266,11 +274,21 @@ export default function Transactions() {
             (acc[t.companyCode] = acc[t.companyCode] || []).push(t);
             return acc;
           }, {});
-          return Object.entries(grouped).map(([code, txns]) => (
+          return Object.entries(grouped).map(([code, txns]) => {
+            const totalShares = txns.reduce((s, t) => s + t.count, 0);
+            const avgPrice = totalShares > 0 ? txns.reduce((s, t) => s + t.count * t.price, 0) / totalShares : 0;
+            const lastTrade = marketMap[code]?.lastTrade || 0;
+            return (
             <div key={code} style={{ marginBottom: '2rem' }}>
-              <div className="group-header" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <CompanyAvatar code={code} size={24} />
-                {code}
+              <div className="group-header" style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                  <CompanyAvatar code={code} size={24} />
+                  {code}
+                </div>
+                <div style={{ display: 'flex', gap: '1.5rem', fontSize: '0.8rem', opacity: 0.85 }}>
+                  <span>Avg: <strong>{avgPrice.toFixed(2)}</strong></span>
+                  {lastTrade > 0 && <span>Last: <strong>{lastTrade.toFixed(2)}</strong></span>}
+                </div>
               </div>
               <div className="portfolio-table-wrap" style={{ borderRadius: '0 0 12px 12px' }}>
                 <table className="portfolio-table" style={{ borderRadius: '0 0 12px 12px' }}>
@@ -319,7 +337,7 @@ export default function Transactions() {
                 </table>
               </div>
             </div>
-          ));
+          );});
         })()
       )}
     </div>
