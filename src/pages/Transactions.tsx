@@ -275,7 +275,7 @@ export default function Transactions() {
             return acc;
           }, {});
           return Object.entries(grouped).map(([code, txns]) => {
-            const buyTxns = txns.filter(t => t.type === 'BUY' || t.type === 'RIGHTS');
+            const buyTxns = txns.filter(t => t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND');
             const sellTxns = txns.filter(t => t.type === 'SELL');
             const totalBought = buyTxns.reduce((s, t) => s + t.count, 0);
             const totalSold = sellTxns.reduce((s, t) => s + t.count, 0);
