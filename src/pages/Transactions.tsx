@@ -69,6 +69,14 @@ export default function Transactions() {
   const totalCost = (Number(count) || 0) * (Number(price) || 0) + (Number(commission) || 0);
 
   const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<'date' | 'companyCode' | 'type' | 'count' | 'price' | 'commission' | 'total'>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+
+  const handleSort = (key: typeof sortKey) => {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir(key === 'companyCode' || key === 'type' ? 'asc' : 'desc'); }
+  };
+  const si = (key: typeof sortKey) => sortKey === key ? (sortDir === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
 
   const sorted = [...transactions]
     .filter(t =>
@@ -77,7 +85,17 @@ export default function Transactions() {
       t.type.toLowerCase().includes(search.toLowerCase()) ||
       t.date.includes(search)
     )
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .sort((a, b) => {
+      let cmp = 0;
+      if (sortKey === 'date') cmp = a.date.localeCompare(b.date);
+      else if (sortKey === 'companyCode') cmp = a.companyCode.localeCompare(b.companyCode);
+      else if (sortKey === 'type') cmp = a.type.localeCompare(b.type);
+      else if (sortKey === 'count') cmp = a.count - b.count;
+      else if (sortKey === 'price') cmp = a.price - b.price;
+      else if (sortKey === 'commission') cmp = a.commission - b.commission;
+      else if (sortKey === 'total') cmp = (a.count * a.price + a.commission) - (b.count * b.price + b.commission);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
 
   if (loading) return <p>Loading...</p>;
 
@@ -186,12 +204,14 @@ export default function Transactions() {
             Group by Company
           </button>
         </div>
-        <input
-          className="search-bar"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search..."
-        />
+        {transactions.length >= 5 && (
+          <input
+            className="search-bar"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search..."
+          />
+        )}
       </div>
 
       {sorted.length === 0 ? (
@@ -201,13 +221,13 @@ export default function Transactions() {
           <table className="portfolio-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Company</th>
-                <th>Type</th>
-                <th className="text-right">Count</th>
-                <th className="text-right">Price</th>
-                <th className="text-right">Commission</th>
-                <th className="text-right">Total</th>
+                <th className="sort-header" onClick={() => handleSort('date')}>Date{si('date')}</th>
+                <th className="sort-header" onClick={() => handleSort('companyCode')}>Company{si('companyCode')}</th>
+                <th className="sort-header" onClick={() => handleSort('type')}>Type{si('type')}</th>
+                <th className="sort-header text-right" onClick={() => handleSort('count')}>Count{si('count')}</th>
+                <th className="sort-header text-right" onClick={() => handleSort('price')}>Price{si('price')}</th>
+                <th className="sort-header text-right" onClick={() => handleSort('commission')}>Commission{si('commission')}</th>
+                <th className="sort-header text-right" onClick={() => handleSort('total')}>Total{si('total')}</th>
                 <th></th>
               </tr>
             </thead>

@@ -152,9 +152,32 @@ export default function Dividends() {
   const calculatedTotal = grossAmount - taxAmount;
   const totalAmount = customTotal !== '' ? Number(customTotal) : calculatedTotal;
 
-  const sorted = [...dividends].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
+  const [divSortKey, setDivSortKey] = useState<'date' | 'companyCode' | 'type' | 'amount' | 'shares' | 'total'>('date');
+  const [divSortDir, setDivSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleDivSort = (key: typeof divSortKey) => {
+    if (divSortKey === key) setDivSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setDivSortKey(key); setDivSortDir(key === 'companyCode' || key === 'type' ? 'asc' : 'desc'); }
+  };
+  const dsi = (key: typeof divSortKey) => divSortKey === key ? (divSortDir === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
+  const [divSearch, setDivSearch] = useState('');
+
+  const sorted = [...dividends]
+    .filter(d =>
+      divSearch === '' ||
+      d.companyCode.toLowerCase().includes(divSearch.toLowerCase()) ||
+      d.type.toLowerCase().includes(divSearch.toLowerCase()) ||
+      d.date.includes(divSearch)
+    )
+    .sort((a, b) => {
+      let cmp = 0;
+      if (divSortKey === 'date') cmp = a.date.localeCompare(b.date);
+      else if (divSortKey === 'companyCode') cmp = a.companyCode.localeCompare(b.companyCode);
+      else if (divSortKey === 'type') cmp = a.type.localeCompare(b.type);
+      else if (divSortKey === 'amount') cmp = a.amount - b.amount;
+      else if (divSortKey === 'shares') cmp = a.shares - b.shares;
+      else if (divSortKey === 'total') cmp = a.totalAmount - b.totalAmount;
+      return divSortDir === 'asc' ? cmp : -cmp;
+    });
 
   if (loading) return <p>Loading...</p>;
 
@@ -293,20 +316,26 @@ export default function Dividends() {
         </form>
       </div>
 
+      {dividends.length >= 5 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+          <input className="search-bar" value={divSearch} onChange={e => setDivSearch(e.target.value)} placeholder="Search..." />
+        </div>
+      )}
+
       {sorted.length === 0 ? (
-        <p>No dividends yet.</p>
+        <p>{dividends.length === 0 ? 'No dividends yet.' : 'No dividends match your search.'}</p>
       ) : (
         <div className="portfolio-table-wrap">
           <table className="portfolio-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Company</th>
-                <th>Type</th>
-                <th className="text-right">Amount/Share</th>
-                <th className="text-right">Shares</th>
+                <th className="sort-header" onClick={() => handleDivSort('date')}>Date{dsi('date')}</th>
+                <th className="sort-header" onClick={() => handleDivSort('companyCode')}>Company{dsi('companyCode')}</th>
+                <th className="sort-header" onClick={() => handleDivSort('type')}>Type{dsi('type')}</th>
+                <th className="sort-header text-right" onClick={() => handleDivSort('amount')}>Amount/Share{dsi('amount')}</th>
+                <th className="sort-header text-right" onClick={() => handleDivSort('shares')}>Shares{dsi('shares')}</th>
                 <th className="text-right">Scrip Shares</th>
-                <th className="text-right">Total</th>
+                <th className="sort-header text-right" onClick={() => handleDivSort('total')}>Total{dsi('total')}</th>
                 <th></th>
               </tr>
             </thead>

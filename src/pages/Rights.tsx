@@ -81,13 +81,29 @@ export default function RightsPage() {
   const totalCost = (Number(count) || 0) * (Number(price) || 0);
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const [rSortKey, setRSortKey] = useState<'date' | 'companyCode' | 'count' | 'price' | 'total'>('date');
+  const [rSortDir, setRSortDir] = useState<'asc' | 'desc'>('desc');
+  const handleRSort = (key: typeof rSortKey) => {
+    if (rSortKey === key) setRSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setRSortKey(key); setRSortDir(key === 'companyCode' ? 'asc' : 'desc'); }
+  };
+  const rsi = (key: typeof rSortKey) => rSortKey === key ? (rSortDir === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
+
   const sorted = [...rights]
     .filter(r =>
       search === '' ||
       r.companyCode.toLowerCase().includes(search.toLowerCase()) ||
       r.date.includes(search)
     )
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .sort((a, b) => {
+      let cmp = 0;
+      if (rSortKey === 'date') cmp = a.date.localeCompare(b.date);
+      else if (rSortKey === 'companyCode') cmp = a.companyCode.localeCompare(b.companyCode);
+      else if (rSortKey === 'count') cmp = a.count - b.count;
+      else if (rSortKey === 'price') cmp = a.price - b.price;
+      else if (rSortKey === 'total') cmp = (a.count * a.price) - (b.count * b.price);
+      return rSortDir === 'asc' ? cmp : -cmp;
+    });
 
   if (loading) return <p>Loading...</p>;
 
@@ -147,11 +163,11 @@ export default function RightsPage() {
           <table className="portfolio-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Company</th>
-                <th className="text-right">Shares</th>
-                <th className="text-right">Price</th>
-                <th className="text-right">Total</th>
+                <th className="sort-header" onClick={() => handleRSort('date')}>Date{rsi('date')}</th>
+                <th className="sort-header" onClick={() => handleRSort('companyCode')}>Company{rsi('companyCode')}</th>
+                <th className="sort-header text-right" onClick={() => handleRSort('count')}>Shares{rsi('count')}</th>
+                <th className="sort-header text-right" onClick={() => handleRSort('price')}>Price{rsi('price')}</th>
+                <th className="sort-header text-right" onClick={() => handleRSort('total')}>Total{rsi('total')}</th>
                 <th></th>
               </tr>
             </thead>

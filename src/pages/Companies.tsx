@@ -70,13 +70,28 @@ export default function Companies() {
   };
 
   const [search, setSearch] = useState('');
+  const [cSortKey, setCSortKey] = useState<'code' | 'name' | 'lastTrade' | 'ytd' | 'industry'>('code');
+  const [cSortDir, setCSortDir] = useState<'asc' | 'desc'>('asc');
+  const handleCSort = (key: typeof cSortKey) => {
+    if (cSortKey === key) setCSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setCSortKey(key); setCSortDir(key === 'lastTrade' || key === 'ytd' ? 'desc' : 'asc'); }
+  };
+  const csi = (key: typeof cSortKey) => cSortKey === key ? (cSortDir === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
 
   const filtered = companies.filter(c =>
     search === '' ||
     c.code.toLowerCase().includes(search.toLowerCase()) ||
     c.name.toLowerCase().includes(search.toLowerCase()) ||
     (c.industryGroupId && groups[c.industryGroupId]?.toLowerCase().includes(search.toLowerCase()))
-  );
+  ).sort((a, b) => {
+    let cmp = 0;
+    if (cSortKey === 'code') cmp = a.code.localeCompare(b.code);
+    else if (cSortKey === 'name') cmp = a.name.localeCompare(b.name);
+    else if (cSortKey === 'lastTrade') cmp = (latestPrice[a.code] || 0) - (latestPrice[b.code] || 0);
+    else if (cSortKey === 'ytd') cmp = (ytdChange[a.code] || 0) - (ytdChange[b.code] || 0);
+    else if (cSortKey === 'industry') cmp = (groups[a.industryGroupId || ''] || '').localeCompare(groups[b.industryGroupId || ''] || '');
+    return cSortDir === 'asc' ? cmp : -cmp;
+  });
 
   if (loading) return <p>Loading...</p>;
 
@@ -99,11 +114,11 @@ export default function Companies() {
           <table className="portfolio-table">
             <thead>
               <tr>
-                <th>Code</th>
-                <th>Name</th>
-                <th className="text-right">Last Trade</th>
-                <th className="text-right">YTD</th>
-                <th>Industry Group</th>
+                <th className="sort-header" onClick={() => handleCSort('code')}>Code{csi('code')}</th>
+                <th className="sort-header" onClick={() => handleCSort('name')}>Name{csi('name')}</th>
+                <th className="sort-header text-right" onClick={() => handleCSort('lastTrade')}>Last Trade{csi('lastTrade')}</th>
+                <th className="sort-header text-right" onClick={() => handleCSort('ytd')}>YTD{csi('ytd')}</th>
+                <th className="sort-header" onClick={() => handleCSort('industry')}>Industry Group{csi('industry')}</th>
               </tr>
             </thead>
             <tbody>
