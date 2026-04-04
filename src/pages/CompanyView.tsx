@@ -310,7 +310,7 @@ export default function CompanyView() {
                     {fmt(transactions.reduce((s, t) => s + t.commission, 0))}
                   </td>
                   <td className="text-right mono">
-                    {fmt(transactions.reduce((s, t) => s + (t.count * t.price + t.commission) * (t.type === 'BUY' ? 1 : -1), 0))}
+                    {fmt(transactions.reduce((s, t) => s + (t.count * t.price + t.commission) * (t.type === 'SELL' ? -1 : 1), 0))}
                   </td>
                   <td></td>
                 </tr>
