@@ -285,11 +285,11 @@ export default function Transactions() {
                 <span style={{ fontWeight: 700 }}>{code}</span>
                 <div style={{ display: 'flex', gap: '0.5rem', marginLeft: '0.5rem' }}>
                   <span style={{ background: 'rgba(255,255,255,0.15)', padding: '0.15rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem' }}>
-                    Avg {avgPrice.toFixed(2)}
+                    Avg. Price {avgPrice.toFixed(2)}
                   </span>
                   {lastTrade > 0 && (
                     <span style={{ background: 'rgba(255,255,255,0.15)', padding: '0.15rem 0.6rem', borderRadius: '12px', fontSize: '0.75rem' }}>
-                      Last {lastTrade.toFixed(2)}
+                      Last Trade {lastTrade.toFixed(2)}
                     </span>
                   )}
                 </div>
