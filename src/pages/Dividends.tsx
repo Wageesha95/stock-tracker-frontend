@@ -199,12 +199,14 @@ export default function Dividends() {
                 ))}
               </select>
             </label>
+            {type === 'CASH' && (
+              <label>
+                XD Date
+                <input type="date" value={xdDate} onChange={e => handleXdDateChange(e.target.value)} required />
+              </label>
+            )}
             <label>
-              XD Date
-              <input type="date" value={xdDate} onChange={e => handleXdDateChange(e.target.value)} required />
-            </label>
-            <label>
-              Transaction Date
+              {type === 'CASH' ? 'Transaction Date' : 'Date'}
               <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
             </label>
             <label>
