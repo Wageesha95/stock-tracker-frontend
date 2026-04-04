@@ -400,7 +400,10 @@ export default function Dashboard() {
         };
         return (
           <>
-            <h2>Opportunity Cost Breakdown (6.5% Annual)</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <h2 style={{ margin: 0 }}>Opportunity Cost Breakdown (6.5% Annual)</h2>
+              {tableSearchBar(Object.keys(grouped).length)}
+            </div>
             <div className="portfolio-table-wrap">
               <table className="portfolio-table">
                 <thead>
@@ -413,7 +416,7 @@ export default function Dashboard() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(grouped).map(([code, txns]) => {
+                  {Object.entries(grouped).filter(([code]) => ms(code)).map(([code, txns]) => {
                     const totalAmount = txns.reduce((s, t) => s + t.amount, 0);
                     const totalInterest = txns.reduce((s, t) => s + t.interest, 0);
                     const isExpanded = expandedInterest.has(code);
@@ -628,7 +631,7 @@ export default function Dashboard() {
 
         return items.length > 0 ? (
           <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '2rem', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '2rem', marginBottom: '1rem', justifyContent: 'space-between', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
                 <h2 style={{ margin: 0 }}>{title}</h2>
                 <div className="segmented-control">
