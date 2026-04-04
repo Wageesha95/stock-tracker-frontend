@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   getWatchlists, createWatchlist, updateWatchlist, deleteWatchlist,
   addWatchlistCompany, removeWatchlistCompany,
@@ -19,6 +20,7 @@ const WATCHLIST_COLORS = [
 ];
 
 export default function Watchlists() {
+  const navigate = useNavigate();
   const [watchlists, setWatchlists] = useState<WatchlistData[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [marketMap, setMarketMap] = useState<Record<string, MarketData>>({});
@@ -423,7 +425,7 @@ export default function Watchlists() {
                         <td style={{ color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'grab' }}>
                           &#x2630;
                         </td>
-                        <td>
+                        <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${code}`)}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <CompanyAvatar code={code} size={36} />
                             <div className="company-cell">

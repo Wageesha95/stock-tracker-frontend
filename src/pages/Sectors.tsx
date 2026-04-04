@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getDashboardAll, getIndustryGroups, getCompanies, createIndustryGroup, updateIndustryGroup, deleteIndustryGroup, invalidate } from '../api';
 import { IndustryGroup, Company } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -39,6 +40,7 @@ const COLORS = [
 
 export default function Sectors() {
   const { isAdmin } = useAuth();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<'allocation' | 'industries'>(isAdmin ? 'industries' : 'allocation');
   const [sectors, setSectors] = useState<SectorItem[]>([]);
   const [industryGroups, setIndustryGroups] = useState<IndustryGroup[]>([]);
@@ -455,7 +457,7 @@ export default function Sectors() {
                       )}
                       {isExpanded && sortCompanies(sec.companies).map(c => (
                         <tr key={c.companyCode} style={{ background: 'var(--bg-row-zebra)' }}>
-                          <td style={{ paddingLeft: '2.5rem' }}>
+                          <td style={{ paddingLeft: '2.5rem', cursor: 'pointer' }} onClick={() => navigate(`/company/${c.companyCode}`)}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                               <CompanyAvatar code={c.companyCode} size={22} />
                               <div className="company-cell">

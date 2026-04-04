@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getDashboardAll } from '../api';
 import { RealizedGainItem } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 export default function RealizedGains() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<RealizedGainItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -42,7 +44,7 @@ export default function RealizedGains() {
         <tbody>
           {items.map((r, i) => (
             <tr key={i}>
-              <td>
+              <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${r.companyCode}`)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <CompanyAvatar code={r.companyCode} size={26} />
                   <div className="company-cell">
