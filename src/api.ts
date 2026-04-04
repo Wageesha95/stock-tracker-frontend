@@ -62,6 +62,12 @@ export function invalidate(...prefixes: string[]) {
   }
 }
 
+export function clearAllCache() {
+  for (const k of Object.keys(cache)) {
+    delete cache[k];
+  }
+}
+
 // Companies
 export const getCompanies = () => cached('companies', () => api.get<Company[]>('/companies').then(res => res.data));
 export const createCompany = (data: { code: string; name: string }) =>

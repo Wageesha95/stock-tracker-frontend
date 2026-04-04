@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { AuthUser } from '../types';
-import { login as apiLogin, logout as apiLogout, getMe } from '../api';
+import { login as apiLogin, logout as apiLogout, getMe, clearAllCache } from '../api';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -40,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
+    clearAllCache();
     const u = await apiLogin(username, password);
     const authUser = { id: u.id, username: u.username, role: u.role };
     localStorage.setItem('user', JSON.stringify(authUser));
@@ -47,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    clearAllCache();
     await apiLogout().catch(() => {});
     localStorage.removeItem('user');
     setUser(null);

@@ -24,7 +24,7 @@ export default function CompanyAvatar({ code, size = 32 }: { code: string; size?
   const letters = code.replace(/\..+/, '').slice(0, 2).toUpperCase();
   const bg = getColor(code);
   const fontSize = size * 0.4;
-  const logoSrc = `http://localhost:8080/logos/${code}.png`;
+  const logoSrc = `/logos/${code}.png`;
 
   useEffect(() => {
     if (logoCache[code]) {

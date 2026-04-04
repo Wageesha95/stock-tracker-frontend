@@ -90,7 +90,7 @@ function App() {
         </nav>
         <main className="content">
           <Routes>
-            <Route path="/" element={isAdmin ? <AdminDashboard /> : <Dashboard />} />
+            <Route path="/" element={isAdmin ? <AdminDashboard key={user.username} /> : <Dashboard key={user.username} />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/dividends" element={<Dividends />} />
             <Route path="/company/:code" element={<CompanyView />} />
