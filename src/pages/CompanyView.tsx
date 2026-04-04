@@ -172,10 +172,6 @@ export default function CompanyView() {
             <p className="stat-value">{fmt(portfolioItem.avgBuyPrice)}</p>
           </div>
           <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}>
-            <h3>Last Trade</h3>
-            <p className="stat-value">{fmt(portfolioItem.lastTrade)}</p>
-          </div>
-          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}>
             <h3>Total Invested</h3>
             <p className="stat-value">{fmt(portfolioItem.totalInvested)}</p>
           </div>
@@ -189,13 +185,6 @@ export default function CompanyView() {
               {gainSign(portfolioItem.unrealizedGain)}{fmt(portfolioItem.unrealizedGain)}
             </p>
             <small style={{ color: '#718096' }}>{gainSign(portfolioItem.unrealizedGainPercent)}{fmt(portfolioItem.unrealizedGainPercent)}%</small>
-          </div>
-          <div className="stat-card" style={{ borderLeftColor: portfolioItem.unrealizedDayGain >= 0 ? '#38a169' : '#e53e3e' }}>
-            <h3>Day Gain</h3>
-            <p className={`stat-value ${gainClass(portfolioItem.unrealizedDayGain)}`}>
-              {gainSign(portfolioItem.unrealizedDayGain)}{fmt(portfolioItem.unrealizedDayGain)}
-            </p>
-            <small style={{ color: '#718096' }}>{gainSign(portfolioItem.changePercent)}{fmt(portfolioItem.changePercent)}%</small>
           </div>
           <div className="stat-card" style={{ borderLeftColor: portfolioItem.realizedGain >= 0 ? '#38a169' : '#e53e3e' }}>
             <h3>Realized Gain</h3>
