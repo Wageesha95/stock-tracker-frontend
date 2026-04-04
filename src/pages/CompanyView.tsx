@@ -149,16 +149,22 @@ export default function CompanyView() {
             )}
           </div>
         </div>
-        {portfolioItem && portfolioItem.lastTrade > 0 && (
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-stat-value)' }}>
-              {fmt(portfolioItem.lastTrade)}
+        {(() => {
+          const latestMd = marketHistory.length > 0
+            ? marketHistory.reduce((a, b) => a.tradeDate > b.tradeDate ? a : b)
+            : null;
+          return latestMd && latestMd.lastTrade > 0 ? (
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-stat-value)' }}>
+                {fmt(latestMd.lastTrade)}
+              </div>
+              <div className={gainClass(latestMd.change)} style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+                {gainSign(latestMd.change)}{fmt(latestMd.change)} ({gainSign(latestMd.changePercent)}{fmt(latestMd.changePercent)}%)
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{latestMd.tradeDate}</div>
             </div>
-            <div className={gainClass(portfolioItem.change)} style={{ fontSize: '0.9rem', fontWeight: 600 }}>
-              {gainSign(portfolioItem.change)}{fmt(portfolioItem.change)} ({gainSign(portfolioItem.changePercent)}{fmt(portfolioItem.changePercent)}%)
-            </div>
-          </div>
-        )}
+          ) : null;
+        })()}
       </div>
 
       {portfolioItem && (
