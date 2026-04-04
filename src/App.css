@@ -1024,6 +1024,11 @@ button:hover {
   color: #553c9a;
 }
 
+.gain-pill-taxed {
+  background: #fff5f5;
+  color: #e53e3e;
+}
+
 .gain-pill-cash {
   background: #c6f6d5;
   color: #22543d;

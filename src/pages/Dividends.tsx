@@ -363,7 +363,7 @@ export default function Dividends() {
                     </div>
                   </td>
                   <td style={{ fontSize: '0.8rem' }}>
-                    {d.taxed !== false ? <span className="gain-pill gain-pill-down" style={{ fontSize: '0.65rem' }}>Taxed</span> : <span style={{ color: 'var(--text-muted)' }}>-</span>}
+                    {d.taxed !== false ? <span className="gain-pill gain-pill-taxed" style={{ fontSize: '0.65rem' }}>Taxed</span> : <span style={{ color: 'var(--text-muted)' }}>-</span>}
                   </td>
                   <td className="text-right mono">{d.amount.toFixed(2)}</td>
                   <td className="text-right mono">{d.shares}</td>
