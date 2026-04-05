@@ -45,7 +45,7 @@ export default function CompanySearchSelect({ companies, value, onChange }: Prop
   return (
     <div style={{ position: 'relative' }}>
       <input
-        className="search-bar"
+        className="search-bar company-search-input"
         value={search}
         onChange={e => { setSearch(e.target.value); setOpen(true); }}
         onFocus={() => setOpen(true)}

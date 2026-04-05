@@ -1437,4 +1437,9 @@ button:hover {
   .company-select-chip {
     display: none !important;
   }
+
+  .company-search-input {
+    background-image: none !important;
+    padding-left: 0.85rem !important;
+  }
 }
