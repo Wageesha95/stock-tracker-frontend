@@ -69,7 +69,7 @@ export default function CompanyView() {
     let cumShares = 0;
     const txPoints: { date: string; invested: number; shares: number }[] = [];
     for (const t of sortedTx) {
-      if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND') {
+      if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
         cumInvested += t.count * t.price + t.commission;
         cumShares += t.count;
       } else if (t.type === 'SELL') {
@@ -283,7 +283,7 @@ export default function CompanyView() {
                   <tr key={t.id}>
                     <td>{t.date}</td>
                     <td>
-                      <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : 'gain-pill-scrip-div'}`}>
+                      <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : t.type === 'IPO' ? 'gain-pill-ipo' : 'gain-pill-scrip-div'}`}>
                         {t.type === 'SCRIP_DIVIDEND' ? 'SCRIP' : t.type}
                       </span>
                     </td>
@@ -303,7 +303,7 @@ export default function CompanyView() {
                 <tr className="portfolio-total">
                   <td colSpan={2}>Summary</td>
                   <td className="text-right mono">
-                    {transactions.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' ? t.count : t.type === 'SELL' ? -t.count : (() => { throw new Error(`Unknown type: ${t.type}`); })()), 0)} net
+                    {transactions.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO' ? t.count : t.type === 'SELL' ? -t.count : (() => { throw new Error(`Unknown type: ${t.type}`); })()), 0)} net
                   </td>
                   <td></td>
                   <td className="text-right mono">

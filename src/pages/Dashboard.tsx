@@ -328,7 +328,7 @@ export default function Dashboard() {
         const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
         let netCashOut = 0;
         const chartData = sorted.map(t => {
-          if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND') {
+          if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
             netCashOut += t.count * t.price + t.commission;
           } else if (t.type === 'SELL') {
             netCashOut -= t.count * t.price - t.commission;

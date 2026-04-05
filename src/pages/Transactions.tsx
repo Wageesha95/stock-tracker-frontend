@@ -252,7 +252,7 @@ export default function Transactions() {
                     </div>
                   </td>
                   <td>
-                    <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : 'gain-pill-scrip-div'}`}>
+                    <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : t.type === 'IPO' ? 'gain-pill-ipo' : 'gain-pill-scrip-div'}`}>
                       {t.type === 'SCRIP_DIVIDEND' ? 'SCRIP' : t.type}
                     </span>
                   </td>
@@ -282,7 +282,7 @@ export default function Transactions() {
             let fifoShares = 0;
             let fifoCost = 0;
             for (const t of chronological) {
-              if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND') {
+              if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
                 fifoShares += t.count;
                 fifoCost += t.count * t.price + t.commission;
               } else if (t.type === 'SELL') {
@@ -341,7 +341,7 @@ export default function Transactions() {
                       <tr key={t.id}>
                         <td>{t.date}</td>
                         <td>
-                          <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : 'gain-pill-scrip-div'}`}>
+                          <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : t.type === 'IPO' ? 'gain-pill-ipo' : 'gain-pill-scrip-div'}`}>
                             {t.type === 'SCRIP_DIVIDEND' ? 'SCRIP' : t.type}
                           </span>
                         </td>
@@ -360,7 +360,7 @@ export default function Transactions() {
                   <tfoot>
                     <tr className="portfolio-total">
                       <td colSpan={2}>Total ({txns.length})</td>
-                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' ? t.count : t.type === 'SELL' ? -t.count : (() => { throw new Error(`Unknown transaction type: ${t.type}`); })()), 0)}</td>
+                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO' ? t.count : t.type === 'SELL' ? -t.count : (() => { throw new Error(`Unknown transaction type: ${t.type}`); })()), 0)}</td>
                       <td></td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + t.commission, 0).toFixed(2)}</td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + (t.count * t.price + t.commission), 0).toFixed(2)}</td>
@@ -421,7 +421,7 @@ export default function Transactions() {
                           </div>
                         </td>
                         <td>
-                          <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : 'gain-pill-scrip-div'}`}>
+                          <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : t.type === 'IPO' ? 'gain-pill-ipo' : 'gain-pill-scrip-div'}`}>
                             {t.type === 'SCRIP_DIVIDEND' ? 'SCRIP' : t.type}
                           </span>
                         </td>
@@ -440,7 +440,7 @@ export default function Transactions() {
                   <tfoot>
                     <tr className="portfolio-total">
                       <td colSpan={2}>Total ({txns.length})</td>
-                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' ? t.count : t.type === 'SELL' ? -t.count : (() => { throw new Error(`Unknown transaction type: ${t.type}`); })()), 0)}</td>
+                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO' ? t.count : t.type === 'SELL' ? -t.count : (() => { throw new Error(`Unknown transaction type: ${t.type}`); })()), 0)}</td>
                       <td></td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + t.commission, 0).toFixed(2)}</td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + (t.count * t.price + t.commission), 0).toFixed(2)}</td>

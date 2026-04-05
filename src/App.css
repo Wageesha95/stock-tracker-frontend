@@ -1024,6 +1024,11 @@ button:hover {
   color: #553c9a;
 }
 
+.gain-pill-ipo {
+  background: #fefcbf;
+  color: #975a16;
+}
+
 .gain-pill-taxed {
   background: #fff5f5;
   color: #e53e3e;

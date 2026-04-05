@@ -15,6 +15,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import Watchlists from './pages/Watchlists';
 import RightsPage from './pages/Rights';
 import AvgCalculator from './pages/AvgCalculator';
+import IpoPage from './pages/Ipos';
 import './App.css';
 
 function App() {
@@ -64,6 +65,7 @@ function App() {
                 <NavLink to="/transactions">Transactions</NavLink>
                 <NavLink to="/dividends">Dividends</NavLink>
                 <NavLink to="/rights">Rights</NavLink>
+                <NavLink to="/ipos">IPO</NavLink>
                 <NavLink to="/watchlists">Watchlists</NavLink>
                 <NavLink to="/sectors">Sectors</NavLink>
                 <NavLink to="/companies">Companies</NavLink>
@@ -98,6 +100,7 @@ function App() {
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/dividends" element={<Dividends />} />
             <Route path="/rights" element={<RightsPage />} />
+            <Route path="/ipos" element={<IpoPage />} />
             <Route path="/calculator" element={<AvgCalculator />} />
             <Route path="/company/:code" element={<CompanyView />} />
             <Route path="/watchlists" element={<Watchlists />} />

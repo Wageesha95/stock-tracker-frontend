@@ -198,6 +198,24 @@ export const updateRights = (id: string, data: { date: string; count: number; pr
 export const deleteRights = (id: string) =>
   api.delete(`/rights/${id}`).then(res => { invalidate('rights', 'transactions', 'portfolio', 'dashboard-all'); return res; });
 
+// IPO
+export interface IpoData {
+  id: string;
+  companyCode: string;
+  date: string;
+  count: number;
+  price: number;
+  transactionId: string;
+  createdAt: string;
+}
+export const getIpos = () => cached('ipos', () => api.get<IpoData[]>('/ipos').then(res => res.data));
+export const createIpo = (data: { companyCode: string; date: string; count: number; price: number }) =>
+  api.post<IpoData>('/ipos', data).then(res => { invalidate('ipos', 'transactions', 'portfolio', 'dashboard-all'); return res.data; });
+export const updateIpo = (id: string, data: { date: string; count: number; price: number }) =>
+  api.put<IpoData>(`/ipos/${id}`, data).then(res => { invalidate('ipos', 'transactions', 'portfolio', 'dashboard-all'); return res.data; });
+export const deleteIpo = (id: string) =>
+  api.delete(`/ipos/${id}`).then(res => { invalidate('ipos', 'transactions', 'portfolio', 'dashboard-all'); return res; });
+
 // Watchlists
 export interface WatchlistData {
   id: string;
