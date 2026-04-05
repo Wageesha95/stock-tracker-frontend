@@ -6,7 +6,7 @@ import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 
-export default function RightsPage() {
+export default function RightsPage({ embedded }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const [rights, setRights] = useState<RightsData[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -109,7 +109,7 @@ export default function RightsPage() {
 
   return (
     <div>
-      <h1>Rights Issues ({sorted.length})</h1>
+      {!embedded && <h1>Rights Issues ({sorted.length})</h1>}
 
       <div className="form-card">
         <h2>Add Rights Issue</h2>

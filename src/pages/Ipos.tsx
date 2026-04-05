@@ -6,7 +6,7 @@ import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 
-export default function IpoPage() {
+export default function IpoPage({ embedded }: { embedded?: boolean }) {
   const navigate = useNavigate();
   const [ipos, setIpos] = useState<IpoData[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -109,7 +109,7 @@ export default function IpoPage() {
 
   return (
     <div>
-      <h1>IPO ({sorted.length})</h1>
+      {!embedded && <h1>IPO ({sorted.length})</h1>}
 
       <div className="form-card">
         <h2>Add IPO</h2>
