@@ -119,6 +119,8 @@ export default function RightsPage() {
               Company
               <CompanySearchSelect companies={companies} value={companyCode} onChange={setCompanyCode} />
             </label>
+          </div>
+          <div className="form-row">
             <label>
               Date
               <input type="date" value={date} onChange={e => setDate(e.target.value)} required />

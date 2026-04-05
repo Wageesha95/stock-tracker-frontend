@@ -20,15 +20,27 @@ export default function CompanySearchSelect({ companies, value, onChange }: Prop
 
   return (
     <div style={{ position: 'relative' }}>
-      <input
-        className="search-bar"
-        value={search}
-        onChange={e => { setSearch(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 200)}
-        placeholder={selected ? `${selected.code} - ${selected.name}` : 'Search company...'}
-        style={{ width: '100%' }}
-      />
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+        {selected && !open && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: '0.4rem',
+            padding: '0.3rem 0.6rem', background: 'var(--bg-thead)',
+            borderRadius: '6px', fontSize: '0.82rem', whiteSpace: 'nowrap', flexShrink: 0,
+          }}>
+            <CompanyAvatar code={selected.code} size={20} />
+            <span style={{ fontWeight: 600 }}>{selected.code}</span>
+          </div>
+        )}
+        <input
+          className="search-bar"
+          value={search}
+          onChange={e => { setSearch(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          placeholder={selected ? selected.name : 'Search company...'}
+          style={{ width: '100%', flex: 1 }}
+        />
+      </div>
       {open && matches.length > 0 && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
@@ -53,17 +65,6 @@ export default function CompanySearchSelect({ companies, value, onChange }: Prop
               <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{c.name}</span>
             </div>
           ))}
-        </div>
-      )}
-      {selected && !open && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: '0.5rem',
-          marginTop: '0.4rem', padding: '0.35rem 0.6rem',
-          background: 'var(--bg-thead)', borderRadius: '6px', fontSize: '0.85rem',
-        }}>
-          <CompanyAvatar code={selected.code} size={22} />
-          <span style={{ fontWeight: 600 }}>{selected.code}</span>
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{selected.name}</span>
         </div>
       )}
     </div>

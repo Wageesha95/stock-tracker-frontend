@@ -195,6 +195,8 @@ export default function Dividends() {
               Company
               <CompanySearchSelect companies={companies} value={companyCode} onChange={handleCompanyChange} />
             </label>
+          </div>
+          <div className="form-row">
             <label>
               XD Date
               <input type="date" value={xdDate} onChange={e => handleXdDateChange(e.target.value)} />
