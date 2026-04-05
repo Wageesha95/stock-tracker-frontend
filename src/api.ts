@@ -27,7 +27,7 @@ api.interceptors.response.use(
 
 // Auth
 export const login = (username: string, password: string) =>
-  api.post<AuthUser & { token: string }>('/auth/login', { username, password }).then(res => {
+  api.post<AuthUser & { token: string; readMode: boolean }>('/auth/login', { username, password }).then(res => {
     localStorage.setItem('token', res.data.token);
     return res.data;
   });

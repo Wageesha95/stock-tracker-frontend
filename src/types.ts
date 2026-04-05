@@ -2,6 +2,7 @@ export interface AuthUser {
   id: string;
   username: string;
   role: 'USER' | 'ADMIN';
+  readMode?: boolean;
 }
 
 export interface Company {

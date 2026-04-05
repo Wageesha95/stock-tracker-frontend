@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTransactionsByCompany, getDividendsByCompany, getDashboardAll, getCompanies, getMarketDataHistory, getShareSplits, ShareSplitData } from '../api';
 import { Transaction, Dividend, RealizedGainItem, Company, MarketData, PortfolioItem } from '../types';
+import { useAuth } from '../context/AuthContext';
 import CompanyAvatar from '../components/CompanyAvatar';
 import ActionMenu from '../components/ActionMenu';
 import { deleteTransaction, deleteDividend, invalidate } from '../api';
@@ -13,6 +14,7 @@ type Period = '1d' | '2d' | '5d' | '2w' | '1m' | '3m' | '6m';
 export default function CompanyView() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const { isReadMode } = useAuth();
   const [tab, setTab] = useState<Tab>('transactions');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [dividends, setDividends] = useState<Dividend[]>([]);
@@ -257,7 +259,7 @@ export default function CompanyView() {
           {lowestData || highestData ? (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div>
-                <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>Lowest</div>
+                <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>{'\u25BC'} Lowest</div>
                 {lowestData ? (
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#e53e3e' }}>{fmt(lowestData.value)}</span>
@@ -266,7 +268,7 @@ export default function CompanyView() {
                 ) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}
               </div>
               <div>
-                <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>Highest</div>
+                <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>{'\u25B2'} Highest</div>
                 {highestData ? (
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#38a169' }}>{fmt(highestData.value)}</span>
@@ -362,7 +364,7 @@ export default function CompanyView() {
                   <th className="text-right">Price</th>
                   <th className="text-right">Commission</th>
                   <th className="text-right">Total</th>
-                  <th></th>
+                  {!isReadMode && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -378,11 +380,13 @@ export default function CompanyView() {
                     <td className="text-right mono">{fmt(t.price)}</td>
                     <td className="text-right mono">{fmt(t.commission)}</td>
                     <td className="text-right mono">{fmt(t.count * t.price + t.commission)}</td>
+                    {!isReadMode && (
                     <td>
                       <ActionMenu actions={[
                         { label: 'Delete', onClick: () => handleDeleteTx(t.id), danger: true },
                       ]} />
                     </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -399,7 +403,7 @@ export default function CompanyView() {
                   <td className="text-right mono">
                     {fmt(transactions.reduce((s, t) => s + (t.count * t.price + t.commission) * (t.type === 'SELL' ? -1 : 1), 0))}
                   </td>
-                  <td></td>
+                  {!isReadMode && <td></td>}
                 </tr>
               </tfoot>
             </table>
@@ -421,7 +425,7 @@ export default function CompanyView() {
                   <th className="text-right">Shares</th>
                   <th className="text-right">Scrip Shares</th>
                   <th className="text-right">Total</th>
-                  <th></th>
+                  {!isReadMode && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -437,11 +441,13 @@ export default function CompanyView() {
                     <td className="text-right mono">{d.type === 'CASH' ? d.shares : '\u2014'}</td>
                     <td className="text-right mono">{d.type === 'SCRIP' ? d.scripShares : '\u2014'}</td>
                     <td className="text-right mono">{d.type === 'CASH' ? fmt(d.totalAmount) : `${d.scripShares} shares`}</td>
+                    {!isReadMode && (
                     <td>
                       <ActionMenu actions={[
                         { label: 'Delete', onClick: () => handleDeleteDiv(d.id), danger: true },
                       ]} />
                     </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -451,7 +457,7 @@ export default function CompanyView() {
                   <td className="text-right mono">
                     {fmt(dividends.filter(d => d.type === 'CASH').reduce((s, d) => s + d.totalAmount, 0))}
                   </td>
-                  <td></td>
+                  {!isReadMode && <td></td>}
                 </tr>
               </tfoot>
             </table>

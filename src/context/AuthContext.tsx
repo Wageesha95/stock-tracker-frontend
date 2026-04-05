@@ -6,6 +6,7 @@ interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
   isAdmin: boolean;
+  isReadMode: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -28,8 +29,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     getMe()
       .then(u => {
-        setUser(u);
-        localStorage.setItem('user', JSON.stringify(u));
+        // Preserve readMode from localStorage since /me doesn't return it
+        const saved = localStorage.getItem('user');
+        const savedUser = saved ? JSON.parse(saved) : {};
+        const authUser = { ...u, readMode: savedUser.readMode ?? false };
+        setUser(authUser);
+        localStorage.setItem('user', JSON.stringify(authUser));
       })
       .catch(() => {
         localStorage.removeItem('token');
@@ -42,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (username: string, password: string) => {
     clearAllCache();
     const u = await apiLogin(username, password);
-    const authUser = { id: u.id, username: u.username, role: u.role };
+    const authUser = { id: u.id, username: u.username, role: u.role, readMode: u.readMode };
     localStorage.setItem('user', JSON.stringify(authUser));
     setUser(authUser);
   }, []);
@@ -55,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin: user?.role === 'ADMIN', login, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin: user?.role === 'ADMIN', isReadMode: user?.readMode ?? false, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

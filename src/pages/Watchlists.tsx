@@ -6,6 +6,7 @@ import {
   getMarketData, getCompanies, getDashboardAll, WatchlistData
 } from '../api';
 import { MarketData, Company, PortfolioItem } from '../types';
+import { useAuth } from '../context/AuthContext';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 const WATCHLIST_COLORS = [
@@ -25,6 +26,7 @@ const WATCHLIST_COLORS = [
 
 export default function Watchlists() {
   const navigate = useNavigate();
+  const { isReadMode } = useAuth();
   const [watchlists, setWatchlists] = useState<WatchlistData[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [marketMap, setMarketMap] = useState<Record<string, MarketData>>({});
@@ -195,6 +197,7 @@ export default function Watchlists() {
             </button>
           );
         })}
+        {!isReadMode && (
         <button
           onClick={() => { setShowCreate(!showCreate); setShowSettings(false); }}
           style={{
@@ -209,10 +212,11 @@ export default function Watchlists() {
         >
           + New
         </button>
+        )}
       </div>
 
       {/* Create form */}
-      {showCreate && (
+      {!isReadMode && showCreate && (
         <div className="form-card" style={{ marginBottom: '1rem' }}>
           <h3 style={{ margin: '0 0 0.75rem' }}>Create Watchlist</h3>
           <form onSubmit={e => { e.preventDefault(); handleCreate(); }}>
@@ -255,6 +259,7 @@ export default function Watchlists() {
       {active && !showCreate && (
         <>
           {/* Toolbar */}
+          {!isReadMode && (
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', alignItems: 'center' }}>
             <div style={{ position: 'relative' }} ref={dropdownRef}>
               <button
@@ -317,9 +322,10 @@ export default function Watchlists() {
               Settings
             </button>
           </div>
+          )}
 
           {/* Settings panel */}
-          {showSettings && (
+          {!isReadMode && showSettings && (
             <div className="form-card" style={{ marginBottom: '1rem' }}>
               <h3 style={{ margin: '0 0 0.75rem' }}>Watchlist Settings</h3>
               <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: '1rem' }}>
@@ -412,7 +418,7 @@ export default function Watchlists() {
                     <th className="text-right">Value</th>
                     <th className="text-right">Unrealized</th>
                     <th className="text-right">Gain %</th>
-                    <th style={{ width: '30px' }}></th>
+                    {!isReadMode && <th style={{ width: '30px' }}></th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -469,6 +475,7 @@ export default function Watchlists() {
                             </span>
                           ) : '\u2014'}
                         </td>
+                        {!isReadMode && (
                         <td>
                           <button
                             onClick={() => handleRemoveCompany(code)}
@@ -482,6 +489,7 @@ export default function Watchlists() {
                             x
                           </button>
                         </td>
+                        )}
                       </tr>
                     );
                   })}

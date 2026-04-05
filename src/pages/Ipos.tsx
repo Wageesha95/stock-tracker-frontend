@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getIpos, createIpo, updateIpo, deleteIpo, getCompanies, IpoData } from '../api';
 import { Company } from '../types';
+import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 
 export default function IpoPage({ embedded }: { embedded?: boolean }) {
   const navigate = useNavigate();
+  const { isReadMode } = useAuth();
   const [ipos, setIpos] = useState<IpoData[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,6 +113,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
     <div>
       {!embedded && <h1>IPO ({sorted.length})</h1>}
 
+      {!isReadMode && (
       <div className="form-card">
         <h2>Add IPO</h2>
         <form onSubmit={handleSubmit}>
@@ -142,6 +145,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
           </div>
         </form>
       </div>
+      )}
 
       {ipos.length >= 3 && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
@@ -166,7 +170,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
                 <th className="sort-header text-right" onClick={() => handleRSort('count')}>Shares{rsi('count')}</th>
                 <th className="sort-header text-right" onClick={() => handleRSort('price')}>Price{rsi('price')}</th>
                 <th className="sort-header text-right" onClick={() => handleRSort('total')}>Total{rsi('total')}</th>
-                <th></th>
+                {!isReadMode && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -182,12 +186,14 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
                   <td className="text-right mono">{r.count}</td>
                   <td className="text-right mono">{fmt(r.price)}</td>
                   <td className="text-right mono">{fmt(r.count * r.price)}</td>
+                  {!isReadMode && (
                   <td>
                     <ActionMenu actions={[
                       { label: 'Edit', onClick: () => openEdit(r) },
                       { label: 'Delete', onClick: () => handleDelete(r.id), danger: true },
                     ]} />
                   </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -196,7 +202,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
       )}
 
       {/* Edit Modal */}
-      {editItem && (
+      {!isReadMode && editItem && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,

@@ -20,7 +20,7 @@ import RightsAndIpo from './pages/RightsAndIpo';
 import './App.css';
 
 function App() {
-  const { user, loading, isAdmin, logout } = useAuth();
+  const { user, loading, isAdmin, isReadMode, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
@@ -74,12 +74,12 @@ function App() {
                 <NavLink to="/sectors" onClick={() => setMenuOpen(false)}>Sectors</NavLink>
                 <NavLink to="/companies" onClick={() => setMenuOpen(false)}>Companies</NavLink>
                 <NavLink to="/calculator" onClick={() => setMenuOpen(false)}>Calculator</NavLink>
-                <NavLink to="/upload" onClick={() => setMenuOpen(false)}>Upload PDF</NavLink>
+                {!isReadMode && <NavLink to="/upload" onClick={() => setMenuOpen(false)}>Upload PDF</NavLink>}
               </>
             )}
           </div>
           <div className="nav-right">
-            <span className="nav-username">{user.username}</span>
+            <span className="nav-username">{user.username}{isReadMode && <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', color: '#ecc94b', fontWeight: 600 }}>(READ)</span>}</span>
             <button
               className="theme-toggle"
               onClick={toggleTheme}

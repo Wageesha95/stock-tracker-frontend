@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getMarketData, getMarketDataHistory, getTransactions, getDividends, getDashboardAll } from '../api';
 import { MarketData, Transaction, Dividend, PortfolioItem, RealizedGainItem } from '../types';
+import { useAuth } from '../context/AuthContext';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 export default function StockPrices() {
+  const { isReadMode } = useAuth();
   const { code } = useParams<{ code: string }>();
   const [marketInfo, setMarketInfo] = useState<MarketData | null>(null);
   const [priceHistory, setPriceHistory] = useState<MarketData[]>([]);

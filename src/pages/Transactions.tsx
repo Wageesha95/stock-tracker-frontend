@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getTransactions, getCompanies, getMarketData, createTransaction, deleteTransaction } from '../api';
 import { Transaction, Company, MarketData } from '../types';
+import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 
 export default function Transactions() {
   const navigate = useNavigate();
+  const { isReadMode } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [marketMap, setMarketMap] = useState<Record<string, MarketData>>({});
@@ -111,6 +113,7 @@ export default function Transactions() {
     <div>
       <h1>Transactions ({sorted.length})</h1>
 
+      {!isReadMode && (
       <div className="form-card">
         <h2>Add Transaction</h2>
         <form onSubmit={handleSubmit}>
@@ -192,6 +195,7 @@ export default function Transactions() {
           </div>
         </form>
       </div>
+      )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <div className="segmented-control">
@@ -238,7 +242,7 @@ export default function Transactions() {
                 <th className="sort-header text-right" onClick={() => handleSort('price')}>Price{si('price')}</th>
                 <th className="sort-header text-right" onClick={() => handleSort('commission')}>Commission{si('commission')}</th>
                 <th className="sort-header text-right" onClick={() => handleSort('total')}>Total{si('total')}</th>
-                <th></th>
+                {!isReadMode && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -260,11 +264,13 @@ export default function Transactions() {
                   <td className="text-right mono">{t.price.toFixed(2)}</td>
                   <td className="text-right mono">{t.commission.toFixed(2)}</td>
                   <td className="text-right mono">{(t.count * t.price + t.commission).toFixed(2)}</td>
+                  {!isReadMode && (
                   <td>
                     <ActionMenu actions={[
                       { label: 'Delete', onClick: () => handleDelete(t.id), danger: true },
                     ]} />
                   </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -333,7 +339,7 @@ export default function Transactions() {
                       <th className="text-right">Price</th>
                       <th className="text-right">Commission</th>
                       <th className="text-right">Total</th>
-                      <th></th>
+                      {!isReadMode && <th></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -349,11 +355,13 @@ export default function Transactions() {
                         <td className="text-right mono">{t.price.toFixed(2)}</td>
                         <td className="text-right mono">{t.commission.toFixed(2)}</td>
                         <td className="text-right mono">{(t.count * t.price + t.commission).toFixed(2)}</td>
+                        {!isReadMode && (
                         <td>
                           <ActionMenu actions={[
                             { label: 'Delete', onClick: () => handleDelete(t.id), danger: true },
                           ]} />
                         </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -364,7 +372,7 @@ export default function Transactions() {
                       <td></td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + t.commission, 0).toFixed(2)}</td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + (t.count * t.price + t.commission), 0).toFixed(2)}</td>
-                      <td></td>
+                      {!isReadMode && <td></td>}
                     </tr>
                   </tfoot>
                 </table>
@@ -408,7 +416,7 @@ export default function Transactions() {
                       <th className="text-right">Price</th>
                       <th className="text-right">Commission</th>
                       <th className="text-right">Total</th>
-                      <th></th>
+                      {!isReadMode && <th></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -429,11 +437,13 @@ export default function Transactions() {
                         <td className="text-right mono">{t.price.toFixed(2)}</td>
                         <td className="text-right mono">{t.commission.toFixed(2)}</td>
                         <td className="text-right mono">{(t.count * t.price + t.commission).toFixed(2)}</td>
+                        {!isReadMode && (
                         <td>
                           <ActionMenu actions={[
                             { label: 'Delete', onClick: () => handleDelete(t.id), danger: true },
                           ]} />
                         </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -444,7 +454,7 @@ export default function Transactions() {
                       <td></td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + t.commission, 0).toFixed(2)}</td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + (t.count * t.price + t.commission), 0).toFixed(2)}</td>
-                      <td></td>
+                      {!isReadMode && <td></td>}
                     </tr>
                   </tfoot>
                 </table>

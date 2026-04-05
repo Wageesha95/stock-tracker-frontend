@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getShareSplits, createShareSplit, updateShareSplit, deleteShareSplit, getCompanies, ShareSplitData } from '../api';
 import { Company } from '../types';
+import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 
 export default function ShareSplitsPage({ embedded }: { embedded?: boolean }) {
   const navigate = useNavigate();
+  const { isReadMode } = useAuth();
   const [splits, setSplits] = useState<ShareSplitData[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +68,7 @@ export default function ShareSplitsPage({ embedded }: { embedded?: boolean }) {
     <div>
       {!embedded && <h1>Share Splits</h1>}
 
+      {!isReadMode && (
       <div className="form-card">
         <h2>Add Split / Merge</h2>
         <form onSubmit={handleSubmit}>
@@ -101,6 +104,7 @@ export default function ShareSplitsPage({ embedded }: { embedded?: boolean }) {
           </div>
         </form>
       </div>
+      )}
 
       {sorted.length === 0 ? (
         <p style={{ color: 'var(--text-muted)' }}>No split records yet.</p>
@@ -113,7 +117,7 @@ export default function ShareSplitsPage({ embedded }: { embedded?: boolean }) {
                 <th>Company</th>
                 <th>Type</th>
                 <th className="text-right">Ratio</th>
-                <th></th>
+                {!isReadMode && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -132,12 +136,14 @@ export default function ShareSplitsPage({ embedded }: { embedded?: boolean }) {
                     </span>
                   </td>
                   <td className="text-right mono">{s.fromShares} : {s.toShares}</td>
+                  {!isReadMode && (
                   <td>
                     <ActionMenu actions={[
                       { label: 'Edit', onClick: () => openEdit(s) },
                       { label: 'Delete', onClick: () => handleDelete(s.id), danger: true },
                     ]} />
                   </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -145,7 +151,7 @@ export default function ShareSplitsPage({ embedded }: { embedded?: boolean }) {
         </div>
       )}
 
-      {editItem && (
+      {!isReadMode && editItem && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,

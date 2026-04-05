@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 export default function Companies() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, isReadMode } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [industryGroups, setIndustryGroups] = useState<IndustryGroup[]>([]);
   const [groups, setGroups] = useState<Record<string, string>>({});
@@ -150,7 +150,7 @@ export default function Companies() {
       </td>
       {viewMode === 'list' && (
         <td>
-          {isAdmin ? (
+          {isAdmin && !isReadMode ? (
             <select
               value={c.industryGroupId || ''}
               onChange={e => handleSectorChange(c, e.target.value)}

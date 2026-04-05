@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend } from '../api';
 import { Dividend, Company, Transaction } from '../types';
+import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 
 export default function Dividends() {
   const navigate = useNavigate();
+  const { isReadMode } = useAuth();
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -187,6 +189,7 @@ export default function Dividends() {
     <div>
       <h1>Dividends</h1>
 
+      {!isReadMode && (
       <div className="form-card">
         <h2>Add Dividend</h2>
         <form onSubmit={handleSubmit}>
@@ -311,6 +314,7 @@ export default function Dividends() {
           </div>
         </form>
       </div>
+      )}
 
       {(() => {
         const cashDivs = sorted.filter(d => d.type === 'CASH');
@@ -340,7 +344,7 @@ export default function Dividends() {
                 <th className="sort-header text-right" onClick={() => handleDivSort('amount')}>Amount/Share{dsi('amount')}</th>
                 <th className="sort-header text-right" onClick={() => handleDivSort('shares')}>Shares{dsi('shares')}</th>
                 <th className="sort-header text-right" onClick={() => handleDivSort('total')}>Total{dsi('total')}</th>
-                <th></th>
+                {!isReadMode && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -360,12 +364,14 @@ export default function Dividends() {
                   <td className="text-right mono">{d.amount.toFixed(2)}</td>
                   <td className="text-right mono">{d.shares}</td>
                   <td className="text-right mono">{d.totalAmount.toFixed(2)}</td>
+                  {!isReadMode && (
                   <td>
                     <ActionMenu actions={[
                       { label: 'Edit', onClick: () => openEdit(d) },
                       { label: 'Delete', onClick: () => handleDelete(d.id), danger: true },
                     ]} />
                   </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -375,7 +381,7 @@ export default function Dividends() {
                 <td></td>
                 <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.shares, 0)}</td>
                 <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.totalAmount, 0).toFixed(2)}</td>
-                <td></td>
+                {!isReadMode && <td></td>}
               </tr>
             </tfoot>
           </table>
@@ -393,7 +399,7 @@ export default function Dividends() {
                 <th>XD Date</th>
                 <th className="sort-header" onClick={() => handleDivSort('companyCode')}>Company{dsi('companyCode')}</th>
                 <th className="text-right">Shares Received</th>
-                <th></th>
+                {!isReadMode && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -408,12 +414,14 @@ export default function Dividends() {
                     </div>
                   </td>
                   <td className="text-right mono">{d.scripShares}</td>
+                  {!isReadMode && (
                   <td>
                     <ActionMenu actions={[
                       { label: 'Edit', onClick: () => openEdit(d) },
                       { label: 'Delete', onClick: () => handleDelete(d.id), danger: true },
                     ]} />
                   </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -421,7 +429,7 @@ export default function Dividends() {
               <tr className="portfolio-total">
                 <td colSpan={3}>Total</td>
                 <td className="text-right mono">{scripDivs.reduce((s, d) => s + d.scripShares, 0)} shares</td>
-                <td></td>
+                {!isReadMode && <td></td>}
               </tr>
             </tfoot>
           </table>
@@ -431,7 +439,7 @@ export default function Dividends() {
       })()}
 
       {/* Edit Modal */}
-      {editDividend && (
+      {!isReadMode && editDividend && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
