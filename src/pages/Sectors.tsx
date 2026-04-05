@@ -288,7 +288,7 @@ export default function Sectors() {
       {sectors.length > 0 && (
         <>
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
-            <div style={{ flex: '1 1 350px', minHeight: 350 }}>
+            <div className="sectors-pie-container" style={{ flex: '1 1 350px', minHeight: 350 }}>
               <ResponsiveContainer width="100%" height={350}>
                 <PieChart>
                   <Pie

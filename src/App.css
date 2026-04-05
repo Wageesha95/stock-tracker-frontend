@@ -1310,6 +1310,11 @@ button:active {
     overflow: hidden;
   }
 
+  .sectors-pie-container {
+    flex: 1 1 100% !important;
+    min-height: 300px !important;
+  }
+
 
   .dashboard-groups {
     grid-template-columns: 1fr;
