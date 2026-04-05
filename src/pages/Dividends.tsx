@@ -245,7 +245,7 @@ export default function Dividends() {
                 />
               </label>
               <label>
-                Shares Held
+                Shares Held{xdDate && companyCode && getSharesHeldAtDate(companyCode, xdDate) > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.8rem' }}> ({getSharesHeldAtDate(companyCode, xdDate)})</span>}
                 <input
                   type="number"
                   min="1"
@@ -253,11 +253,6 @@ export default function Dividends() {
                   onChange={e => setShares(e.target.value)}
                   required
                 />
-                {xdDate && companyCode && getSharesHeldAtDate(companyCode, xdDate) > 0 && (
-                  <small style={{ color: 'var(--text-muted)' }}>
-                    Held before XD: {getSharesHeldAtDate(companyCode, xdDate)}
-                  </small>
-                )}
               </label>
             </div>
           ) : (
