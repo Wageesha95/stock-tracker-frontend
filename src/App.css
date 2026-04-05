@@ -1318,7 +1318,6 @@ button:active {
     flex: 1 1 auto !important;
     min-height: auto !important;
   }
-  }
 
   .dashboard-groups {
     grid-template-columns: 1fr;
