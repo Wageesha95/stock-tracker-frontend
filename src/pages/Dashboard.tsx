@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, invalidate } from '../api';
 import { PortfolioItem, Dividend, RealizedGainItem, Transaction, Company } from '../types';
@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [realizedItems, setRealizedItems] = useState<RealizedGainItem[]>([]);
   const [opportunityCost, setOpportunityCost] = useState(0);
   const [interestBreakdown, setInterestBreakdown] = useState<InterestBreakdown[]>([]);
+  const sectionRef = useRef<HTMLDivElement>(null);
   const [activeSection, setActiveSection] = useState<'none' | 'holdings' | 'invested' | 'realized' | 'realizedProfit' | 'realizedLoss' | 'netRealized' | 'interest' | 'profit' | 'loss' | 'netUnrealized' | 'dayProfit' | 'dayLoss' | 'netDay' | 'cashDiv' | 'scripDiv'>('none');
   const [expandedInterest, setExpandedInterest] = useState<Set<string>>(new Set());
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -82,7 +83,12 @@ export default function Dashboard() {
   const [companySearch, setCompanySearch] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [tableSearch, setTableSearch] = useState('');
-  useEffect(() => { setTableSearch(''); }, [activeSection]);
+  useEffect(() => {
+    setTableSearch('');
+    if (activeSection !== 'none') {
+      setTimeout(() => sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+  }, [activeSection]);
   const tableSearchBar = (count: number) => count >= 5 ? (
     <input className="search-bar" value={tableSearch} onChange={e => setTableSearch(e.target.value)} placeholder="Search..." />
   ) : null;
@@ -324,6 +330,7 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <div ref={sectionRef} />
       {activeSection === 'invested' && (() => {
         const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
         let netCashOut = 0;
