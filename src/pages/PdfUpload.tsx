@@ -254,7 +254,7 @@ export default function PdfUpload() {
           )}
 
           <div className="upload-actions" style={{ marginTop: '1rem' }}>
-            <button className="btn-upload" onClick={handleConfirm} disabled={confirming || preview.length === 0 || !tradeDate || !brokerId || dateMismatch}>
+            <button className="btn-upload" onClick={handleConfirm} disabled={confirming || preview.length === 0 || !tradeDate || !brokerId || !!dateMismatch}>
               {confirming ? 'Saving...' : 'Confirm & Save'}
             </button>
             <button className="btn-reset" onClick={handleReset}>Cancel</button>

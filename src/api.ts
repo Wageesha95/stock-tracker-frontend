@@ -185,7 +185,7 @@ export const getDashboardSummary = () => cached('summary', () => api.get<{
 // Admin
 export const getAdminStats = () => cached('admin-stats', () => api.get<{
   totalUsers: number;
-  users: { id: string; username: string; role: string; transactionCount: number; createdAt: string }[];
+  users: { id: string; username: string; role: string; transactionCount: number; locked: boolean; createdAt: string }[];
 }>('/admin/stats').then(res => res.data));
 export const createAdminUser = (data: { username: string; password: string; role: string }) =>
   api.post('/admin/users', data).then(res => { invalidate('admin-stats'); return res.data; });
