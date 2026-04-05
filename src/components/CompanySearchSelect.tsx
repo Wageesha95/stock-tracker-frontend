@@ -22,7 +22,7 @@ export default function CompanySearchSelect({ companies, value, onChange }: Prop
     <div style={{ position: 'relative' }}>
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
         {selected && !open && (
-          <div style={{
+          <div className="company-select-chip" style={{
             display: 'flex', alignItems: 'center', gap: '0.4rem',
             padding: '0.3rem 0.6rem', background: 'var(--bg-thead)',
             borderRadius: '6px', fontSize: '0.82rem', whiteSpace: 'nowrap', flexShrink: 0,
@@ -37,8 +37,8 @@ export default function CompanySearchSelect({ companies, value, onChange }: Prop
           onChange={e => { setSearch(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 200)}
-          placeholder={selected ? selected.name : 'Search company...'}
-          style={{ width: '100%', flex: 1 }}
+          placeholder={selected ? `${selected.code} - ${selected.name}` : 'Search company...'}
+          style={{ flex: 1, minWidth: 0 }}
         />
       </div>
       {open && matches.length > 0 && (
