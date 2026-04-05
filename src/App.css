@@ -1212,6 +1212,12 @@ button:hover {
 
   .nav-hamburger {
     display: flex;
+    order: -1;
+  }
+
+  .nav-brand {
+    order: 0;
+    margin-right: auto;
   }
 
   .nav-links {
