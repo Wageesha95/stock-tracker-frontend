@@ -193,6 +193,8 @@ export const updateAdminUser = (id: string, data: { username?: string; password?
   api.put(`/admin/users/${id}`, data).then(res => { invalidate('admin-stats'); return res.data; });
 export const deleteAdminUser = (id: string) =>
   api.delete(`/admin/users/${id}`).then(res => { invalidate('admin-stats'); return res; });
+export const unlockUser = (id: string) =>
+  api.put(`/admin/users/${id}/unlock`).then(res => { invalidate('admin-stats'); return res.data; });
 
 export const getDashboardAll = () => cached('dashboard-all', () => api.get<{
   portfolio: PortfolioItem[];

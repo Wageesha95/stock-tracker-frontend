@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAdminStats, createAdminUser, updateAdminUser, deleteAdminUser } from '../api';
+import { getAdminStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser } from '../api';
 import ActionMenu from '../components/ActionMenu';
 
 interface UserStat {
@@ -7,6 +7,7 @@ interface UserStat {
   username: string;
   role: string;
   transactionCount: number;
+  locked: boolean;
   createdAt: string;
 }
 
@@ -70,6 +71,15 @@ export default function AdminDashboard() {
       loadData();
     } catch (err: any) {
       setEditError(err?.response?.data?.error || 'Failed to update user');
+    }
+  };
+
+  const handleUnlock = async (u: UserStat) => {
+    try {
+      await unlockUser(u.id);
+      loadData();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Failed to unlock user');
     }
   };
 
@@ -149,7 +159,10 @@ export default function AdminDashboard() {
           <tbody>
             {users.map(u => (
               <tr key={u.id}>
-                <td style={{ fontWeight: 600 }}>{u.username}</td>
+                <td style={{ fontWeight: 600 }}>
+                  {u.username}
+                  {u.locked && <span style={{ marginLeft: '0.5rem', fontSize: '0.7rem', color: '#e53e3e', fontWeight: 600 }}>LOCKED</span>}
+                </td>
                 <td>
                   <span className="gain-pill"
                     style={u.role === 'ADMIN' ? { background: '#bee3f8', color: '#2a4365' } : { background: '#e2e8f0', color: '#4a5568' }}>
@@ -160,6 +173,7 @@ export default function AdminDashboard() {
                 <td>
                   <ActionMenu actions={[
                     { label: 'Edit', onClick: () => openEdit(u) },
+                    ...(u.locked ? [{ label: 'Unlock', onClick: () => handleUnlock(u) }] : []),
                     { label: 'Delete', onClick: () => handleDelete(u), danger: true },
                   ]} />
                 </td>
