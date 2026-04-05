@@ -486,29 +486,40 @@ select:focus {
 /* Buttons */
 button {
   padding: 0.5rem 1.25rem;
-  background: #3182ce;
+  background: linear-gradient(135deg, #3182ce, #2b6cb0);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
   white-space: nowrap;
+  box-shadow: 0 2px 4px rgba(49, 130, 206, 0.2);
+  letter-spacing: 0.2px;
 }
 
 button:hover {
-  background: #2b6cb0;
+  background: linear-gradient(135deg, #2b6cb0, #2563a8);
+  box-shadow: 0 4px 8px rgba(49, 130, 206, 0.3);
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px rgba(49, 130, 206, 0.2);
 }
 
 .btn-delete {
-  background: #e53e3e;
+  background: linear-gradient(135deg, #e53e3e, #c53030);
   padding: 0.3rem 0.75rem;
   font-size: 0.8rem;
+  box-shadow: 0 2px 4px rgba(229, 62, 62, 0.2);
 }
 
 .btn-delete:hover {
-  background: #c53030;
+  background: linear-gradient(135deg, #c53030, #b91c1c);
+  box-shadow: 0 4px 8px rgba(229, 62, 62, 0.3);
 }
 
 /* Links */
@@ -677,40 +688,47 @@ button:hover {
 
 .btn-upload {
   padding: 0.65rem 2rem;
-  background: #38a169;
+  background: linear-gradient(135deg, #38a169, #2f855a);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(56, 161, 105, 0.2);
 }
 
 .btn-upload:hover {
-  background: #2f855a;
+  background: linear-gradient(135deg, #2f855a, #276749);
+  box-shadow: 0 4px 8px rgba(56, 161, 105, 0.3);
+  transform: translateY(-1px);
 }
 
 .btn-upload:disabled {
   background: #a0aec0;
   cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .btn-reset {
   padding: 0.5rem 1.25rem;
-  background: #718096;
-  color: white;
-  border: none;
-  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1.5px solid var(--border-input);
+  border-radius: 8px;
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
   margin-left: 1rem;
+  box-shadow: none;
 }
 
 .btn-reset:hover {
-  background: #4a5568;
+  background: var(--bg-row-hover);
+  border-color: var(--text-muted);
 }
 
 .upload-actions {
@@ -874,31 +892,35 @@ button:hover {
 /* Segmented Control (view mode toggle) */
 .segmented-control {
   display: inline-flex;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
-  border: 1px solid var(--border-segmented);
+  border: 1.5px solid var(--border-segmented);
   background: var(--bg-segmented);
+  padding: 3px;
+  gap: 2px;
 }
 
 .segmented-control button {
-  padding: 0.45rem 1.25rem;
+  padding: 0.4rem 1.1rem;
   border: none;
   background: transparent;
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: var(--text-th);
   cursor: pointer;
-  border-radius: 0;
-  transition: background 0.2s, color 0.2s;
+  border-radius: 7px;
+  transition: all 0.2s;
+  box-shadow: none;
 }
 
 .segmented-control button:not(:last-child) {
-  border-right: 1px solid var(--border-segmented);
+  border-right: none;
 }
 
 .segmented-control button.active {
   background: var(--bg-thead-gradient);
   color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .segmented-control button:hover:not(.active) {
@@ -912,15 +934,17 @@ button:hover {
   border: 1.5px solid #3182ce;
   padding: 0.3rem 0.75rem;
   font-size: 0.8rem;
-  border-radius: 6px;
+  border-radius: 8px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s;
+  transition: all 0.2s;
+  box-shadow: none;
 }
 
 .btn-outline:hover {
   background: #3182ce;
   color: white;
+  box-shadow: 0 2px 4px rgba(49, 130, 206, 0.2);
 }
 
 /* Subtle Delete Button */
