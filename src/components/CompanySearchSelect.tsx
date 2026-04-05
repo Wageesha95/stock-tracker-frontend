@@ -29,6 +29,11 @@ export default function CompanySearchSelect({ companies, value, onChange }: Prop
           }}>
             <CompanyAvatar code={selected.code} size={20} />
             <span style={{ fontWeight: 600 }}>{selected.code}</span>
+            <span
+              onClick={() => { onChange(''); setSearch(''); }}
+              style={{ cursor: 'pointer', opacity: 0.5, fontSize: '0.75rem', marginLeft: '0.1rem' }}
+              title="Clear"
+            >&times;</span>
           </div>
         )}
         <input
