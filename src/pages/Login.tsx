@@ -15,7 +15,8 @@ export default function Login() {
     try {
       await login(username, password);
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Invalid username or password');
+      const msg = err?.response?.data?.error || err?.message || 'Invalid username or password';
+      setError(msg);
     } finally {
       setLoading(false);
     }
