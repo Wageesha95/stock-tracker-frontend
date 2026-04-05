@@ -55,6 +55,17 @@ export default function CompanySearchSelect({ companies, value, onChange }: Prop
           ))}
         </div>
       )}
+      {selected && !open && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: '0.5rem',
+          marginTop: '0.4rem', padding: '0.35rem 0.6rem',
+          background: 'var(--bg-thead)', borderRadius: '6px', fontSize: '0.85rem',
+        }}>
+          <CompanyAvatar code={selected.code} size={22} />
+          <span style={{ fontWeight: 600 }}>{selected.code}</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{selected.name}</span>
+        </div>
+      )}
     </div>
   );
 }
