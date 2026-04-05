@@ -11,7 +11,7 @@ export default function Companies() {
   const [industryGroups, setIndustryGroups] = useState<IndustryGroup[]>([]);
   const [groups, setGroups] = useState<Record<string, string>>({});
   const [latestPrice, setLatestPrice] = useState<Record<string, number>>({});
-  const [priceChange, setPriceChange] = useState<Record<string, number>>({});
+  const [, setPriceChange] = useState<Record<string, number>>({});
   const [changePercent, setChangePercent] = useState<Record<string, number>>({});
   const [ytdChange, setYtdChange] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -106,12 +106,82 @@ export default function Companies() {
     });
   }, [companies, searchLower, groups, latestPrice, ytdChange, cSortKey, cSortDir]);
 
+  const [viewMode, setViewMode] = useState<'list' | 'industry'>('list');
+
+  // Group by industry
+  const groupedByIndustry = useMemo(() => {
+    const map: Record<string, typeof filtered> = {};
+    filtered.forEach(c => {
+      const industry = c.industryGroupId ? groups[c.industryGroupId] || 'Uncategorized' : 'Uncategorized';
+      (map[industry] = map[industry] || []).push(c);
+    });
+    return Object.entries(map).sort((a, b) => a[0] === 'Uncategorized' ? 1 : b[0] === 'Uncategorized' ? -1 : a[0].localeCompare(b[0]));
+  }, [filtered, groups]);
+
+  const [expandedIndustry, setExpandedIndustry] = useState<Set<string>>(new Set());
+
   if (loading) return <p>Loading...</p>;
+
+  const companyRow = (c: Company) => (
+    <tr key={c.id}>
+      <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${c.code}`)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <CompanyAvatar code={c.code} size={28} />
+          <span className="company-code">{c.code}</span>
+        </div>
+      </td>
+      <td>{c.name}</td>
+      <td className="text-right mono">
+        {latestPrice[c.code] != null ? latestPrice[c.code].toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '\u2014'}
+      </td>
+      <td className={`text-right mono`}>
+        {changePercent[c.code] != null ? (
+          <span className={`gain-pill ${changePercent[c.code] >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
+            {changePercent[c.code] >= 0 ? '+' : ''}{changePercent[c.code].toFixed(2)}%
+          </span>
+        ) : '\u2014'}
+      </td>
+      <td className="text-right mono">
+        {ytdChange[c.code] != null ? (
+          <span className={`gain-pill ${ytdChange[c.code] >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
+            {ytdChange[c.code] >= 0 ? '+' : ''}{ytdChange[c.code].toFixed(1)}%
+          </span>
+        ) : '\u2014'}
+      </td>
+      {viewMode === 'list' && (
+        <td>
+          {isAdmin ? (
+            <select
+              value={c.industryGroupId || ''}
+              onChange={e => handleSectorChange(c, e.target.value)}
+              onClick={e => e.stopPropagation()}
+              style={{ fontSize: '0.85rem', padding: '0.25rem 0.5rem' }}
+            >
+              <option value="">— None —</option>
+              {industryGroups.map(g => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
+          ) : (
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              {c.industryGroupId ? groups[c.industryGroupId] || '\u2014' : '\u2014'}
+            </span>
+          )}
+        </td>
+      )}
+    </tr>
+  );
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <h1 style={{ margin: 0 }}>Companies ({filtered.length})</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <h1 style={{ margin: 0 }}>Companies ({filtered.length})</h1>
+          <div className="segmented-control">
+            <button className={viewMode === 'list' ? 'active' : ''} onClick={() => setViewMode('list')}>List</button>
+            <button className={viewMode === 'industry' ? 'active' : ''} onClick={() => setViewMode('industry')}>By Industry</button>
+          </div>
+        </div>
         <input
           className="search-bar"
           value={search}
@@ -122,7 +192,7 @@ export default function Companies() {
 
       {filtered.length === 0 ? (
         <p style={{ color: 'var(--text-muted)' }}>{companies.length === 0 ? 'No companies registered yet.' : 'No companies match your search.'}</p>
-      ) : (
+      ) : viewMode === 'list' ? (
         <div className="portfolio-table-wrap">
           <table className="portfolio-table">
             <thead>
@@ -132,63 +202,49 @@ export default function Companies() {
                 <th className="sort-header text-right" onClick={() => handleCSort('lastTrade')}>Last Trade{csi('lastTrade')}</th>
                 <th className="text-right">Change</th>
                 <th className="sort-header text-right" onClick={() => handleCSort('ytd')}>YTD{csi('ytd')}</th>
-                <th className="sort-header" onClick={() => handleCSort('industry')}>Industry Group{csi('industry')}</th>
+                <th className="sort-header" onClick={() => handleCSort('industry')}>Industry{csi('industry')}</th>
               </tr>
             </thead>
-            <tbody>
-              {filtered.map(c => (
-                <tr key={c.id}>
-                  <td
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/company/${c.code}`)}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <CompanyAvatar code={c.code} size={28} />
-                      <span className="company-code">{c.code}</span>
-                    </div>
-                  </td>
-                  <td>{c.name}</td>
-                  <td className="text-right mono">
-                    {latestPrice[c.code] != null ? latestPrice[c.code].toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '\u2014'}
-                  </td>
-                  <td className={`text-right mono ${priceChange[c.code] != null ? (priceChange[c.code] >= 0 ? 'gain-positive' : 'gain-negative') : ''}`}>
-                    {changePercent[c.code] != null ? (
-                      <span className={`gain-pill ${changePercent[c.code] >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
-                        {changePercent[c.code] >= 0 ? '+' : ''}{changePercent[c.code].toFixed(2)}%
-                      </span>
-                    ) : '\u2014'}
-                  </td>
-                  <td className="text-right mono">
-                    {ytdChange[c.code] != null ? (
-                      <span className={`gain-pill ${ytdChange[c.code] >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
-                        {ytdChange[c.code] >= 0 ? '+' : ''}{ytdChange[c.code].toFixed(1)}%
-                      </span>
-                    ) : '\u2014'}
-                  </td>
-                  <td>
-                    {isAdmin ? (
-                      <select
-                        value={c.industryGroupId || ''}
-                        onChange={e => handleSectorChange(c, e.target.value)}
-                        onClick={e => e.stopPropagation()}
-                        style={{ fontSize: '0.85rem', padding: '0.25rem 0.5rem' }}
-                      >
-                        <option value="">— None —</option>
-                        {industryGroups.map(g => (
-                          <option key={g.id} value={g.id}>{g.name}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                        {c.industryGroupId ? groups[c.industryGroupId] || '—' : '—'}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+            <tbody>{filtered.map(companyRow)}</tbody>
           </table>
         </div>
+      ) : (
+        groupedByIndustry.map(([industry, comps]) => {
+          const isExpanded = expandedIndustry.has(industry);
+          return (
+            <div key={industry} className="group-card">
+              <div className="group-header" onClick={() => setExpandedIndustry(prev => {
+                const next = new Set(prev);
+                next.has(industry) ? next.delete(industry) : next.add(industry);
+                return next;
+              })} style={{ cursor: 'pointer' }}>
+                <div className="group-header-left">
+                  <span style={{ fontSize: '0.7rem', width: 16 }}>{isExpanded ? '\u25BC' : '\u25B6'}</span>
+                  <div>
+                    <div className="group-code">{industry}</div>
+                    <div className="group-name">{comps.length} companies</div>
+                  </div>
+                </div>
+              </div>
+              {isExpanded && (
+                <div className="portfolio-table-wrap">
+                  <table className="portfolio-table">
+                    <thead>
+                      <tr>
+                        <th>Code</th>
+                        <th>Name</th>
+                        <th className="text-right">Last Trade</th>
+                        <th className="text-right">Change</th>
+                        <th className="text-right">YTD</th>
+                      </tr>
+                    </thead>
+                    <tbody>{comps.map(companyRow)}</tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })
       )}
     </div>
   );
