@@ -295,7 +295,7 @@ export default function PdfUpload() {
                     <td>{u.tradeDate || u.filename}</td>
                     <td>{getBrokerName(u.brokerId)}</td>
                     <td className="text-right mono">{u.transactionCount}</td>
-                    <td>{new Date(u.uploadedAt).toLocaleString()}</td>
+                    <td>{new Date(u.uploadedAt).toLocaleString('en-US', { timeZone: 'Asia/Colombo' })}</td>
                     <td>
                       <ActionMenu actions={[
                         { label: 'Delete', onClick: () => handleDeleteUpload(u.id), danger: true },

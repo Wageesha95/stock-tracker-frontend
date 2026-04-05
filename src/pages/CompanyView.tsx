@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getTransactionsByCompany, getDividendsByCompany, getDashboardAll, getCompanies, getMarketDataHistory } from '../api';
+import { getTransactionsByCompany, getDividendsByCompany, getDashboardAll, getCompanies, getMarketDataHistory, getShareSplits, ShareSplitData } from '../api';
 import { Transaction, Dividend, RealizedGainItem, Company, MarketData, PortfolioItem } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
 import ActionMenu from '../components/ActionMenu';
@@ -8,6 +8,7 @@ import { deleteTransaction, deleteDividend, invalidate } from '../api';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
 type Tab = 'transactions' | 'dividends' | 'realized';
+type Period = '1d' | '2d' | '5d' | '2w' | '1m' | '3m' | '6m';
 
 export default function CompanyView() {
   const { code } = useParams<{ code: string }>();
@@ -19,7 +20,9 @@ export default function CompanyView() {
   const [company, setCompany] = useState<Company | null>(null);
   const [portfolioItem, setPortfolioItem] = useState<PortfolioItem | null>(null);
   const [marketHistory, setMarketHistory] = useState<MarketData[]>([]);
+  const [shareSplits, setShareSplits] = useState<ShareSplitData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lowPeriod, setLowPeriod] = useState<Period>('1d');
 
   const loadData = () => {
     if (!code) return Promise.resolve();
@@ -29,13 +32,15 @@ export default function CompanyView() {
       getDashboardAll(),
       getCompanies(),
       getMarketDataHistory(code),
-    ]).then(([txns, divs, dash, comps, mh]) => {
+      getShareSplits(),
+    ]).then(([txns, divs, dash, comps, mh, splits]) => {
       setTransactions(txns.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setDividends(divs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setRealizedItems(dash.realizedItems.filter(r => r.companyCode === code));
       setPortfolioItem(dash.portfolio.find((p: PortfolioItem) => p.companyCode === code) || null);
       setCompany(comps.find(c => c.code === code) || null);
       setMarketHistory(mh);
+      setShareSplits(splits.filter(s => s.companyCode === code));
     });
   };
 
@@ -60,6 +65,38 @@ export default function CompanyView() {
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gainClass = (n: number) => (n >= 0 ? 'gain-positive' : 'gain-negative');
   const gainSign = (n: number) => (n >= 0 ? '+' : '');
+
+  const periodDays: Record<Period, number> = { '1d': 1, '2d': 2, '5d': 5, '2w': 14, '1m': 30, '3m': 90, '6m': 180 };
+  const periodLabels: Record<Period, string> = { '1d': 'Last Trade Day', '2d': 'Last 2 Days', '5d': 'Last 5 Days', '2w': 'Last 2 Weeks', '1m': 'Last Month', '3m': 'Last 3 Months', '6m': 'Last 6 Months' };
+
+  const { lowestData, highestData, splitsInPeriod } = useMemo(() => {
+    if (marketHistory.length === 0) return { lowestData: null, highestData: null, splitsInPeriod: [] as ShareSplitData[] };
+
+    let filtered: MarketData[];
+    let cutoffStr: string;
+    if (lowPeriod === '1d') {
+      const latestDate = marketHistory.reduce((max, m) => m.tradeDate > max ? m.tradeDate : max, '');
+      filtered = marketHistory.filter(m => m.tradeDate === latestDate);
+      cutoffStr = latestDate;
+    } else {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - periodDays[lowPeriod]);
+      cutoffStr = cutoff.toISOString().split('T')[0];
+      filtered = marketHistory.filter(m => m.tradeDate >= cutoffStr);
+    }
+
+    const filteredLow = filtered.filter(m => m.low > 0);
+    const filteredHigh = filtered.filter(m => m.high > 0);
+    const count = filtered.length;
+    const lowest = filteredLow.length > 0 ? filteredLow.reduce((min, m) => m.low < min.low ? m : min) : null;
+    const highest = filteredHigh.length > 0 ? filteredHigh.reduce((max, m) => m.high > max.high ? m : max) : null;
+    const splits = shareSplits.filter(s => s.date >= cutoffStr);
+    return {
+      lowestData: lowest ? { value: lowest.low, date: lowest.tradeDate, count } : null,
+      highestData: highest ? { value: highest.high, date: highest.tradeDate, count } : null,
+      splitsInPeriod: splits,
+    };
+  }, [marketHistory, lowPeriod, shareSplits]);
 
   const { valueChartData, sharesChartData } = useMemo(() => {
     const sortedTx = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
@@ -200,6 +237,56 @@ export default function CompanyView() {
               {gainSign(portfolioItem.realizedGain)}{fmt(portfolioItem.realizedGain)}
             </p>
           </div>
+        </div>
+      )}
+
+      {marketHistory.length > 0 && (
+        <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem', boxShadow: 'var(--shadow-card)', marginBottom: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+            <h3 style={{ margin: 0, fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>
+              Price Range {lowestData && <span style={{ fontWeight: 400, fontSize: '0.75rem', textTransform: 'none' }}>({lowestData.count} trading day{lowestData.count !== 1 ? 's' : ''})</span>}
+            </h3>
+            <div className="segmented-control" style={{ fontSize: '0.75rem' }}>
+              {(Object.keys(periodLabels) as Period[]).map(p => (
+                <button key={p} className={lowPeriod === p ? 'active' : ''} onClick={() => setLowPeriod(p)}>
+                  {p === '1d' ? 'LTD' : p === '2d' ? '2D' : p === '5d' ? '5D' : p === '2w' ? '2W' : p === '1m' ? '1M' : p === '3m' ? '3M' : '6M'}
+                </button>
+              ))}
+            </div>
+          </div>
+          {lowestData || highestData ? (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div>
+                <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>Lowest</div>
+                {lowestData ? (
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#e53e3e' }}>{fmt(lowestData.value)}</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>on {lowestData.date}</span>
+                  </div>
+                ) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}
+              </div>
+              <div>
+                <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>Highest</div>
+                {highestData ? (
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#38a169' }}>{fmt(highestData.value)}</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>on {highestData.date}</span>
+                  </div>
+                ) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}
+              </div>
+            </div>
+          ) : (
+            <p style={{ color: 'var(--text-muted)', margin: 0 }}>No data for {periodLabels[lowPeriod].toLowerCase()}</p>
+          )}
+          {splitsInPeriod.length > 0 && (
+            <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: '#fefcbf', color: '#744210', borderRadius: '6px', fontSize: '0.8rem', border: '1px solid #ecc94b' }}>
+              {splitsInPeriod.map((s, i) => (
+                <div key={i}>
+                  {s.type === 'SUBDIVISION' ? 'Subdivision' : 'Merge'} ({s.fromShares}:{s.toShares}) on {s.date} — prices may not be comparable
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
