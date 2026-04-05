@@ -253,7 +253,7 @@ export default function Dividends() {
                   onChange={e => setShares(e.target.value)}
                   required
                 />
-                {xdDate && companyCode && (
+                {xdDate && companyCode && getSharesHeldAtDate(companyCode, xdDate) > 0 && (
                   <small style={{ color: 'var(--text-muted)' }}>
                     Held before XD: {getSharesHeldAtDate(companyCode, xdDate)}
                   </small>
