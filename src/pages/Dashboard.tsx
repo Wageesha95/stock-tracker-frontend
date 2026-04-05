@@ -326,20 +326,16 @@ export default function Dashboard() {
 
       {activeSection === 'invested' && (() => {
         const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
-        let cumShares = 0;
-        let cumCost = 0;
+        let netCashOut = 0;
         const chartData = sorted.map(t => {
           if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND') {
-            cumShares += t.count;
-            cumCost += t.count * t.price + t.commission;
+            netCashOut += t.count * t.price + t.commission;
           } else if (t.type === 'SELL') {
-            const avg = cumShares > 0 ? cumCost / cumShares : 0;
-            cumCost -= avg * t.count;
-            cumShares -= t.count;
+            netCashOut -= t.count * t.price - t.commission;
           } else {
             throw new Error(`Unknown transaction type: ${t.type}`);
           }
-          return { date: t.date, invested: Math.round(cumCost * 100) / 100 };
+          return { date: t.date, invested: Math.round(netCashOut * 100) / 100 };
         });
         // Merge same-date entries (keep last cumulative value per date)
         const merged = chartData.reduce<{ date: string; invested: number }[]>((acc, item) => {

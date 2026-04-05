@@ -245,7 +245,10 @@ export default function Dividends() {
                 />
               </label>
               <label>
-                Shares Held{xdDate && companyCode && getSharesHeldAtDate(companyCode, xdDate) > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.8rem' }}> ({getSharesHeldAtDate(companyCode, xdDate)})</span>}
+                <span style={{ display: 'flex', alignItems: 'baseline', gap: '0.4rem' }}>
+                  Shares Held
+                  {xdDate && companyCode && getSharesHeldAtDate(companyCode, xdDate) > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.75rem' }}>(Held before XD: {getSharesHeldAtDate(companyCode, xdDate)})</span>}
+                </span>
                 <input
                   type="number"
                   min="1"
