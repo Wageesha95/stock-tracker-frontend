@@ -317,20 +317,18 @@ export default function Sectors() {
               </ResponsiveContainer>
             </div>
 
-            <div style={{ flex: '1 1 300px' }}>
-              <div className="stats-grid" style={{ gridTemplateColumns: '1fr' }}>
-                <div className="stat-card">
-                  <h3>Total Portfolio</h3>
-                  <p className="stat-value">LKR {fmt(totalPortfolioValue)}</p>
-                </div>
-                <div className="stat-card">
-                  <h3>Sectors</h3>
-                  <p className="stat-value">{sectors.length}</p>
-                </div>
-                <div className="stat-card">
-                  <h3>Companies</h3>
-                  <p className="stat-value">{sectors.reduce((s, sec) => s + sec.companyCount, 0)}</p>
-                </div>
+            <div className="sectors-stats" style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid var(--border-color)' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Total Portfolio</span>
+                <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>LKR {fmt(totalPortfolioValue)}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0', borderBottom: '1px solid var(--border-color)' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Sectors</span>
+                <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{sectors.length}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 0' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Companies</span>
+                <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{sectors.reduce((s, sec) => s + sec.companyCount, 0)}</span>
               </div>
             </div>
           </div>
