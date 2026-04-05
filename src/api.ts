@@ -168,8 +168,14 @@ export const getDashboardSummary = () => cached('summary', () => api.get<{
 // Admin
 export const getAdminStats = () => cached('admin-stats', () => api.get<{
   totalUsers: number;
-  users: { username: string; role: string; transactionCount: number }[];
+  users: { id: string; username: string; role: string; transactionCount: number; createdAt: string }[];
 }>('/admin/stats').then(res => res.data));
+export const createAdminUser = (data: { username: string; password: string; role: string }) =>
+  api.post('/admin/users', data).then(res => { invalidate('admin-stats'); return res.data; });
+export const updateAdminUser = (id: string, data: { username?: string; password?: string; role?: string }) =>
+  api.put(`/admin/users/${id}`, data).then(res => { invalidate('admin-stats'); return res.data; });
+export const deleteAdminUser = (id: string) =>
+  api.delete(`/admin/users/${id}`).then(res => { invalidate('admin-stats'); return res; });
 
 export const getDashboardAll = () => cached('dashboard-all', () => api.get<{
   portfolio: PortfolioItem[];
