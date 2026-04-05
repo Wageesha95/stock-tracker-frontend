@@ -1310,6 +1310,10 @@ button:active {
     overflow: hidden;
   }
 
+  .recharts-legend-wrapper {
+    display: none !important;
+  }
+
 
 
   .dashboard-groups {
