@@ -1319,6 +1319,12 @@ button:active {
     min-height: auto !important;
   }
 
+  .recharts-legend-wrapper {
+    position: relative !important;
+    width: 100% !important;
+    text-align: left !important;
+  }
+
   .dashboard-groups {
     grid-template-columns: 1fr;
   }
