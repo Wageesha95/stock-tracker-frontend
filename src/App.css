@@ -1221,7 +1221,7 @@ button:active {
 
 /* ========== Mobile Responsive ========== */
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
   .navbar {
     flex-wrap: wrap;
     height: auto;
