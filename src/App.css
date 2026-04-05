@@ -1305,13 +1305,16 @@ button:active {
     font-size: 1.1rem;
   }
 
-  .recharts-wrapper {
-    max-width: 100% !important;
-    overflow: hidden;
-  }
 
   .recharts-legend-wrapper {
     display: none !important;
+  }
+
+  .sectors-pie {
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+    min-height: 300px !important;
+    height: 300px;
   }
 
 
