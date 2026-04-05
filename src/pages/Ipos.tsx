@@ -109,10 +109,10 @@ export default function IpoPage() {
 
   return (
     <div>
-      <h1>IPO Applications ({sorted.length})</h1>
+      <h1>IPO ({sorted.length})</h1>
 
       <div className="form-card">
-        <h2>Add IPO Application</h2>
+        <h2>Add IPO</h2>
         <form onSubmit={handleSubmit}>
           <div className="form-row">
             <label>
@@ -205,7 +205,7 @@ export default function IpoPage() {
             background: 'var(--bg-card)', borderRadius: '12px', padding: '1.5rem',
             width: '100%', maxWidth: '420px', margin: '1rem', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
           }} onClick={e => e.stopPropagation()}>
-            <h2 style={{ margin: '0 0 1rem' }}>Edit IPO Application</h2>
+            <h2 style={{ margin: '0 0 1rem' }}>Edit IPO</h2>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
               <CompanyAvatar code={editItem.companyCode} size={32} />
               <span style={{ fontWeight: 700, fontSize: '1.1rem' }}>{editItem.companyCode}</span>
