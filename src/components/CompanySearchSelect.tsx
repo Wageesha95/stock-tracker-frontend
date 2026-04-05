@@ -18,34 +18,41 @@ export default function CompanySearchSelect({ companies, value, onChange }: Prop
     ? companies.filter(c => c.code.toLowerCase().includes(s) || c.name.toLowerCase().includes(s)).slice(0, 8)
     : companies.slice(0, 8);
 
+  if (selected) {
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '0.5rem',
+        padding: '0.45rem 0.75rem', background: 'var(--bg-thead)',
+        borderRadius: '8px', border: '1.5px solid var(--border-input)',
+      }}>
+        <CompanyAvatar code={selected.code} size={24} />
+        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{selected.code}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', flex: 1 }}>{selected.name}</span>
+        <button
+          type="button"
+          onClick={() => { onChange(''); setSearch(''); }}
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: '1.1rem', padding: '0 0.25rem',
+            lineHeight: 1,
+          }}
+          title="Clear"
+        >&times;</button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ position: 'relative' }}>
-      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-        {selected && !open && (
-          <div className="company-select-chip" style={{
-            display: 'flex', alignItems: 'center', gap: '0.4rem',
-            padding: '0.3rem 0.6rem', background: 'var(--bg-thead)',
-            borderRadius: '6px', fontSize: '0.82rem', whiteSpace: 'nowrap', flexShrink: 0,
-          }}>
-            <CompanyAvatar code={selected.code} size={20} />
-            <span style={{ fontWeight: 600 }}>{selected.code}</span>
-            <span
-              onClick={() => { onChange(''); setSearch(''); }}
-              style={{ cursor: 'pointer', opacity: 0.5, fontSize: '0.75rem', marginLeft: '0.1rem' }}
-              title="Clear"
-            >&times;</span>
-          </div>
-        )}
-        <input
-          className="search-bar"
-          value={search}
-          onChange={e => { setSearch(e.target.value); setOpen(true); }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 200)}
-          placeholder={selected ? `${selected.code} - ${selected.name}` : 'Search company...'}
-          style={{ flex: 1, minWidth: 0 }}
-        />
-      </div>
+      <input
+        className="search-bar"
+        value={search}
+        onChange={e => { setSearch(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        placeholder="Search company..."
+        style={{ width: '100%' }}
+      />
       {open && matches.length > 0 && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
@@ -60,10 +67,9 @@ export default function CompanySearchSelect({ companies, value, onChange }: Prop
               style={{
                 padding: '0.5rem 0.75rem', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem',
-                background: c.code === value ? 'var(--bg-dropdown-hover)' : 'transparent',
               }}
               onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-dropdown-hover)')}
-              onMouseLeave={e => (e.currentTarget.style.background = c.code === value ? 'var(--bg-dropdown-hover)' : 'transparent')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
             >
               <CompanyAvatar code={c.code} size={24} />
               <span style={{ fontWeight: 600 }}>{c.code}</span>
