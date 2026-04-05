@@ -287,16 +287,16 @@ export default function Sectors() {
       {tab === 'allocation' && (<>
       {sectors.length > 0 && (
         <>
-          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
-            <div style={{ flex: '1 1 280px', minHeight: 280, maxWidth: '100%' }}>
-              <ResponsiveContainer width="100%" height={280}>
+          <div className="sectors-chart-row" style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
+            <div style={{ flex: '1 1 350px', minHeight: 350, overflow: 'hidden' }}>
+              <ResponsiveContainer width="100%" height={350}>
                 <PieChart>
                   <Pie
                     data={pieData}
                     cx="50%"
                     cy="50%"
-                    outerRadius={100}
-                    innerRadius={45}
+                    outerRadius={120}
+                    innerRadius={55}
                     dataKey="value"
                     label={false}
                   >
@@ -308,16 +308,16 @@ export default function Sectors() {
                     formatter={(value: any) => `LKR ${fmt(value)}`}
                   />
                   <Legend
-                    layout="horizontal"
-                    align="center"
-                    verticalAlign="bottom"
-                    wrapperStyle={{ fontSize: '0.65rem', lineHeight: '1.4', paddingTop: '0.5rem' }}
+                    layout="vertical"
+                    align="right"
+                    verticalAlign="middle"
+                    wrapperStyle={{ fontSize: '0.75rem', lineHeight: '1.6' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
             </div>
 
-            <div style={{ flex: '1 1 200px' }}>
+            <div style={{ flex: '1 1 300px' }}>
               <div className="stats-grid" style={{ gridTemplateColumns: '1fr' }}>
                 <div className="stat-card">
                   <h3>Total Portfolio</h3>

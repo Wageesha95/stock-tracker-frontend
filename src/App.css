@@ -1305,6 +1305,21 @@ button:active {
     font-size: 1.1rem;
   }
 
+  .recharts-wrapper {
+    max-width: 100% !important;
+    overflow: hidden;
+  }
+
+  .sectors-chart-row {
+    flex-direction: column !important;
+  }
+
+  .sectors-chart-row > div {
+    flex: 1 1 auto !important;
+    min-height: auto !important;
+  }
+  }
+
   .dashboard-groups {
     grid-template-columns: 1fr;
   }
