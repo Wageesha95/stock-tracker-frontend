@@ -287,8 +287,8 @@ export default function Sectors() {
       {tab === 'allocation' && (<>
       {sectors.length > 0 && (
         <>
-          <div className="sectors-chart-row" style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
-            <div style={{ flex: '1 1 350px', minHeight: 350, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
+            <div style={{ flex: '1 1 350px', minHeight: 350 }}>
               <ResponsiveContainer width="100%" height={350}>
                 <PieChart>
                   <Pie

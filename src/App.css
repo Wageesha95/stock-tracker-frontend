@@ -1310,20 +1310,6 @@ button:active {
     overflow: hidden;
   }
 
-  .sectors-chart-row {
-    flex-direction: column !important;
-  }
-
-  .sectors-chart-row > div {
-    flex: 1 1 auto !important;
-    min-height: auto !important;
-  }
-
-  .recharts-legend-wrapper {
-    position: relative !important;
-    width: 100% !important;
-    text-align: left !important;
-  }
 
   .dashboard-groups {
     grid-template-columns: 1fr;
