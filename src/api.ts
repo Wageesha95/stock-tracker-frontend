@@ -216,6 +216,24 @@ export const updateIpo = (id: string, data: { date: string; count: number; price
 export const deleteIpo = (id: string) =>
   api.delete(`/ipos/${id}`).then(res => { invalidate('ipos', 'transactions', 'portfolio', 'dashboard-all'); return res; });
 
+// Share Splits
+export interface ShareSplitData {
+  id: string;
+  companyCode: string;
+  date: string;
+  fromShares: number;
+  toShares: number;
+  type: string;
+  createdAt: string;
+}
+export const getShareSplits = () => cached('share-splits', () => api.get<ShareSplitData[]>('/share-splits').then(res => res.data));
+export const createShareSplit = (data: { companyCode: string; date: string; fromShares: number; toShares: number }) =>
+  api.post<ShareSplitData>('/share-splits', data).then(res => { invalidate('share-splits', 'dashboard-all', 'portfolio'); return res.data; });
+export const updateShareSplit = (id: string, data: { date: string; fromShares: number; toShares: number }) =>
+  api.put<ShareSplitData>(`/share-splits/${id}`, data).then(res => { invalidate('share-splits', 'dashboard-all', 'portfolio'); return res.data; });
+export const deleteShareSplit = (id: string) =>
+  api.delete(`/share-splits/${id}`).then(res => { invalidate('share-splits', 'dashboard-all', 'portfolio'); return res; });
+
 // Watchlists
 export interface WatchlistData {
   id: string;

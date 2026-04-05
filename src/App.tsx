@@ -69,7 +69,7 @@ function App() {
                 <NavLink to="/" end onClick={() => setMenuOpen(false)}>Dashboard</NavLink>
                 <NavLink to="/transactions" onClick={() => setMenuOpen(false)}>Transactions</NavLink>
                 <NavLink to="/dividends" onClick={() => setMenuOpen(false)}>Dividends</NavLink>
-                <NavLink to="/rights-ipo" onClick={() => setMenuOpen(false)}>Rights & IPO</NavLink>
+                <NavLink to="/rights-ipo" onClick={() => setMenuOpen(false)}>Corporate Actions</NavLink>
                 <NavLink to="/watchlists" onClick={() => setMenuOpen(false)}>Watchlists</NavLink>
                 <NavLink to="/sectors" onClick={() => setMenuOpen(false)}>Sectors</NavLink>
                 <NavLink to="/companies" onClick={() => setMenuOpen(false)}>Companies</NavLink>
