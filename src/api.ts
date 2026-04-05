@@ -112,21 +112,38 @@ export const deleteTransaction = (id: string) =>
 export const previewPdf = (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
-  return api.post<{ companyCode: string; companyName: string; date: string; type: 'BUY' | 'SELL'; count: number; price: number; commission: number }[]>(
+  return api.post<{
+    transactions: { companyCode: string; companyName: string; date: string; type: 'BUY' | 'SELL'; count: number; price: number; commission: number }[];
+    suggestedDate: string | null;
+  }>(
     '/pdf/preview', formData, { headers: { 'Content-Type': 'multipart/form-data' } }
   ).then(res => res.data);
 };
-export const uploadPdf = (file: File) => {
+export const uploadPdf = (file: File, tradeDate: string, brokerId: string) => {
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('tradeDate', tradeDate);
+  formData.append('brokerId', brokerId);
   return api.post<Transaction[]>('/pdf/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }).then(res => { invalidate('transactions', 'portfolio', 'realized', 'summary', 'companies', 'uploads'); return res.data; });
 };
 export const getPdfUploads = () =>
-  cached('uploads', () => api.get<{ id: string; filename: string; tradeDate: string; transactionCount: number; uploadedAt: string }[]>('/pdf/uploads').then(res => res.data));
+  cached('uploads', () => api.get<{ id: string; filename: string; tradeDate: string; brokerId: string; transactionCount: number; uploadedAt: string }[]>('/pdf/uploads').then(res => res.data));
 export const deletePdfUpload = (id: string) =>
   api.delete(`/pdf/uploads/${id}`).then(res => { invalidate('uploads', 'transactions', 'portfolio', 'realized', 'summary'); return res; });
+
+// Brokers
+export interface BrokerData {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+export const getBrokers = () => cached('brokers', () => api.get<BrokerData[]>('/brokers').then(res => res.data));
+export const createBroker = (name: string) =>
+  api.post<BrokerData>('/brokers', { name }).then(res => { invalidate('brokers'); return res.data; });
+export const deleteBroker = (id: string) =>
+  api.delete(`/brokers/${id}`).then(res => { invalidate('brokers'); return res; });
 
 // Dividends
 export const getDividends = () => cached('dividends', () => api.get<Dividend[]>('/dividends').then(res => res.data));
