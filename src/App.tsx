@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import Dashboard from './pages/Dashboard';
@@ -21,6 +21,7 @@ import './App.css';
 
 function App() {
   const { user, loading, isAdmin, logout } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
   });
@@ -51,26 +52,29 @@ function App() {
     <BrowserRouter>
       <div className="app" data-theme={theme === 'dark' ? 'dark' : undefined}>
         <nav className="navbar">
-          <div className="nav-brand">Stock Tracker</div>
-          <div className="nav-links">
+          <NavLink to="/" className="nav-brand" style={{ textDecoration: 'none', color: 'white' }}>Stock Tracker</NavLink>
+          <button className="nav-hamburger" onClick={() => setMenuOpen(o => !o)} aria-label="Menu">
+            <span /><span /><span />
+          </button>
+          <div className={`nav-links ${menuOpen ? 'nav-links-open' : ''}`}>
             {isAdmin ? (
               <>
-                <NavLink to="/" end>System Stats</NavLink>
-                <NavLink to="/companies">Companies</NavLink>
-                <NavLink to="/sectors">Sectors</NavLink>
-                <NavLink to="/upload-summary">Upload Trade Summary</NavLink>
+                <NavLink to="/" end onClick={() => setMenuOpen(false)}>System Stats</NavLink>
+                <NavLink to="/companies" onClick={() => setMenuOpen(false)}>Companies</NavLink>
+                <NavLink to="/sectors" onClick={() => setMenuOpen(false)}>Sectors</NavLink>
+                <NavLink to="/upload-summary" onClick={() => setMenuOpen(false)}>Upload Trade Summary</NavLink>
               </>
             ) : (
               <>
-                <NavLink to="/" end>Dashboard</NavLink>
-                <NavLink to="/transactions">Transactions</NavLink>
-                <NavLink to="/dividends">Dividends</NavLink>
-                <NavLink to="/rights-ipo">Rights & IPO</NavLink>
-                <NavLink to="/watchlists">Watchlists</NavLink>
-                <NavLink to="/sectors">Sectors</NavLink>
-                <NavLink to="/companies">Companies</NavLink>
-                <NavLink to="/calculator">Calculator</NavLink>
-                <NavLink to="/upload">Upload PDF</NavLink>
+                <NavLink to="/" end onClick={() => setMenuOpen(false)}>Dashboard</NavLink>
+                <NavLink to="/transactions" onClick={() => setMenuOpen(false)}>Transactions</NavLink>
+                <NavLink to="/dividends" onClick={() => setMenuOpen(false)}>Dividends</NavLink>
+                <NavLink to="/rights-ipo" onClick={() => setMenuOpen(false)}>Rights & IPO</NavLink>
+                <NavLink to="/watchlists" onClick={() => setMenuOpen(false)}>Watchlists</NavLink>
+                <NavLink to="/sectors" onClick={() => setMenuOpen(false)}>Sectors</NavLink>
+                <NavLink to="/companies" onClick={() => setMenuOpen(false)}>Companies</NavLink>
+                <NavLink to="/calculator" onClick={() => setMenuOpen(false)}>Calculator</NavLink>
+                <NavLink to="/upload" onClick={() => setMenuOpen(false)}>Upload PDF</NavLink>
               </>
             )}
           </div>
