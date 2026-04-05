@@ -305,7 +305,10 @@ export default function Sectors() {
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: any) => `LKR ${fmt(value)}`}
+                    formatter={(value: any) => {
+                      const pct = totalPortfolioValue > 0 ? ((value / totalPortfolioValue) * 100).toFixed(1) : '0';
+                      return `LKR ${fmt(value)} (${pct}%)`;
+                    }}
                   />
                   <Legend
                     layout="vertical"
