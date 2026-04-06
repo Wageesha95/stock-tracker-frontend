@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 import CompanySearchSelect from '../components/CompanySearchSelect';
+import { useTableSort } from '../hooks/useTableSort';
 
 export default function ShareSplitsPage({ embedded }: { embedded?: boolean }) {
   const navigate = useNavigate();
@@ -33,6 +34,8 @@ export default function ShareSplitsPage({ embedded }: { embedded?: boolean }) {
 
   useEffect(() => { loadData(); }, []);
 
+  const { sorted, handleSort, sortIcon } = useTableSort(splits, 'date');
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     await createShareSplit({ companyCode, date, fromShares: Number(fromShares), toShares: Number(toShares) });
@@ -59,8 +62,6 @@ export default function ShareSplitsPage({ embedded }: { embedded?: boolean }) {
     setEditItem(null);
     loadData();
   };
-
-  const sorted = [...splits].sort((a, b) => b.date.localeCompare(a.date));
 
   if (loading) return <p>Loading...</p>;
 
@@ -113,10 +114,10 @@ export default function ShareSplitsPage({ embedded }: { embedded?: boolean }) {
           <table className="portfolio-table">
             <thead>
               <tr>
-                <th>Date</th>
-                <th>Company</th>
-                <th>Type</th>
-                <th className="text-right">Ratio</th>
+                <th className="sort-header" onClick={() => handleSort('date')}>Date{sortIcon('date')}</th>
+                <th className="sort-header" onClick={() => handleSort('companyCode')}>Company{sortIcon('companyCode')}</th>
+                <th className="sort-header" onClick={() => handleSort('type')}>Type{sortIcon('type')}</th>
+                <th className="sort-header text-right" onClick={() => handleSort('toShares')}>Ratio{sortIcon('toShares')}</th>
                 {!isReadMode && <th></th>}
               </tr>
             </thead>

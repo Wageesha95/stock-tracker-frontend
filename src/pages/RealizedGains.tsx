@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getDashboardAll } from '../api';
 import { RealizedGainItem } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
+import { useTableSort } from '../hooks/useTableSort';
 
 export default function RealizedGains() {
   const navigate = useNavigate();
@@ -15,6 +16,8 @@ export default function RealizedGains() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  const { sorted, handleSort, sortIcon } = useTableSort(items, 'sellDate');
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gainClass = (n: number) => (n >= 0 ? 'gain-positive' : 'gain-negative');
@@ -31,18 +34,18 @@ export default function RealizedGains() {
       <table className="portfolio-table">
         <thead>
           <tr>
-            <th>Company</th>
-            <th>Sell Date</th>
-            <th className="text-right">Shares</th>
-            <th className="text-right">Avg Buy</th>
-            <th className="text-right">Sell Price</th>
-            <th className="text-right">Commission</th>
-            <th className="text-right">Realized Gain</th>
-            <th className="text-right">Gain %</th>
+            <th className="sort-header" onClick={() => handleSort('companyCode')}>Company{sortIcon('companyCode')}</th>
+            <th className="sort-header" onClick={() => handleSort('sellDate')}>Sell Date{sortIcon('sellDate')}</th>
+            <th className="sort-header text-right" onClick={() => handleSort('sharesSold')}>Shares{sortIcon('sharesSold')}</th>
+            <th className="sort-header text-right" onClick={() => handleSort('avgBuyPrice')}>Avg Buy{sortIcon('avgBuyPrice')}</th>
+            <th className="sort-header text-right" onClick={() => handleSort('sellPrice')}>Sell Price{sortIcon('sellPrice')}</th>
+            <th className="sort-header text-right" onClick={() => handleSort('commission')}>Commission{sortIcon('commission')}</th>
+            <th className="sort-header text-right" onClick={() => handleSort('realizedGain')}>Realized Gain{sortIcon('realizedGain')}</th>
+            <th className="sort-header text-right" onClick={() => handleSort('gainPercent')}>Gain %{sortIcon('gainPercent')}</th>
           </tr>
         </thead>
         <tbody>
-          {items.map((r, i) => (
+          {sorted.map((r, i) => (
             <tr key={i}>
               <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${r.companyCode}`)}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

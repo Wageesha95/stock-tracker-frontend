@@ -36,6 +36,8 @@ export default function Dashboard() {
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [realizedViewMode, setRealizedViewMode] = useState<'list' | 'group'>('list');
   const [expandedRealizedCompanies, setExpandedRealizedCompanies] = useState<Set<string>>(new Set());
+  const [subSortKey, setSubSortKey] = useState<string>('');
+  const [subSortDir, setSubSortDir] = useState<SortDir>('desc');
 
   const loadData = useCallback(() => {
     return Promise.all([getDashboardAll(), getDividends(), getMarketData(), getTransactions(), getCompanies()])
@@ -85,6 +87,8 @@ export default function Dashboard() {
   const [tableSearch, setTableSearch] = useState('');
   useEffect(() => {
     setTableSearch('');
+    setSubSortKey('');
+    setSubSortDir('desc');
     if (activeSection !== 'none') {
       setTimeout(() => sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     }
@@ -116,6 +120,31 @@ export default function Dashboard() {
   const sortIcon = (key: SortKey) => {
     if (sortKey !== key) return ' \u2195';
     return sortDir === 'asc' ? ' \u2191' : ' \u2193';
+  };
+
+  const handleSubSort = (key: string) => {
+    if (subSortKey === key) {
+      setSubSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSubSortKey(key);
+      setSubSortDir('desc');
+    }
+  };
+
+  const subSortIcon = (key: string) => {
+    if (subSortKey !== key) return ' \u2195';
+    return subSortDir === 'asc' ? ' \u2191' : ' \u2193';
+  };
+
+  const applySubSort = <T extends Record<string, any>>(items: T[], defaultKey: string, defaultDir: SortDir = 'desc'): T[] => {
+    const key = subSortKey || defaultKey;
+    const dir = subSortKey ? subSortDir : defaultDir;
+    return [...items].sort((a, b) => {
+      const av = a[key];
+      const bv = b[key];
+      const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
+      return dir === 'asc' ? cmp : -cmp;
+    });
   };
 
   const totalValue = filtered.reduce((s, p) => s + p.currentValue, 0);
@@ -411,17 +440,21 @@ export default function Dashboard() {
               <table className="portfolio-table">
                 <thead>
                   <tr>
-                    <th>Company</th>
+                    <th className="sort-header" onClick={() => handleSubSort('code')}>Company{subSortIcon('code')}</th>
                     <th>Buy Date</th>
-                    <th className="text-right">Amount Invested</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('totalAmount')}>Amount Invested{subSortIcon('totalAmount')}</th>
                     <th className="text-right">Days</th>
-                    <th className="text-right">Interest Earned (FD)</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('totalInterest')}>Interest Earned (FD){subSortIcon('totalInterest')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(grouped).filter(([code]) => ms(code)).map(([code, txns]) => {
-                    const totalAmount = txns.reduce((s, t) => s + t.amount, 0);
-                    const totalInterest = txns.reduce((s, t) => s + t.interest, 0);
+                  {applySubSort(Object.entries(grouped).filter(([code]) => ms(code)).map(([code, txns]) => ({
+                    code,
+                    companyName: txns[0].companyName,
+                    txns,
+                    totalAmount: txns.reduce((s, t) => s + t.amount, 0),
+                    totalInterest: txns.reduce((s, t) => s + t.interest, 0),
+                  })), 'totalInterest').map(({ code, companyName, txns, totalAmount, totalInterest }) => {
                     const isExpanded = expandedInterest.has(code);
                     return (
                       <>{/* Fragment needed for adjacent rows */}
@@ -436,8 +469,8 @@ export default function Dashboard() {
                               <CompanyAvatar code={code} size={32} />
                               <div className="company-cell">
                                 <span className="company-code">{code}</span>
-                                {txns[0].companyName !== code && (
-                                  <span className="company-name">{txns[0].companyName}</span>
+                                {companyName !== code && (
+                                  <span className="company-name">{companyName}</span>
                                 )}
                               </div>
                             </div>
@@ -607,22 +640,20 @@ export default function Dashboard() {
         const title = activeSection === 'netRealized' ? 'All Realized Trades' : activeSection === 'realizedProfit' ? 'Realized Profits' : 'Realized Losses';
         const total = items.reduce((s, r) => s + r.realizedGain, 0);
         const filteredItems = items.filter(r => ms(r.companyCode) || ms(r.companyName));
-        const sortedItems = [...filteredItems].sort((a, b) => Math.abs(b.realizedGain) - Math.abs(a.realizedGain));
+        const sortedItems = applySubSort(filteredItems, 'realizedGain');
 
         // Group by company
         const grouped = items.reduce<Record<string, typeof items>>((acc, r) => {
           (acc[r.companyCode] = acc[r.companyCode] || []).push(r);
           return acc;
         }, {});
-        const groupedEntries = Object.entries(grouped).map(([code, trades]) => ({
+        const groupedEntries = applySubSort(Object.entries(grouped).map(([code, trades]) => ({
           code,
           name: trades[0].companyName,
           trades,
           totalGain: trades.reduce((s, r) => s + r.realizedGain, 0),
           totalShares: trades.reduce((s, r) => s + r.sharesSold, 0),
-        })).sort((a, b) =>
-          activeSection === 'realizedProfit' ? b.totalGain - a.totalGain : a.totalGain - b.totalGain
-        );
+        })), 'totalGain');
 
         const toggleCompany = (code: string) => {
           setExpandedRealizedCompanies(prev => {
@@ -654,14 +685,14 @@ export default function Dashboard() {
                 <table className="portfolio-table">
                   <thead>
                     <tr>
-                      <th>Company</th>
-                      <th>Sell Date</th>
-                      <th className="text-right">Shares</th>
-                      <th className="text-right">Avg Buy</th>
-                      <th className="text-right">Sell Price</th>
-                      <th className="text-right">Commission</th>
-                      <th className="text-right">Realized</th>
-                      <th className="text-right">Gain %</th>
+                      <th className="sort-header" onClick={() => handleSubSort('companyCode')}>Company{subSortIcon('companyCode')}</th>
+                      <th className="sort-header" onClick={() => handleSubSort('sellDate')}>Sell Date{subSortIcon('sellDate')}</th>
+                      <th className="sort-header text-right" onClick={() => handleSubSort('sharesSold')}>Shares{subSortIcon('sharesSold')}</th>
+                      <th className="sort-header text-right" onClick={() => handleSubSort('avgBuyPrice')}>Avg Buy{subSortIcon('avgBuyPrice')}</th>
+                      <th className="sort-header text-right" onClick={() => handleSubSort('sellPrice')}>Sell Price{subSortIcon('sellPrice')}</th>
+                      <th className="sort-header text-right" onClick={() => handleSubSort('commission')}>Commission{subSortIcon('commission')}</th>
+                      <th className="sort-header text-right" onClick={() => handleSubSort('realizedGain')}>Realized{subSortIcon('realizedGain')}</th>
+                      <th className="sort-header text-right" onClick={() => handleSubSort('gainPercent')}>Gain %{subSortIcon('gainPercent')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -710,10 +741,10 @@ export default function Dashboard() {
                 <table className="portfolio-table">
                   <thead>
                     <tr>
-                      <th>Company</th>
-                      <th className="text-right">Trades</th>
-                      <th className="text-right">Total Shares</th>
-                      <th className="text-right">Total Realized</th>
+                      <th className="sort-header" onClick={() => handleSubSort('code')}>Company{subSortIcon('code')}</th>
+                      <th className="sort-header text-right" onClick={() => handleSubSort('trades')}>Trades{subSortIcon('trades')}</th>
+                      <th className="sort-header text-right" onClick={() => handleSubSort('totalShares')}>Total Shares{subSortIcon('totalShares')}</th>
+                      <th className="sort-header text-right" onClick={() => handleSubSort('totalGain')}>Total Realized{subSortIcon('totalGain')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -792,7 +823,7 @@ export default function Dashboard() {
         const title = activeSection === 'netUnrealized' ? 'All Unrealized' : activeSection === 'profit' ? 'Unrealized Profits' : 'Unrealized Losses';
         const total = items.reduce((s, p) => s + p.unrealizedGain, 0);
         const filteredUItems = items.filter(p => ms(p.companyCode) || ms(p.companyName));
-        const sortedItems = [...filteredUItems].sort((a, b) => Math.abs(b.unrealizedGain) - Math.abs(a.unrealizedGain));
+        const sortedItems = applySubSort(filteredUItems, 'unrealizedGain');
         return items.length > 0 ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
@@ -803,14 +834,14 @@ export default function Dashboard() {
               <table className="portfolio-table">
                 <thead>
                   <tr>
-                    <th>Company</th>
-                    <th className="text-right">Shares</th>
-                    <th className="text-right">Avg Buy</th>
-                    <th className="text-right">Last Trade</th>
-                    <th className="text-right">Invested</th>
-                    <th className="text-right">Value</th>
-                    <th className="text-right">Unrealized</th>
-                    <th className="text-right">Gain %</th>
+                    <th className="sort-header" onClick={() => handleSubSort('companyCode')}>Company{subSortIcon('companyCode')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('sharesHeld')}>Shares{subSortIcon('sharesHeld')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('avgBuyPrice')}>Avg Buy{subSortIcon('avgBuyPrice')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('lastTrade')}>Last Trade{subSortIcon('lastTrade')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('totalInvested')}>Invested{subSortIcon('totalInvested')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('currentValue')}>Value{subSortIcon('currentValue')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('unrealizedGain')}>Unrealized{subSortIcon('unrealizedGain')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('unrealizedGainPercent')}>Gain %{subSortIcon('unrealizedGainPercent')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -868,7 +899,7 @@ export default function Dashboard() {
         const title = activeSection === 'netDay' ? 'All Day Changes' : activeSection === 'dayProfit' ? 'Day Gainers' : 'Day Losers';
         const total = items.reduce((s, p) => s + p.unrealizedDayGain, 0);
         const filteredDItems = items.filter(p => ms(p.companyCode) || ms(p.companyName));
-        const sortedItems = [...filteredDItems].sort((a, b) => Math.abs(b.unrealizedDayGain) - Math.abs(a.unrealizedDayGain));
+        const sortedItems = applySubSort(filteredDItems, 'unrealizedDayGain');
         return items.length > 0 ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
@@ -879,12 +910,12 @@ export default function Dashboard() {
               <table className="portfolio-table">
                 <thead>
                   <tr>
-                    <th>Company</th>
-                    <th className="text-right">Shares</th>
-                    <th className="text-right">Last Trade</th>
-                    <th className="text-right">Change</th>
-                    <th className="text-right">Change %</th>
-                    <th className="text-right">Day Gain</th>
+                    <th className="sort-header" onClick={() => handleSubSort('companyCode')}>Company{subSortIcon('companyCode')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('sharesHeld')}>Shares{subSortIcon('sharesHeld')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('lastTrade')}>Last Trade{subSortIcon('lastTrade')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('change')}>Change{subSortIcon('change')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('changePercent')}>Change %{subSortIcon('changePercent')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('unrealizedDayGain')}>Day Gain{subSortIcon('unrealizedDayGain')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -947,16 +978,16 @@ export default function Dashboard() {
               <table className="portfolio-table">
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Company</th>
+                    <th className="sort-header" onClick={() => handleSubSort('date')}>Date{subSortIcon('date')}</th>
+                    <th className="sort-header" onClick={() => handleSubSort('companyCode')}>Company{subSortIcon('companyCode')}</th>
                     <th>Tax</th>
-                    <th className="text-right">Amount/Share</th>
-                    <th className="text-right">Shares</th>
-                    <th className="text-right">Total</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('amount')}>Amount/Share{subSortIcon('amount')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('shares')}>Shares{subSortIcon('shares')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('totalAmount')}>Total{subSortIcon('totalAmount')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[...cashDividends].filter(d => ms(d.companyCode)).sort((a, b) => b.date.localeCompare(a.date)).map((d, i) => (
+                  {applySubSort([...cashDividends].filter(d => ms(d.companyCode)), 'date').map((d, i) => (
                     <tr key={i}>
                       <td>{d.date}</td>
                       <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${d.companyCode}`)}>
@@ -999,13 +1030,13 @@ export default function Dashboard() {
               <table className="portfolio-table">
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Company</th>
-                    <th className="text-right">Shares Received</th>
+                    <th className="sort-header" onClick={() => handleSubSort('date')}>Date{subSortIcon('date')}</th>
+                    <th className="sort-header" onClick={() => handleSubSort('companyCode')}>Company{subSortIcon('companyCode')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('scripShares')}>Shares Received{subSortIcon('scripShares')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[...scripDividends].filter(d => ms(d.companyCode)).sort((a, b) => b.date.localeCompare(a.date)).map((d, i) => (
+                  {applySubSort([...scripDividends].filter(d => ms(d.companyCode)), 'date').map((d, i) => (
                     <tr key={i}>
                       <td>{d.date}</td>
                       <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${d.companyCode}`)}>

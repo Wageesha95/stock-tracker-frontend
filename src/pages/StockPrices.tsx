@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { getMarketData, getMarketDataHistory, getTransactions, getDividends, getDashboardAll } from '../api';
 import { MarketData, Transaction, Dividend, PortfolioItem, RealizedGainItem } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
+import { useTableSort } from '../hooks/useTableSort';
 
 export default function StockPrices() {
   const { code } = useParams<{ code: string }>();
@@ -31,6 +32,11 @@ export default function StockPrices() {
       setRealizedItems(dash.realizedItems.filter(r => r.companyCode === code));
     }).catch(console.error).finally(() => setLoading(false));
   }, [code]);
+
+  const priceSort = useTableSort(priceHistory, 'tradeDate');
+  const txnSort = useTableSort(transactions, 'date');
+  const realizedSort = useTableSort(realizedItems, 'sellDate');
+  const divSort = useTableSort(dividends, 'date');
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gainClass = (n: number) => (n >= 0 ? 'gain-positive' : 'gain-negative');
@@ -114,16 +120,16 @@ export default function StockPrices() {
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th className="text-right">High</th>
-                  <th className="text-right">Low</th>
-                  <th className="text-right">Last Trade</th>
-                  <th className="text-right">Change</th>
-                  <th className="text-right">Change %</th>
+                  <th className="sort-header" onClick={() => priceSort.handleSort('tradeDate')}>Date{priceSort.sortIcon('tradeDate')}</th>
+                  <th className="sort-header text-right" onClick={() => priceSort.handleSort('high')}>High{priceSort.sortIcon('high')}</th>
+                  <th className="sort-header text-right" onClick={() => priceSort.handleSort('low')}>Low{priceSort.sortIcon('low')}</th>
+                  <th className="sort-header text-right" onClick={() => priceSort.handleSort('lastTrade')}>Last Trade{priceSort.sortIcon('lastTrade')}</th>
+                  <th className="sort-header text-right" onClick={() => priceSort.handleSort('change')}>Change{priceSort.sortIcon('change')}</th>
+                  <th className="sort-header text-right" onClick={() => priceSort.handleSort('changePercent')}>Change %{priceSort.sortIcon('changePercent')}</th>
                 </tr>
               </thead>
               <tbody>
-                {priceHistory.map(p => (
+                {priceSort.sorted.map(p => (
                   <tr key={p.id}>
                     <td>{p.tradeDate}</td>
                     <td className="text-right mono">{p.high ? fmt(p.high) : '—'}</td>
@@ -153,16 +159,16 @@ export default function StockPrices() {
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th className="text-right">Count</th>
-                  <th className="text-right">Price</th>
-                  <th className="text-right">Commission</th>
+                  <th className="sort-header" onClick={() => txnSort.handleSort('date')}>Date{txnSort.sortIcon('date')}</th>
+                  <th className="sort-header" onClick={() => txnSort.handleSort('type')}>Type{txnSort.sortIcon('type')}</th>
+                  <th className="sort-header text-right" onClick={() => txnSort.handleSort('count')}>Count{txnSort.sortIcon('count')}</th>
+                  <th className="sort-header text-right" onClick={() => txnSort.handleSort('price')}>Price{txnSort.sortIcon('price')}</th>
+                  <th className="sort-header text-right" onClick={() => txnSort.handleSort('commission')}>Commission{txnSort.sortIcon('commission')}</th>
                   <th className="text-right">Total</th>
                 </tr>
               </thead>
               <tbody>
-                {transactions.map(t => (
+                {txnSort.sorted.map(t => (
                   <tr key={t.id}>
                     <td>{t.date}</td>
                     <td>
@@ -190,16 +196,16 @@ export default function StockPrices() {
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>Sell Date</th>
-                  <th className="text-right">Shares</th>
-                  <th className="text-right">Avg Buy</th>
-                  <th className="text-right">Sell Price</th>
-                  <th className="text-right">Realized Gain</th>
-                  <th className="text-right">Gain %</th>
+                  <th className="sort-header" onClick={() => realizedSort.handleSort('sellDate')}>Sell Date{realizedSort.sortIcon('sellDate')}</th>
+                  <th className="sort-header text-right" onClick={() => realizedSort.handleSort('sharesSold')}>Shares{realizedSort.sortIcon('sharesSold')}</th>
+                  <th className="sort-header text-right" onClick={() => realizedSort.handleSort('avgBuyPrice')}>Avg Buy{realizedSort.sortIcon('avgBuyPrice')}</th>
+                  <th className="sort-header text-right" onClick={() => realizedSort.handleSort('sellPrice')}>Sell Price{realizedSort.sortIcon('sellPrice')}</th>
+                  <th className="sort-header text-right" onClick={() => realizedSort.handleSort('realizedGain')}>Realized Gain{realizedSort.sortIcon('realizedGain')}</th>
+                  <th className="sort-header text-right" onClick={() => realizedSort.handleSort('gainPercent')}>Gain %{realizedSort.sortIcon('gainPercent')}</th>
                 </tr>
               </thead>
               <tbody>
-                {realizedItems.map((r, i) => (
+                {realizedSort.sorted.map((r, i) => (
                   <tr key={i}>
                     <td>{r.sellDate}</td>
                     <td className="text-right mono">{r.sharesSold}</td>
@@ -229,15 +235,15 @@ export default function StockPrices() {
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th className="text-right">Amount/Share</th>
-                  <th className="text-right">Shares</th>
-                  <th className="text-right">Total</th>
+                  <th className="sort-header" onClick={() => divSort.handleSort('date')}>Date{divSort.sortIcon('date')}</th>
+                  <th className="sort-header" onClick={() => divSort.handleSort('type')}>Type{divSort.sortIcon('type')}</th>
+                  <th className="sort-header text-right" onClick={() => divSort.handleSort('amount')}>Amount/Share{divSort.sortIcon('amount')}</th>
+                  <th className="sort-header text-right" onClick={() => divSort.handleSort('shares')}>Shares{divSort.sortIcon('shares')}</th>
+                  <th className="sort-header text-right" onClick={() => divSort.handleSort('totalAmount')}>Total{divSort.sortIcon('totalAmount')}</th>
                 </tr>
               </thead>
               <tbody>
-                {dividends.map(d => (
+                {divSort.sorted.map(d => (
                   <tr key={d.id}>
                     <td>{d.date}</td>
                     <td>
