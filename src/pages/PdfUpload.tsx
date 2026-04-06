@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect, DragEvent } from 'react';
-import { previewPdf, uploadPdf, getPdfUploads, deletePdfUpload, getBrokers, BrokerData } from '../api';
+import { previewPdf, uploadPdf, getPdfUploads, deletePdfUpload, getBrokers, getUserSettings, BrokerData } from '../api';
 import { Transaction } from '../types';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
+import { useTableSort } from '../hooks/useTableSort';
 
 interface PreviewItem {
   companyCode: string;
@@ -31,6 +32,7 @@ export default function PdfUpload() {
   const [savedTransactions, setSavedTransactions] = useState<Transaction[]>([]);
   const [uploads, setUploads] = useState<PdfRecord[]>([]);
   const [brokers, setBrokers] = useState<BrokerData[]>([]);
+  const [selectedBrokerIds, setSelectedBrokerIds] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [step, setStep] = useState<'select' | 'preview' | 'done'>('select');
   const [dragOver, setDragOver] = useState(false);
@@ -48,7 +50,16 @@ export default function PdfUpload() {
 
   useEffect(() => {
     loadUploads();
-    loadBrokers();
+    Promise.all([getBrokers(), getUserSettings()]).then(([b, s]) => {
+      setBrokers(b);
+      const selected = s.selectedBrokerIds || [];
+      setSelectedBrokerIds(selected);
+      // Auto-select if user has a single broker (from settings or system-wide)
+      const available = selected.length > 0 ? b.filter(x => selected.includes(x.id)) : b;
+      if (available.length === 1) {
+        setBrokerId(available[0].id);
+      }
+    }).catch(() => { loadBrokers(); });
   }, []);
 
   const handleFile = (f: File | undefined) => {
@@ -124,6 +135,13 @@ export default function PdfUpload() {
     }
   };
 
+  const getDefaultBrokerId = () => {
+    const available = selectedBrokerIds.length > 0
+      ? brokers.filter(x => selectedBrokerIds.includes(x.id))
+      : brokers;
+    return available.length === 1 ? available[0].id : '';
+  };
+
   const handleReset = () => {
     setFile(null);
     setPreview([]);
@@ -131,11 +149,14 @@ export default function PdfUpload() {
     setError('');
     setStep('select');
     setTradeDate('');
-    setBrokerId('');
+    setBrokerId(getDefaultBrokerId());
     if (inputRef.current) inputRef.current.value = '';
   };
 
   const getBrokerName = (id: string) => brokers.find(b => b.id === id)?.name || id;
+
+  const previewSort = useTableSort(preview, 'date');
+  const uploadSort = useTableSort(uploads, 'tradeDate');
 
   return (
     <div>
@@ -175,29 +196,28 @@ export default function PdfUpload() {
             Found {preview.length} transaction{preview.length !== 1 ? 's' : ''} in {file?.name}. Review and confirm below.
           </div>
 
-          <div className="form-row" style={{ display: 'flex', gap: '1rem', margin: '1rem 0', flexWrap: 'wrap' }}>
-            <div className="form-group" style={{ flex: 1, minWidth: '200px' }}>
-              <label htmlFor="tradeDate" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600 }}>Trade Date</label>
+          <div className="upload-fields">
+            <div className="upload-field">
+              <label htmlFor="tradeDate">Trade Date</label>
               <input
                 id="tradeDate"
                 type="date"
                 value={tradeDate}
                 onChange={e => setTradeDate(e.target.value)}
-                className="form-input"
-                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)' }}
               />
             </div>
-            <div className="form-group" style={{ flex: 1, minWidth: '200px' }}>
-              <label htmlFor="broker" style={{ display: 'block', marginBottom: '0.25rem', fontWeight: 600 }}>Broker</label>
+            <div className="upload-field">
+              <label htmlFor="broker">Broker</label>
               <select
                 id="broker"
                 value={brokerId}
                 onChange={e => setBrokerId(e.target.value)}
-                className="form-input"
-                style={{ width: '100%', padding: '0.5rem', borderRadius: '6px', border: '1px solid var(--border)' }}
               >
                 <option value="">Select broker...</option>
-                {brokers.map(b => (
+                {(selectedBrokerIds.length > 0
+                  ? brokers.filter(b => selectedBrokerIds.includes(b.id))
+                  : brokers
+                ).map(b => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </select>
@@ -215,17 +235,17 @@ export default function PdfUpload() {
               <table className="portfolio-table">
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Company</th>
-                    <th>Type</th>
-                    <th className="text-right">Count</th>
-                    <th className="text-right">Price</th>
-                    <th className="text-right">Commission</th>
+                    <th className="sort-header" onClick={() => previewSort.handleSort('date')}>Date{previewSort.sortIcon('date')}</th>
+                    <th className="sort-header" onClick={() => previewSort.handleSort('companyCode')}>Company{previewSort.sortIcon('companyCode')}</th>
+                    <th className="sort-header" onClick={() => previewSort.handleSort('type')}>Type{previewSort.sortIcon('type')}</th>
+                    <th className="sort-header text-right" onClick={() => previewSort.handleSort('count')}>Count{previewSort.sortIcon('count')}</th>
+                    <th className="sort-header text-right" onClick={() => previewSort.handleSort('price')}>Price{previewSort.sortIcon('price')}</th>
+                    <th className="sort-header text-right" onClick={() => previewSort.handleSort('commission')}>Commission{previewSort.sortIcon('commission')}</th>
                     <th className="text-right">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.map((p, i) => (
+                  {previewSort.sorted.map((p, i) => (
                     <tr key={i}>
                       <td>{p.date}</td>
                       <td>
@@ -277,20 +297,20 @@ export default function PdfUpload() {
 
       {uploads.length > 0 && (
         <>
-          <h2>Upload History</h2>
+          <h2>Upload History ({uploads.length})</h2>
           <div className="portfolio-table-wrap">
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>Trade Date</th>
-                  <th>Broker</th>
-                  <th className="text-right">Transactions</th>
-                  <th>Uploaded At</th>
+                  <th className="sort-header" onClick={() => uploadSort.handleSort('tradeDate')}>Trade Date{uploadSort.sortIcon('tradeDate')}</th>
+                  <th className="sort-header" onClick={() => uploadSort.handleSort('brokerId')}>Broker{uploadSort.sortIcon('brokerId')}</th>
+                  <th className="sort-header text-right" onClick={() => uploadSort.handleSort('transactionCount')}>Transactions{uploadSort.sortIcon('transactionCount')}</th>
+                  <th className="sort-header" onClick={() => uploadSort.handleSort('uploadedAt')}>Uploaded At{uploadSort.sortIcon('uploadedAt')}</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {uploads.map(u => (
+                {uploadSort.sorted.map(u => (
                   <tr key={u.id}>
                     <td>{u.tradeDate || u.filename}</td>
                     <td>{getBrokerName(u.brokerId)}</td>

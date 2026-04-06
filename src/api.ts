@@ -145,6 +145,16 @@ export const createBroker = (name: string) =>
 export const deleteBroker = (id: string) =>
   api.delete(`/brokers/${id}`).then(res => { invalidate('brokers'); return res; });
 
+// User Settings
+export interface UserSettingsData {
+  id?: string;
+  userId?: string;
+  selectedBrokerIds: string[];
+}
+export const getUserSettings = () => cached('settings', () => api.get<UserSettingsData>('/settings').then(res => res.data));
+export const updateSelectedBrokers = (selectedBrokerIds: string[]) =>
+  api.put<UserSettingsData>('/settings/brokers', { selectedBrokerIds }).then(res => { invalidate('settings'); return res.data; });
+
 // Dividends
 export const getDividends = () => cached('dividends', () => api.get<Dividend[]>('/dividends').then(res => res.data));
 export const getDividendsByCompany = (code: string) =>

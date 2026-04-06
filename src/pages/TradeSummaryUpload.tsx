@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, DragEvent } from 'react';
+import { useState, useRef, useEffect, useMemo, DragEvent } from 'react';
 import { previewTradeSummary, uploadTradeSummary, getMarketData } from '../api';
 import { MarketData } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
+import { useTableSort } from '../hooks/useTableSort';
 
 interface PreviewItem {
   companyCode: string;
@@ -10,6 +11,8 @@ interface PreviewItem {
   change: number;
   changePercent: number;
 }
+
+type SortDir = 'asc' | 'desc';
 
 export default function TradeSummaryUpload() {
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
@@ -24,10 +27,38 @@ export default function TradeSummaryUpload() {
   const [uploadCount, setUploadCount] = useState(0);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [mdSortKey, setMdSortKey] = useState<string>('');
+  const [mdSortDir, setMdSortDir] = useState<SortDir>('desc');
 
   useEffect(() => {
     getMarketData().then(setMarketData).catch(() => {});
   }, []);
+
+  const previewSort = useTableSort(preview, 'companyCode', 'asc');
+
+  const handleMdSort = (key: string) => {
+    if (mdSortKey === key) {
+      setMdSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setMdSortKey(key);
+      setMdSortDir(typeof marketData[0]?.[key as keyof MarketData] === 'string' ? 'asc' : 'desc');
+    }
+  };
+
+  const mdSortIcon = (key: string) => {
+    if (mdSortKey !== key) return ' \u2195';
+    return mdSortDir === 'asc' ? ' \u2191' : ' \u2193';
+  };
+
+  const sortMdItems = (items: MarketData[]): MarketData[] => {
+    if (!mdSortKey) return items;
+    return [...items].sort((a, b) => {
+      const av = a[mdSortKey as keyof MarketData];
+      const bv = b[mdSortKey as keyof MarketData];
+      const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
+      return mdSortDir === 'asc' ? cmp : -cmp;
+    });
+  };
 
   const handleFile = (f: File | undefined) => {
     if (f && (f.name.endsWith('.csv') || f.type === 'text/csv')) {
@@ -132,15 +163,15 @@ export default function TradeSummaryUpload() {
               <table className="portfolio-table">
                 <thead>
                   <tr>
-                    <th>Symbol</th>
-                    <th>Company</th>
-                    <th className="text-right">Last Trade (LKR)</th>
-                    <th className="text-right">Change</th>
-                    <th className="text-right">Change%</th>
+                    <th className="sort-header" onClick={() => previewSort.handleSort('companyCode')}>Symbol{previewSort.sortIcon('companyCode')}</th>
+                    <th className="sort-header" onClick={() => previewSort.handleSort('companyName')}>Company{previewSort.sortIcon('companyName')}</th>
+                    <th className="sort-header text-right" onClick={() => previewSort.handleSort('lastTrade')}>Last Trade (LKR){previewSort.sortIcon('lastTrade')}</th>
+                    <th className="sort-header text-right" onClick={() => previewSort.handleSort('change')}>Change{previewSort.sortIcon('change')}</th>
+                    <th className="sort-header text-right" onClick={() => previewSort.handleSort('changePercent')}>Change%{previewSort.sortIcon('changePercent')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {preview.map((p, i) => (
+                  {previewSort.sorted.map((p, i) => (
                     <tr key={i}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -222,16 +253,16 @@ export default function TradeSummaryUpload() {
               <table className="portfolio-table">
                 <thead>
                   <tr>
-                    <th>Symbol</th>
-                    <th>Company</th>
-                    <th className="text-right">Last Trade</th>
-                    <th className="text-right">Change</th>
-                    <th className="text-right">Change%</th>
+                    <th className="sort-header" onClick={() => handleMdSort('companyCode')}>Symbol{mdSortIcon('companyCode')}</th>
+                    <th className="sort-header" onClick={() => handleMdSort('companyName')}>Company{mdSortIcon('companyName')}</th>
+                    <th className="sort-header text-right" onClick={() => handleMdSort('lastTrade')}>Last Trade{mdSortIcon('lastTrade')}</th>
+                    <th className="sort-header text-right" onClick={() => handleMdSort('change')}>Change{mdSortIcon('change')}</th>
+                    <th className="sort-header text-right" onClick={() => handleMdSort('changePercent')}>Change%{mdSortIcon('changePercent')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {sortedDates.map(date => {
-                    const items = byDate[date];
+                    const items = sortMdItems(byDate[date]);
                     const isExpanded = expandedDates.has(date);
                     return (
                       <>{/* Fragment for adjacent rows */}

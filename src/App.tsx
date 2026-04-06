@@ -17,11 +17,13 @@ import RightsPage from './pages/Rights';
 import AvgCalculator from './pages/AvgCalculator';
 import IpoPage from './pages/Ipos';
 import RightsAndIpo from './pages/RightsAndIpo';
+import SettingsPanel from './components/SettingsPanel';
 import './App.css';
 
 function App() {
   const { user, loading, isAdmin, isReadMode, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
   });
@@ -80,6 +82,16 @@ function App() {
           </div>
           <div className="nav-right">
             <span className="nav-username">{user.username}{isReadMode && <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', color: '#ecc94b', fontWeight: 600 }}>(READ)</span>}</span>
+            {!isAdmin && (
+              <button
+                className="btn-settings-gear"
+                onClick={() => setSettingsOpen(true)}
+                aria-label="Settings"
+                title="Settings"
+              >
+                &#9881;
+              </button>
+            )}
             <button
               className="theme-toggle"
               onClick={toggleTheme}
@@ -117,6 +129,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
+        <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       </div>
     </BrowserRouter>
   );
