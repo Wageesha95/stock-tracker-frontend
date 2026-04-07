@@ -98,12 +98,12 @@ export default function AvgCalculator() {
             Company
             <div style={{ position: 'relative' }} ref={dropdownRef}>
               <input
-                className="search-bar"
+                className={`search-bar${companySearch ? ' search-bar-has-value' : ''}`}
                 value={companySearch}
                 onChange={e => { setCompanySearch(e.target.value); setShowDropdown(true); }}
                 onFocus={() => setShowDropdown(true)}
                 onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-                placeholder={selectedCode ? `${selectedCode}` : 'Type to search...'}
+                placeholder={selectedCode ? `${selectedCode}` : 'Search...'}
                 style={{ width: '100%' }}
               />
               {showDropdown && companySearch.length > 0 && (() => {
