@@ -283,7 +283,7 @@ h2 {
 }
 
 .stat-card h3 {
-  font-size: 0.65rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
   color: var(--text-muted);
   letter-spacing: 0.5px;
