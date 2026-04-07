@@ -32,9 +32,8 @@ export const login = (username: string, password: string) =>
     return res.data;
   });
 export const logout = () => {
-  return api.post('/auth/logout').then(res => {
+  return api.post('/auth/logout').finally(() => {
     localStorage.removeItem('token');
-    return res.data;
   });
 };
 export const getMe = () =>
