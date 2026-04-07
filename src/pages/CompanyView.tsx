@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import CompanyAvatar from '../components/CompanyAvatar';
 import ActionMenu from '../components/ActionMenu';
 import { deleteTransaction, deleteDividend, invalidate } from '../api';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 
 type Tab = 'transactions' | 'dividends' | 'realized';
 type Period = '1d' | '2d' | '5d' | '2w' | '1m' | '3m' | '6m';
@@ -100,7 +100,7 @@ export default function CompanyView() {
     };
   }, [marketHistory, lowPeriod, shareSplits]);
 
-  const { valueChartData, sharesChartData } = useMemo(() => {
+  const { valueChartData, sharesChartData, pnlChartData } = useMemo(() => {
     const sortedTx = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
 
     // Build cumulative invested + shares over time (FIFO)
@@ -118,7 +118,7 @@ export default function CompanyView() {
       } else {
         throw new Error(`Unknown transaction type: ${t.type}`);
       }
-      txPoints.push({ date: t.date, invested: Math.round(cumInvested * 100) / 100, shares: cumShares });
+      txPoints.push({ date: t.date, invested: Math.round(cumInvested * 10000) / 10000, shares: cumShares });
     }
     // Merge same-date
     const mergedTx = txPoints.reduce<typeof txPoints>((acc, item) => {
@@ -157,13 +157,18 @@ export default function CompanyView() {
       if (lastInvested > 0 || portfolio > 0) {
         valueData.push({
           date,
-          invested: Math.round(lastInvested * 100) / 100,
-          portfolio: Math.round(portfolio * 100) / 100,
+          invested: Math.round(lastInvested * 10000) / 10000,
+          portfolio: Math.round(portfolio * 10000) / 10000,
         });
       }
     }
 
-    return { valueChartData: valueData, sharesChartData: mergedTx };
+    const pnlData = valueData.map(d => ({
+      date: d.date,
+      pnl: Math.round((d.portfolio - d.invested) * 10000) / 10000,
+    }));
+
+    return { valueChartData: valueData, sharesChartData: mergedTx, pnlChartData: pnlData };
   }, [transactions, marketHistory]);
 
   if (loading) return <p>Loading...</p>;
@@ -292,7 +297,7 @@ export default function CompanyView() {
         </div>
       )}
 
-      {(valueChartData.length > 1 || sharesChartData.length > 1) && (
+      {(valueChartData.length > 1 || sharesChartData.length > 1 || pnlChartData.length > 1) && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
           {valueChartData.length > 1 && (
             <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)' }}>
@@ -329,6 +334,25 @@ export default function CompanyView() {
                     labelFormatter={l => l}
                   />
                   <Line type="monotone" dataKey="shares" stroke="#805ad5" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {pnlChartData.length > 1 && (
+            <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)' }}>
+              <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Adjusted P&L</h3>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={pnlChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
+                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
+                  <Tooltip
+                    contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
+                    formatter={(value: any) => [`LKR ${fmt(value)}`, 'P&L']}
+                    labelFormatter={l => l}
+                  />
+                  <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
+                  <Line type="monotone" dataKey="pnl" stroke="#dd6b20" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

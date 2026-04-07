@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, invalidate } from '../api';
 import { PortfolioItem, Dividend, RealizedGainItem, Transaction, Company } from '../types';
+import { SELL_COMMISSION_RATE } from '../constants';
 import CompanyAvatar from '../components/CompanyAvatar';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 
@@ -149,7 +150,7 @@ export default function Dashboard() {
 
   const totalValue = filtered.reduce((s, p) => s + p.currentValue, 0);
   const totalInvested = filtered.reduce((s, p) => s + p.totalInvested, 0);
-  const totalGain = filtered.reduce((s, p) => s + p.unrealizedGain, 0);
+  const totalGain = filtered.reduce((s, p) => s + (p.currentValue - p.currentValue * SELL_COMMISSION_RATE - p.totalInvested), 0);
   const totalDayGain = filtered.reduce((s, p) => s + p.unrealizedDayGain, 0);
   const totalRealized = realizedItems.reduce((s, r) => s + r.realizedGain, 0);
   const totalGainPct = totalInvested !== 0 ? (totalGain / totalInvested) * 100 : 0;
@@ -158,10 +159,11 @@ export default function Dashboard() {
   const scripDividends = dividends.filter(d => d.type === 'SCRIP');
   const totalDividends = cashDividends.reduce((s, d) => s + d.totalAmount, 0);
   const totalScripShares = scripDividends.reduce((s, d) => s + d.scripShares, 0);
-  const profitItems = filtered.filter(p => p.unrealizedGain > 0);
-  const lossItems = filtered.filter(p => p.unrealizedGain < 0);
-  const totalProfit = profitItems.reduce((s, p) => s + p.unrealizedGain, 0);
-  const totalLoss = lossItems.reduce((s, p) => s + p.unrealizedGain, 0);
+  const adjGain = (p: PortfolioItem) => p.currentValue - p.currentValue * SELL_COMMISSION_RATE - p.totalInvested;
+  const profitItems = filtered.filter(p => adjGain(p) > 0);
+  const lossItems = filtered.filter(p => adjGain(p) < 0);
+  const totalProfit = profitItems.reduce((s, p) => s + adjGain(p), 0);
+  const totalLoss = lossItems.reduce((s, p) => s + adjGain(p), 0);
   const dayProfitItems = filtered.filter(p => p.unrealizedDayGain > 0);
   const dayLossItems = filtered.filter(p => p.unrealizedDayGain < 0);
   const totalDayProfit = dayProfitItems.reduce((s, p) => s + p.unrealizedDayGain, 0);
@@ -371,7 +373,7 @@ export default function Dashboard() {
           } else {
             throw new Error(`Unknown transaction type: ${t.type}`);
           }
-          return { date: t.date, invested: Math.round(netCashOut * 100) / 100 };
+          return { date: t.date, invested: Math.round(netCashOut * 10000) / 10000 };
         });
         // Merge same-date entries (keep last cumulative value per date)
         const merged = chartData.reduce<{ date: string; invested: number }[]>((acc, item) => {
@@ -841,11 +843,14 @@ export default function Dashboard() {
                     <th className="sort-header text-right" onClick={() => handleSubSort('totalInvested')}>Invested{subSortIcon('totalInvested')}</th>
                     <th className="sort-header text-right" onClick={() => handleSubSort('currentValue')}>Value{subSortIcon('currentValue')}</th>
                     <th className="sort-header text-right" onClick={() => handleSubSort('unrealizedGain')}>Unrealized{subSortIcon('unrealizedGain')}</th>
+                    <th className="text-right">Adj. Gain</th>
                     <th className="sort-header text-right" onClick={() => handleSubSort('unrealizedGainPercent')}>Gain %{subSortIcon('unrealizedGainPercent')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedItems.map(p => (
+                  {sortedItems.map(p => {
+                    const adjGain = p.currentValue - p.currentValue * SELL_COMMISSION_RATE - p.totalInvested;
+                    return (
                     <tr key={p.companyCode}>
                       <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${p.companyCode}`)}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -866,13 +871,17 @@ export default function Dashboard() {
                       <td className={`text-right mono ${gainClass(p.unrealizedGain)}`}>
                         {gainSign(p.unrealizedGain)}{fmt(p.unrealizedGain)}
                       </td>
+                      <td className={`text-right mono ${gainClass(adjGain)}`}>
+                        {gainSign(adjGain)}{fmt(adjGain)}
+                      </td>
                       <td className="text-right mono">
                         <span className={`gain-pill ${p.unrealizedGainPercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
                           {gainSign(p.unrealizedGainPercent)}{fmt(p.unrealizedGainPercent)}%
                         </span>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr className="portfolio-total">
@@ -881,6 +890,9 @@ export default function Dashboard() {
                     <td className="text-right mono">{fmt(items.reduce((s, p) => s + p.currentValue, 0))}</td>
                     <td className={`text-right mono ${gainClass(total)}`}>
                       {gainSign(total)}{fmt(total)}
+                    </td>
+                    <td className={`text-right mono ${gainClass(items.reduce((s, p) => s + (p.currentValue - p.currentValue * SELL_COMMISSION_RATE - p.totalInvested), 0))}`}>
+                      {gainSign(items.reduce((s, p) => s + (p.currentValue - p.currentValue * SELL_COMMISSION_RATE - p.totalInvested), 0))}{fmt(items.reduce((s, p) => s + (p.currentValue - p.currentValue * SELL_COMMISSION_RATE - p.totalInvested), 0))}
                     </td>
                     <td></td>
                   </tr>

@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { getCompanies, getDashboardAll } from '../api';
+import { SELL_COMMISSION_PCT } from '../constants';
 import { Company, PortfolioItem } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
 
@@ -18,12 +19,12 @@ export default function AvgCalculator() {
   // Calculate mode
   const [newShares, setNewShares] = useState('');
   const [newPrice, setNewPrice] = useState('');
-  const [newCommission, setNewCommission] = useState('1.22');
+  const [newCommission, setNewCommission] = useState(SELL_COMMISSION_PCT);
 
   // Target mode
   const [targetAvg, setTargetAvg] = useState('');
   const [buyPrice, setBuyPrice] = useState('');
-  const [targetCommission, setTargetCommission] = useState('1.22');
+  const [targetCommission, setTargetCommission] = useState(SELL_COMMISSION_PCT);
 
   useEffect(() => {
     Promise.all([getCompanies(), getDashboardAll()])
@@ -124,7 +125,7 @@ export default function AvgCalculator() {
                           setSelectedCode(c.code);
                           setCompanySearch('');
                           setShowDropdown(false);
-                          setNewShares(''); setNewPrice(''); setNewCommission('1.22'); setTargetAvg(''); setBuyPrice(''); setTargetCommission('1.22');
+                          setNewShares(''); setNewPrice(''); setNewCommission(SELL_COMMISSION_PCT); setTargetAvg(''); setBuyPrice(''); setTargetCommission(SELL_COMMISSION_PCT);
                         }}
                         style={{
                           padding: '0.5rem 0.75rem', cursor: 'pointer',

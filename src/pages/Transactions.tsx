@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getTransactions, getCompanies, getMarketData, createTransaction, deleteTransaction } from '../api';
 import { Transaction, Company, MarketData } from '../types';
+import { SELL_COMMISSION_PCT } from '../constants';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -20,7 +21,7 @@ export default function Transactions() {
   const [type, setType] = useState<'BUY' | 'SELL'>('BUY');
   const [count, setCount] = useState('');
   const [price, setPrice] = useState('');
-  const [commission, setCommission] = useState('1.22');
+  const [commission, setCommission] = useState(SELL_COMMISSION_PCT);
   const [viewMode, setViewMode] = useState<'list' | 'group' | 'date'>('list');
 
   const loadData = () => {
