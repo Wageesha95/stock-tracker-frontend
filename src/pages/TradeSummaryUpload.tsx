@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, DragEvent } from 'react';
+import { useState, useRef, useEffect, DragEvent } from 'react';
 import { previewTradeSummary, uploadTradeSummary, getMarketData } from '../api';
 import { MarketData } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';

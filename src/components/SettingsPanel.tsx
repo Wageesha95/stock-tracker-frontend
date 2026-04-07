@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { getBrokers, getUserSettings, updateSelectedBrokers, BrokerData, UserSettingsData } from '../api';
+import { getBrokers, getUserSettings, updateSelectedBrokers, BrokerData } from '../api';
 
 interface SettingsPanelProps {
   open: boolean;
