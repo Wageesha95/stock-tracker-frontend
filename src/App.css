@@ -1669,6 +1669,49 @@ button:active {
   opacity: 1;
 }
 
+/* Multi-select dropdown */
+.multi-select-dropdown {
+  position: relative;
+}
+.multi-select-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  background: var(--bg-card);
+  cursor: pointer;
+  font-size: 0.85rem;
+  min-height: 38px;
+}
+.multi-select-options {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 10;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.multi-select-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.1s;
+}
+.multi-select-option:hover {
+  background: var(--bg-body);
+}
+
 /* Chart scroll carousel — desktop: grid, mobile: horizontal scroll with arrows */
 .chart-scroll-container {
   display: grid;

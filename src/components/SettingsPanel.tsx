@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { getBrokers, getUserSettings, updateSelectedBrokers, BrokerData, UserSettingsData } from '../api';
 
 interface SettingsPanelProps {
@@ -11,6 +11,8 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -42,6 +44,17 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     }
   };
 
+  useEffect(() => {
+    if (!dropdownOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [dropdownOpen]);
+
   if (!open) return null;
 
   return (
@@ -65,17 +78,31 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               {brokers.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)' }}>No brokers configured yet.</p>
               ) : (
-                <div className="broker-list">
-                  {brokers.map(b => (
-                    <label key={b.id} className="broker-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(b.id)}
-                        onChange={() => toggleBroker(b.id)}
-                      />
-                      <span>{b.name}</span>
-                    </label>
-                  ))}
+                <div className="multi-select-dropdown" ref={dropdownRef}>
+                  <div
+                    className="multi-select-trigger"
+                    onClick={() => setDropdownOpen(o => !o)}
+                  >
+                    {selectedIds.length === 0
+                      ? <span style={{ color: 'var(--text-muted)' }}>Select brokers...</span>
+                      : <span>{brokers.filter(b => selectedIds.includes(b.id)).map(b => b.name).join(', ')}</span>
+                    }
+                    <span style={{ marginLeft: 'auto', fontSize: '0.7rem' }}>{dropdownOpen ? '\u25B2' : '\u25BC'}</span>
+                  </div>
+                  {dropdownOpen && (
+                    <div className="multi-select-options">
+                      {brokers.map(b => (
+                        <label key={b.id} className="multi-select-option">
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(b.id)}
+                            onChange={() => toggleBroker(b.id)}
+                          />
+                          <span>{b.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
