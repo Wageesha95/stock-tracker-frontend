@@ -4,7 +4,7 @@ import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompa
 import { PortfolioItem, Dividend, RealizedGainItem, Transaction, Company } from '../types';
 import { SELL_COMMISSION_RATE } from '../constants';
 import CompanyAvatar from '../components/CompanyAvatar';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 
 interface InterestBreakdown {
   companyCode: string;
@@ -26,7 +26,7 @@ export default function Dashboard() {
   const [opportunityCost, setOpportunityCost] = useState(0);
   const [interestBreakdown, setInterestBreakdown] = useState<InterestBreakdown[]>([]);
   const sectionRef = useRef<HTMLDivElement>(null);
-  const [activeSection, setActiveSection] = useState<'none' | 'holdings' | 'invested' | 'realized' | 'realizedProfit' | 'realizedLoss' | 'netRealized' | 'interest' | 'profit' | 'loss' | 'netUnrealized' | 'dayProfit' | 'dayLoss' | 'netDay' | 'cashDiv' | 'scripDiv'>('none');
+  const [activeSection, setActiveSection] = useState<'none' | 'holdings' | 'invested' | 'realized' | 'realizedProfit' | 'realizedLoss' | 'netRealized' | 'interest' | 'profit' | 'loss' | 'netUnrealized' | 'dayProfit' | 'dayLoss' | 'netDay' | 'cashDiv' | 'scripDiv' | 'adjustedPnl'>('none');
   const [expandedInterest, setExpandedInterest] = useState<Set<string>>(new Set());
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
@@ -332,7 +332,7 @@ export default function Dashboard() {
               <p className="stat-value">{v(<span style={{ color: '#d69e2e' }}>LKR {fmt(opportunityCost)}</span>)}</p>
               <small style={{ color: '#718096' }}>6.5% FD rate</small>
             </div>
-            <div className="stat-card" style={{ borderLeftColor: loading ? '#3182ce' : adjustedPnl >= 0 ? '#38a169' : '#e53e3e' }}>
+            <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: loading ? '#3182ce' : adjustedPnl >= 0 ? '#38a169' : '#e53e3e' }} onClick={() => !loading && setActiveSection(s => s === 'adjustedPnl' ? 'none' : 'adjustedPnl')} title="Click to show Adjusted P&L timeline">
               <h3>Adjusted P&L</h3>
               <p className="stat-value">{v(<span className={gainClass(adjustedPnl)}>{gainSign(adjustedPnl)}LKR {fmt(adjustedPnl)}</span>)}</p>
               <small style={{ color: '#718096' }}>P&L - Opportunity Cost</small>
@@ -360,6 +360,108 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {activeSection === 'adjustedPnl' && !loading && filtered.length > 0 && (() => {
+        // Build adjusted P&L timeline: unrealized + realized + dividends - opportunity cost
+        // Collect all events with dates
+        const events: { date: string; type: 'tx' | 'div' | 'realized'; data: any }[] = [];
+        transactions.forEach(t => events.push({ date: t.date, type: 'tx', data: t }));
+        dividends.filter(d => d.type === 'CASH').forEach(d => events.push({ date: d.date, type: 'div', data: d }));
+        realizedItems.forEach(r => events.push({ date: r.sellDate, type: 'realized', data: r }));
+        events.sort((a, b) => a.date.localeCompare(b.date));
+
+        const latestPriceMap: Record<string, number> = {};
+        filtered.forEach(p => { latestPriceMap[p.companyCode] = p.lastTrade; });
+
+        const companyState: Record<string, { shares: number; cost: number }> = {};
+        let cumRealizedGain = 0;
+        let cumDividends = 0;
+        const annualRate = 0.065;
+        let cumInterest = 0;
+        let lastDate: string | null = null;
+
+        const pnlPoints: { date: string; pnl: number }[] = [];
+
+        for (const ev of events) {
+          // Accumulate opportunity cost between dates
+          if (lastDate && lastDate < ev.date) {
+            let totalCost = 0;
+            for (const c of Object.keys(companyState)) totalCost += companyState[c].cost;
+            if (totalCost > 0) {
+              const days = (new Date(ev.date).getTime() - new Date(lastDate).getTime()) / 86400000;
+              cumInterest += totalCost * annualRate * days / 365;
+            }
+          }
+
+          if (ev.type === 'tx') {
+            const t = ev.data;
+            const code = t.companyCode;
+            if (!companyState[code]) companyState[code] = { shares: 0, cost: 0 };
+            const st = companyState[code];
+            if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+              st.cost += t.count * t.price + t.commission;
+              st.shares += t.count;
+            } else if (t.type === 'SELL') {
+              const avg = st.shares > 0 ? st.cost / st.shares : 0;
+              st.cost -= avg * t.count;
+              st.shares -= t.count;
+            }
+          } else if (ev.type === 'div') {
+            cumDividends += ev.data.totalAmount;
+          } else if (ev.type === 'realized') {
+            cumRealizedGain += ev.data.realizedGain;
+          }
+
+          // Compute unrealized gain at this point
+          let totalValue = 0;
+          let totalInvested = 0;
+          for (const c of Object.keys(companyState)) {
+            const s = companyState[c];
+            totalValue += s.shares * (latestPriceMap[c] || 0);
+            totalInvested += s.cost;
+          }
+          const unrealized = totalValue - totalValue * SELL_COMMISSION_RATE - totalInvested;
+          const adjPnl = unrealized + cumRealizedGain + cumDividends - cumInterest;
+
+          pnlPoints.push({
+            date: ev.date,
+            pnl: Math.round(adjPnl * 10000) / 10000,
+          });
+          lastDate = ev.date;
+        }
+
+        // Merge same-date (keep last)
+        const merged = pnlPoints.reduce<typeof pnlPoints>((acc, item) => {
+          if (acc.length > 0 && acc[acc.length - 1].date === item.date) {
+            acc[acc.length - 1].pnl = item.pnl;
+          } else {
+            acc.push(item);
+          }
+          return acc;
+        }, []);
+
+        return merged.length > 1 ? (
+          <div style={{ marginBottom: '1.5rem' }}>
+            <h2>Adjusted P&L Timeline</h2>
+            <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem', boxShadow: 'var(--shadow-card)' }}>
+              <ResponsiveContainer width="100%" height={350}>
+                <LineChart data={merged}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
+                  <Tooltip
+                    contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.85rem' }}
+                    formatter={(value: any) => [`LKR ${fmt(value)}`, 'Adjusted P&L']}
+                    labelFormatter={l => `Date: ${l}`}
+                  />
+                  <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
+                  <Line type="monotone" dataKey="pnl" stroke="#dd6b20" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        ) : null;
+      })()}
 
       <div ref={sectionRef} />
       {activeSection === 'invested' && (() => {

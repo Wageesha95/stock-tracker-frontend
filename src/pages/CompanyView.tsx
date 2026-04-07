@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getTransactionsByCompany, getDividendsByCompany, getDashboardAll, getCompanies, getMarketDataHistory, getShareSplits, ShareSplitData } from '../api';
 import { Transaction, Dividend, RealizedGainItem, Company, MarketData, PortfolioItem } from '../types';
@@ -7,6 +7,7 @@ import CompanyAvatar from '../components/CompanyAvatar';
 import ActionMenu from '../components/ActionMenu';
 import { deleteTransaction, deleteDividend, invalidate } from '../api';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
+import { SELL_COMMISSION_RATE } from '../constants';
 
 type Tab = 'transactions' | 'dividends' | 'realized';
 type Period = '1d' | '2d' | '5d' | '2w' | '1m' | '3m' | '6m';
@@ -25,6 +26,7 @@ export default function CompanyView() {
   const [shareSplits, setShareSplits] = useState<ShareSplitData[]>([]);
   const [loading, setLoading] = useState(true);
   const [lowPeriod, setLowPeriod] = useState<Period>('1d');
+  const chartScrollRef = useRef<HTMLDivElement>(null);
 
   const loadData = () => {
     if (!code) return Promise.resolve();
@@ -100,7 +102,7 @@ export default function CompanyView() {
     };
   }, [marketHistory, lowPeriod, shareSplits]);
 
-  const { valueChartData, sharesChartData, pnlChartData } = useMemo(() => {
+  const { valueChartData, sharesChartData, adjPnlChartData } = useMemo(() => {
     const sortedTx = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
 
     // Build cumulative invested + shares over time (FIFO)
@@ -163,13 +165,63 @@ export default function CompanyView() {
       }
     }
 
-    const pnlData = valueData.map(d => ({
-      date: d.date,
-      pnl: Math.round((d.portfolio - d.invested) * 10000) / 10000,
-    }));
+    // Build adjusted P&L timeline: unrealized + realized + dividends - opportunity cost
+    const annualRate = 0.065;
+    const events: { date: string; type: 'tx' | 'div' | 'realized'; data: any }[] = [];
+    sortedTx.forEach(t => events.push({ date: t.date, type: 'tx', data: t }));
+    dividends.filter(d => d.type === 'CASH').forEach(d => events.push({ date: d.date, type: 'div', data: d }));
+    realizedItems.forEach(r => events.push({ date: r.sellDate, type: 'realized', data: r }));
+    events.sort((a, b) => a.date.localeCompare(b.date));
 
-    return { valueChartData: valueData, sharesChartData: mergedTx, pnlChartData: pnlData };
-  }, [transactions, marketHistory]);
+    let cumShares2 = 0;
+    let cumCost = 0;
+    let cumRealized = 0;
+    let cumDividends = 0;
+    let cumInterest = 0;
+    let prevDate: string | null = null;
+    const adjPnlPoints: { date: string; pnl: number }[] = [];
+
+    for (const ev of events) {
+      if (prevDate && prevDate < ev.date && cumCost > 0) {
+        const days = (new Date(ev.date).getTime() - new Date(prevDate).getTime()) / 86400000;
+        cumInterest += cumCost * annualRate * days / 365;
+      }
+
+      if (ev.type === 'tx') {
+        const t = ev.data;
+        if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+          cumCost += t.count * t.price + t.commission;
+          cumShares2 += t.count;
+        } else if (t.type === 'SELL') {
+          const avg = cumShares2 > 0 ? cumCost / cumShares2 : 0;
+          cumCost -= avg * t.count;
+          cumShares2 -= t.count;
+        }
+      } else if (ev.type === 'div') {
+        cumDividends += ev.data.totalAmount;
+      } else if (ev.type === 'realized') {
+        cumRealized += ev.data.realizedGain;
+      }
+
+      const price = priceByDate[ev.date] || lastPrice;
+      const portfolioVal = cumShares2 * price;
+      const unrealized = portfolioVal - portfolioVal * SELL_COMMISSION_RATE - cumCost;
+      const adjPnl = unrealized + cumRealized + cumDividends - cumInterest;
+      adjPnlPoints.push({ date: ev.date, pnl: Math.round(adjPnl * 10000) / 10000 });
+      prevDate = ev.date;
+    }
+
+    const mergedAdjPnl = adjPnlPoints.reduce<typeof adjPnlPoints>((acc, item) => {
+      if (acc.length > 0 && acc[acc.length - 1].date === item.date) {
+        acc[acc.length - 1].pnl = item.pnl;
+      } else {
+        acc.push(item);
+      }
+      return acc;
+    }, []);
+
+    return { valueChartData: valueData, sharesChartData: mergedTx, adjPnlChartData: mergedAdjPnl };
+  }, [transactions, marketHistory, dividends, realizedItems]);
 
   if (loading) return <p>Loading...</p>;
 
@@ -297,10 +349,29 @@ export default function CompanyView() {
         </div>
       )}
 
-      {(valueChartData.length > 1 || sharesChartData.length > 1 || pnlChartData.length > 1) && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+      {(valueChartData.length > 1 || sharesChartData.length > 1 || adjPnlChartData.length > 1) && (
+        <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
+          <div className="chart-scroll-container" ref={chartScrollRef}>
+          {sharesChartData.length > 1 && (
+            <div className="chart-scroll-item" style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)' }}>
+              <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Shares Held</h3>
+              <ResponsiveContainer width="100%" height={220}>
+                <LineChart data={sharesChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
+                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
+                  <Tooltip
+                    contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
+                    formatter={(value: any) => [value, 'Shares']}
+                    labelFormatter={l => l}
+                  />
+                  <Line type="monotone" dataKey="shares" stroke="#805ad5" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
           {valueChartData.length > 1 && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)' }}>
+            <div className="chart-scroll-item" style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)' }}>
               <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>
                 <span style={{ color: '#3182ce' }}>Invested</span> / <span style={{ color: '#38a169' }}>Portfolio Value</span>
               </h3>
@@ -320,35 +391,17 @@ export default function CompanyView() {
               </ResponsiveContainer>
             </div>
           )}
-          {sharesChartData.length > 1 && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)' }}>
-              <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Shares Held</h3>
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={sharesChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
-                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-                  <Tooltip
-                    contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
-                    formatter={(value: any) => [value, 'Shares']}
-                    labelFormatter={l => l}
-                  />
-                  <Line type="monotone" dataKey="shares" stroke="#805ad5" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-          {pnlChartData.length > 1 && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)' }}>
+          {adjPnlChartData.length > 1 && (
+            <div className="chart-scroll-item" style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)' }}>
               <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Adjusted P&L</h3>
               <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={pnlChartData}>
+                <LineChart data={adjPnlChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
                   <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
                   <Tooltip
                     contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
-                    formatter={(value: any) => [`LKR ${fmt(value)}`, 'P&L']}
+                    formatter={(value: any) => [`LKR ${fmt(value)}`, 'Adjusted P&L']}
                     labelFormatter={l => l}
                   />
                   <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
@@ -357,6 +410,9 @@ export default function CompanyView() {
               </ResponsiveContainer>
             </div>
           )}
+          </div>
+          <button className="chart-scroll-arrow chart-scroll-left" onClick={() => chartScrollRef.current?.scrollBy({ left: -300, behavior: 'smooth' })} aria-label="Scroll left">&lsaquo;</button>
+          <button className="chart-scroll-arrow chart-scroll-right" onClick={() => chartScrollRef.current?.scrollBy({ left: 300, behavior: 'smooth' })} aria-label="Scroll right">&rsaquo;</button>
         </div>
       )}
 
