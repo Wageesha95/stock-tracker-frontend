@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, getUserSettings, invalidate } from '../api';
 import { PortfolioItem, Dividend, RealizedGainItem, Transaction, Company } from '../types';
 import { SELL_COMMISSION_RATE } from '../constants';
-import { TABLE_COLUMN_OPTIONS, DEFAULT_COLUMNS } from '../components/SettingsPanel';
+import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, PieChart, Pie, Cell } from 'recharts';
 
@@ -268,17 +268,17 @@ export default function Dashboard() {
           <div className="card-group-label">Unrealized</div>
           <div className="stats-grid">
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: loading ? '#3182ce' : totalGain >= 0 ? '#38a169' : '#e53e3e' }} onClick={() => !loading && setActiveSection(s => s === 'netUnrealized' ? 'none' : 'netUnrealized')} title="Click to show all unrealized">
-              <h3>{'\uD83D\uDCCA'} Net</h3>
+              <h3>Net</h3>
               <p className="stat-value">{v(<span className={gainClass(totalGain)}>{gainSign(totalGain)}LKR {fmt(totalGain)}</span>)}</p>
               <small style={{ color: '#718096' }}>{v(<>{gainSign(totalGainPct)}{fmt(totalGainPct)}%</>)}</small>
             </div>
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: '#38a169' }} onClick={() => !loading && setActiveSection(s => s === 'profit' ? 'none' : 'profit')} title="Click to show unrealized profits">
-              <h3>{'\uD83D\uDCC8'} Profit</h3>
+              <h3>Profit</h3>
               <p className="stat-value">{v(<span className="gain-positive">+LKR {fmt(totalProfit)}</span>)}</p>
               <small style={{ color: '#718096' }}>{v(<>{profitItems.length} companies</>)}</small>
             </div>
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: '#e53e3e' }} onClick={() => !loading && setActiveSection(s => s === 'loss' ? 'none' : 'loss')} title="Click to show unrealized losses">
-              <h3>{'\uD83D\uDCC9'} Loss</h3>
+              <h3>Loss</h3>
               <p className="stat-value">{v(<span className="gain-negative">LKR {fmt(totalLoss)}</span>)}</p>
               <small style={{ color: '#718096' }}>{v(<>{lossItems.length} companies</>)}</small>
             </div>
@@ -307,17 +307,17 @@ export default function Dashboard() {
           <div className="card-group-label">Realized</div>
           <div className="stats-grid">
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: loading ? '#3182ce' : totalRealized >= 0 ? '#38a169' : '#e53e3e' }} onClick={() => !loading && setActiveSection(s => s === 'netRealized' ? 'none' : 'netRealized')} title="Click to show all realized">
-              <h3>{'\uD83C\uDFE6'} Net</h3>
+              <h3>Net</h3>
               <p className="stat-value">{v(<span className={gainClass(totalRealized)}>{gainSign(totalRealized)}LKR {fmt(totalRealized)}</span>)}</p>
               <small style={{ color: '#718096' }}>{v(<>{realizedItems.length} trades</>)}</small>
             </div>
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: '#38a169' }} onClick={() => !loading && setActiveSection(s => s === 'realizedProfit' ? 'none' : 'realizedProfit')} title="Click to show realized profits">
-              <h3>{'\u2705'} Profit</h3>
+              <h3>Profit</h3>
               <p className="stat-value">{v(<span className="gain-positive">+LKR {fmt(totalRealizedProfit)}</span>)}</p>
               <small style={{ color: '#718096' }}>{v(<>{realizedProfitItems.length} trades</>)}</small>
             </div>
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: '#e53e3e' }} onClick={() => !loading && setActiveSection(s => s === 'realizedLoss' ? 'none' : 'realizedLoss')} title="Click to show realized losses">
-              <h3>{'\u274C'} Loss</h3>
+              <h3>Loss</h3>
               <p className="stat-value">{v(<span className="gain-negative">LKR {fmt(totalRealizedLoss)}</span>)}</p>
               <small style={{ color: '#718096' }}>{v(<>{realizedLossItems.length} trades</>)}</small>
             </div>
@@ -351,17 +351,17 @@ export default function Dashboard() {
           <div className="card-group-label">Day Change{latestTradeDate ? ` (${latestTradeDate})` : ''}</div>
           <div className="stats-grid">
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: loading ? '#3182ce' : totalDayGain >= 0 ? '#38a169' : '#e53e3e' }} onClick={() => !loading && setActiveSection(s => s === 'netDay' ? 'none' : 'netDay')} title="Click to show all day changes">
-              <h3>{'\uD83D\uDCC5'} Net</h3>
+              <h3>Net</h3>
               <p className="stat-value">{v(<span className={gainClass(totalDayGain)}>{gainSign(totalDayGain)}LKR {fmt(totalDayGain)}</span>)}</p>
               <small style={{ color: '#718096' }}>{v(<>{gainSign(totalDayGainPct)}{fmt(totalDayGainPct)}%</>)}</small>
             </div>
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: '#38a169' }} onClick={() => !loading && setActiveSection(s => s === 'dayProfit' ? 'none' : 'dayProfit')} title="Click to show day gainers">
-              <h3>{'\uD83D\uDFE2'} Profit</h3>
+              <h3>Profit</h3>
               <p className="stat-value">{v(<span className="gain-positive">+LKR {fmt(totalDayProfit)}</span>)}</p>
               <small style={{ color: '#718096' }}>{v(<>{dayProfitItems.length} companies</>)}</small>
             </div>
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: '#e53e3e' }} onClick={() => !loading && setActiveSection(s => s === 'dayLoss' ? 'none' : 'dayLoss')} title="Click to show day losers">
-              <h3>{'\uD83D\uDD34'} Loss</h3>
+              <h3>Loss</h3>
               <p className="stat-value">{v(<span className="gain-negative">LKR {fmt(totalDayLoss)}</span>)}</p>
               <small style={{ color: '#718096' }}>{v(<>{dayLossItems.length} companies</>)}</small>
             </div>
@@ -648,7 +648,7 @@ export default function Dashboard() {
                       cx="50%"
                       cy="50%"
                       outerRadius={100}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(1)}%`}
+                      label={({ name, percent }: any) => `${name} ${((percent ?? 0) * 100).toFixed(1)}%`}
                       labelLine={{ stroke: 'var(--text-muted)' }}
                       style={{ fontSize: '0.75rem' }}
                     >
