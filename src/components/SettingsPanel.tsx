@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { getBrokers, getUserSettings, updateSelectedBrokers, updateTableColumns, BrokerData } from '../api';
+import { getBrokers, getUserSettings, updateSelectedBrokers, updateTableColumns, clearAllCache, BrokerData } from '../api';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -126,7 +126,9 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     try {
       await updateSelectedBrokers(selectedIds);
       await updateTableColumns(tableColumns);
+      clearAllCache();
       onClose();
+      window.location.reload();
     } catch (err) {
       console.error('Failed to save settings', err);
     } finally {

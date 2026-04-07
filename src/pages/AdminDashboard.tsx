@@ -103,7 +103,12 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      <h1>Admin Dashboard</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
+        <h1 style={{ margin: 0 }}>Admin Dashboard</h1>
+        <button onClick={() => { setLoading(true); loadData(); }} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem', cursor: 'pointer' }}>
+          Refresh
+        </button>
+      </div>
 
       <div className="stats-grid">
         <div className="stat-card">
@@ -199,6 +204,7 @@ export default function AdminDashboard() {
               <th>Mode</th>
               <th>Device</th>
               <th>IP</th>
+              <th>Location</th>
               <th>Time</th>
             </tr>
           </thead>
@@ -221,13 +227,14 @@ export default function AdminDashboard() {
                   {h.device}
                 </td>
                 <td className="mono" style={{ fontSize: '0.8rem' }}>{h.ipAddress}</td>
+                <td style={{ fontSize: '0.8rem' }}>{h.location || ''}</td>
                 <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
                   {new Date(h.timestamp).toLocaleString()}
                 </td>
               </tr>
             ))}
             {loginHistory.length === 0 && (
-              <tr><td colSpan={6} style={{ color: 'var(--text-muted)', textAlign: 'center' }}>No login history yet</td></tr>
+              <tr><td colSpan={7} style={{ color: 'var(--text-muted)', textAlign: 'center' }}>No login history yet</td></tr>
             )}
           </tbody>
         </table>

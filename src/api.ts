@@ -216,6 +216,7 @@ export interface LoginHistoryItem {
   action: string;
   device: string;
   ipAddress: string;
+  location: string;
   readMode: boolean;
   timestamp: string;
 }
