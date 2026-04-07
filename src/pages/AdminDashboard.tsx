@@ -215,8 +215,10 @@ export default function AdminDashboard() {
                 <td>
                   <span className="gain-pill" style={h.action === 'LOGIN'
                     ? { background: '#c6f6d5', color: '#276749' }
+                    : h.action === 'FAILED_LOGIN'
+                    ? { background: '#fefcbf', color: '#744210' }
                     : { background: '#fed7d7', color: '#9b2c2c' }
-                  }>{h.action}</span>
+                  }>{h.action === 'FAILED_LOGIN' ? 'FAILED' : h.action}</span>
                 </td>
                 <td title={h.action === 'LOGIN' ? (h.readMode ? 'Read Only' : 'Privileged') : ''} style={{ textAlign: 'center' }}>
                   {h.action === 'LOGIN' && (
