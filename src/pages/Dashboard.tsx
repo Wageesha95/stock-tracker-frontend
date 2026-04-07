@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, invalidate } from '../api';
+import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, getUserSettings, invalidate } from '../api';
 import { PortfolioItem, Dividend, RealizedGainItem, Transaction, Company } from '../types';
 import { SELL_COMMISSION_RATE } from '../constants';
+import { TABLE_COLUMN_OPTIONS, DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, PieChart, Pie, Cell } from 'recharts';
 
 interface InterestBreakdown {
   companyCode: string;
@@ -39,10 +40,16 @@ export default function Dashboard() {
   const [expandedRealizedCompanies, setExpandedRealizedCompanies] = useState<Set<string>>(new Set());
   const [subSortKey, setSubSortKey] = useState<string>('');
   const [subSortDir, setSubSortDir] = useState<SortDir>('desc');
+  const [tableColumns, setTableColumns] = useState<Record<string, string[]>>({});
+
+  const colVisible = (table: string, col: string) => {
+    const cols = tableColumns[table] || DEFAULT_COLUMNS[table];
+    return !cols || cols.includes(col);
+  };
 
   const loadData = useCallback(() => {
-    return Promise.all([getDashboardAll(), getDividends(), getMarketData(), getTransactions(), getCompanies()])
-      .then(([dash, d, md, txns, comps]) => {
+    return Promise.all([getDashboardAll(), getDividends(), getMarketData(), getTransactions(), getCompanies(), getUserSettings()])
+      .then(([dash, d, md, txns, comps, settings]) => {
         setPortfolio(dash.portfolio);
         setDividends(d);
         setRealizedItems(dash.realizedItems);
@@ -50,6 +57,7 @@ export default function Dashboard() {
         setInterestBreakdown(dash.interestBreakdown);
         setTransactions(txns);
         setAllCompanies(comps);
+        setTableColumns(settings.tableColumns || {});
         if (md.length > 0) {
           const latest = md.reduce((a, b) => a.tradeDate > b.tradeDate ? a : b);
           setLatestTradeDate(latest.tradeDate);
@@ -616,12 +624,46 @@ export default function Dashboard() {
             return next;
           });
         };
+        // Pie chart data: group interest by company
+        const pieData = Object.entries(grouped).map(([code, items]) => ({
+          name: code,
+          value: Math.round(items.reduce((s, b) => s + b.interest, 0) * 100) / 100,
+        })).filter(d => d.value > 0).sort((a, b) => b.value - a.value);
+        const PIE_COLORS = ['#3182ce', '#38a169', '#dd6b20', '#805ad5', '#e53e3e', '#d69e2e', '#319795', '#b83280', '#2b6cb0', '#c05621', '#6b46c1', '#c53030'];
+
         return (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
               <h2 style={{ margin: 0 }}>Opportunity Cost Breakdown (6.5% Annual)</h2>
               {tableSearchBar(Object.keys(grouped).length)}
             </div>
+            {pieData.length > 0 && (
+              <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem', boxShadow: 'var(--shadow-card)', marginBottom: '1.25rem' }}>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={100}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(1)}%`}
+                      labelLine={{ stroke: 'var(--text-muted)' }}
+                      style={{ fontSize: '0.75rem' }}
+                    >
+                      {pieData.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.85rem' }}
+                      formatter={(value: any) => [`LKR ${fmt(value)}`, 'Interest']}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
             <div className="portfolio-table-wrap">
               <table className="portfolio-table">
                 <thead>
@@ -711,36 +753,16 @@ export default function Dashboard() {
           <table className="portfolio-table">
             <thead>
               <tr>
-                <th className="sort-header" onClick={() => handleSort('companyCode')}>
-                  Company{sortIcon('companyCode')}
-                </th>
-                <th className="sort-header text-right" onClick={() => handleSort('sharesHeld')}>
-                  Shares{sortIcon('sharesHeld')}
-                </th>
-                <th className="sort-header text-right" onClick={() => handleSort('avgBuyPrice')}>
-                  Avg Buy{sortIcon('avgBuyPrice')}
-                </th>
-                <th className="sort-header text-right" onClick={() => handleSort('lastTrade')}>
-                  Last Trade{sortIcon('lastTrade')}
-                </th>
-                <th className="sort-header text-right" onClick={() => handleSort('currentValue')}>
-                  Value{sortIcon('currentValue')}
-                </th>
-                <th className="sort-header text-right" onClick={() => handleSort('totalInvested')}>
-                  Invested{sortIcon('totalInvested')}
-                </th>
-                <th className="sort-header text-right" onClick={() => handleSort('unrealizedGain')}>
-                  Unrealized{sortIcon('unrealizedGain')}
-                </th>
-                <th className="sort-header text-right" onClick={() => handleSort('unrealizedGainPercent')}>
-                  Gain %{sortIcon('unrealizedGainPercent')}
-                </th>
-                <th className="sort-header text-right" onClick={() => handleSort('unrealizedDayGain')}>
-                  Day Gain{sortIcon('unrealizedDayGain')}
-                </th>
-                <th className="sort-header text-right" onClick={() => handleSort('changePercent')}>
-                  Day %{sortIcon('changePercent')}
-                </th>
+                <th className="sort-header" onClick={() => handleSort('companyCode')}>Company{sortIcon('companyCode')}</th>
+                {colVisible('portfolio', 'sharesHeld') && <th className="sort-header text-right" onClick={() => handleSort('sharesHeld')}>Shares{sortIcon('sharesHeld')}</th>}
+                {colVisible('portfolio', 'avgBuyPrice') && <th className="sort-header text-right" onClick={() => handleSort('avgBuyPrice')}>Avg Buy{sortIcon('avgBuyPrice')}</th>}
+                {colVisible('portfolio', 'lastTrade') && <th className="sort-header text-right" onClick={() => handleSort('lastTrade')}>Last Trade{sortIcon('lastTrade')}</th>}
+                {colVisible('portfolio', 'currentValue') && <th className="sort-header text-right" onClick={() => handleSort('currentValue')}>Value{sortIcon('currentValue')}</th>}
+                {colVisible('portfolio', 'totalInvested') && <th className="sort-header text-right" onClick={() => handleSort('totalInvested')}>Invested{sortIcon('totalInvested')}</th>}
+                {colVisible('portfolio', 'unrealizedGain') && <th className="sort-header text-right" onClick={() => handleSort('unrealizedGain')}>Unrealized{sortIcon('unrealizedGain')}</th>}
+                {colVisible('portfolio', 'unrealizedGainPercent') && <th className="sort-header text-right" onClick={() => handleSort('unrealizedGainPercent')}>Gain %{sortIcon('unrealizedGainPercent')}</th>}
+                {colVisible('portfolio', 'unrealizedDayGain') && <th className="sort-header text-right" onClick={() => handleSort('unrealizedDayGain')}>Day Gain{sortIcon('unrealizedDayGain')}</th>}
+                {colVisible('portfolio', 'changePercent') && <th className="sort-header text-right" onClick={() => handleSort('changePercent')}>Day %{sortIcon('changePercent')}</th>}
               </tr>
             </thead>
             <tbody>
@@ -762,31 +784,15 @@ export default function Dashboard() {
                         </div>
                       </div>
                     </td>
-                    <td className="text-right mono">{p.sharesHeld}</td>
-                    <td className="text-right mono">{fmt(p.avgBuyPrice)}</td>
-                    <td className="text-right mono">{hasMarket ? fmt(p.lastTrade) : 'N/A'}</td>
-                    <td className="text-right mono">{hasMarket ? fmt(p.currentValue) : 'N/A'}</td>
-                    <td className="text-right mono">{fmt(p.totalInvested)}</td>
-                    <td className={`text-right mono ${hasMarket ? gainClass(p.unrealizedGain) : ''}`}>
-                      {hasMarket ? `${gainSign(p.unrealizedGain)}${fmt(p.unrealizedGain)}` : 'N/A'}
-                    </td>
-                    <td className={`text-right mono ${hasMarket ? gainClass(p.unrealizedGainPercent) : ''}`}>
-                      {hasMarket ? (
-                        <span className={`gain-pill ${p.unrealizedGainPercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
-                          {gainSign(p.unrealizedGainPercent)}{fmt(p.unrealizedGainPercent)}%
-                        </span>
-                      ) : 'N/A'}
-                    </td>
-                    <td className={`text-right mono ${hasMarket ? gainClass(p.unrealizedDayGain) : ''}`}>
-                      {hasMarket ? `${gainSign(p.unrealizedDayGain)}${fmt(p.unrealizedDayGain)}` : 'N/A'}
-                    </td>
-                    <td className={`text-right mono ${hasMarket ? gainClass(p.changePercent) : ''}`}>
-                      {hasMarket ? (
-                        <span className={`gain-pill ${p.changePercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
-                          {gainSign(p.changePercent)}{fmt(p.changePercent)}%
-                        </span>
-                      ) : 'N/A'}
-                    </td>
+                    {colVisible('portfolio', 'sharesHeld') && <td className="text-right mono">{p.sharesHeld}</td>}
+                    {colVisible('portfolio', 'avgBuyPrice') && <td className="text-right mono">{fmt(p.avgBuyPrice)}</td>}
+                    {colVisible('portfolio', 'lastTrade') && <td className="text-right mono">{hasMarket ? fmt(p.lastTrade) : 'N/A'}</td>}
+                    {colVisible('portfolio', 'currentValue') && <td className="text-right mono">{hasMarket ? fmt(p.currentValue) : 'N/A'}</td>}
+                    {colVisible('portfolio', 'totalInvested') && <td className="text-right mono">{fmt(p.totalInvested)}</td>}
+                    {colVisible('portfolio', 'unrealizedGain') && <td className={`text-right mono ${hasMarket ? gainClass(p.unrealizedGain) : ''}`}>{hasMarket ? `${gainSign(p.unrealizedGain)}${fmt(p.unrealizedGain)}` : 'N/A'}</td>}
+                    {colVisible('portfolio', 'unrealizedGainPercent') && <td className={`text-right mono ${hasMarket ? gainClass(p.unrealizedGainPercent) : ''}`}>{hasMarket ? <span className={`gain-pill ${p.unrealizedGainPercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>{gainSign(p.unrealizedGainPercent)}{fmt(p.unrealizedGainPercent)}%</span> : 'N/A'}</td>}
+                    {colVisible('portfolio', 'unrealizedDayGain') && <td className={`text-right mono ${hasMarket ? gainClass(p.unrealizedDayGain) : ''}`}>{hasMarket ? `${gainSign(p.unrealizedDayGain)}${fmt(p.unrealizedDayGain)}` : 'N/A'}</td>}
+                    {colVisible('portfolio', 'changePercent') && <td className={`text-right mono ${hasMarket ? gainClass(p.changePercent) : ''}`}>{hasMarket ? <span className={`gain-pill ${p.changePercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>{gainSign(p.changePercent)}{fmt(p.changePercent)}%</span> : 'N/A'}</td>}
                   </tr>
                 );
               })}
@@ -794,27 +800,15 @@ export default function Dashboard() {
             <tfoot>
               <tr className="portfolio-total">
                 <td>Total</td>
-                <td className="text-right"></td>
-                <td className="text-right"></td>
-                <td className="text-right"></td>
-                <td className="text-right mono">{fmt(totalValue)}</td>
-                <td className="text-right mono">{fmt(totalInvested)}</td>
-                <td className={`text-right mono ${gainClass(totalGain)}`}>
-                  {gainSign(totalGain)}{fmt(totalGain)}
-                </td>
-                <td className={`text-right mono ${gainClass(totalGainPct)}`}>
-                  <span className={`gain-pill ${totalGainPct >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
-                    {gainSign(totalGainPct)}{fmt(totalGainPct)}%
-                  </span>
-                </td>
-                <td className={`text-right mono ${gainClass(totalDayGain)}`}>
-                  {gainSign(totalDayGain)}{fmt(totalDayGain)}
-                </td>
-                <td className={`text-right mono ${gainClass(totalDayGainPct)}`}>
-                  <span className={`gain-pill ${totalDayGainPct >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
-                    {gainSign(totalDayGainPct)}{fmt(totalDayGainPct)}%
-                  </span>
-                </td>
+                {colVisible('portfolio', 'sharesHeld') && <td className="text-right"></td>}
+                {colVisible('portfolio', 'avgBuyPrice') && <td className="text-right"></td>}
+                {colVisible('portfolio', 'lastTrade') && <td className="text-right"></td>}
+                {colVisible('portfolio', 'currentValue') && <td className="text-right mono">{fmt(totalValue)}</td>}
+                {colVisible('portfolio', 'totalInvested') && <td className="text-right mono">{fmt(totalInvested)}</td>}
+                {colVisible('portfolio', 'unrealizedGain') && <td className={`text-right mono ${gainClass(totalGain)}`}>{gainSign(totalGain)}{fmt(totalGain)}</td>}
+                {colVisible('portfolio', 'unrealizedGainPercent') && <td className={`text-right mono ${gainClass(totalGainPct)}`}><span className={`gain-pill ${totalGainPct >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>{gainSign(totalGainPct)}{fmt(totalGainPct)}%</span></td>}
+                {colVisible('portfolio', 'unrealizedDayGain') && <td className={`text-right mono ${gainClass(totalDayGain)}`}>{gainSign(totalDayGain)}{fmt(totalDayGain)}</td>}
+                {colVisible('portfolio', 'changePercent') && <td className={`text-right mono ${gainClass(totalDayGainPct)}`}><span className={`gain-pill ${totalDayGainPct >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>{gainSign(totalDayGainPct)}{fmt(totalDayGainPct)}%</span></td>}
               </tr>
             </tfoot>
           </table>
@@ -1008,7 +1002,12 @@ export default function Dashboard() {
         const items = activeSection === 'netUnrealized' ? filtered.filter(p => p.unrealizedGain !== 0) : activeSection === 'profit' ? profitItems : lossItems;
         const title = activeSection === 'netUnrealized' ? 'All Unrealized' : activeSection === 'profit' ? 'Unrealized Profits' : 'Unrealized Losses';
         const total = items.reduce((s, p) => s + p.unrealizedGain, 0);
-        const filteredUItems = items.filter(p => ms(p.companyCode) || ms(p.companyName));
+        const enriched = items.map(p => {
+          const adjGain = p.currentValue - p.currentValue * SELL_COMMISSION_RATE - p.totalInvested;
+          const adjGainPct = p.totalInvested !== 0 ? (adjGain / p.totalInvested) * 100 : 0;
+          return { ...p, adjGain, adjGainPct };
+        });
+        const filteredUItems = enriched.filter(p => ms(p.companyCode) || ms(p.companyName));
         const sortedItems = applySubSort(filteredUItems, 'unrealizedGain');
         return items.length > 0 ? (
           <>
@@ -1021,19 +1020,19 @@ export default function Dashboard() {
                 <thead>
                   <tr>
                     <th className="sort-header" onClick={() => handleSubSort('companyCode')}>Company{subSortIcon('companyCode')}</th>
-                    <th className="sort-header text-right" onClick={() => handleSubSort('sharesHeld')}>Shares{subSortIcon('sharesHeld')}</th>
-                    <th className="sort-header text-right" onClick={() => handleSubSort('avgBuyPrice')}>Avg Buy{subSortIcon('avgBuyPrice')}</th>
-                    <th className="sort-header text-right" onClick={() => handleSubSort('lastTrade')}>Last Trade{subSortIcon('lastTrade')}</th>
-                    <th className="sort-header text-right" onClick={() => handleSubSort('totalInvested')}>Invested{subSortIcon('totalInvested')}</th>
-                    <th className="sort-header text-right" onClick={() => handleSubSort('currentValue')}>Value{subSortIcon('currentValue')}</th>
-                    <th className="sort-header text-right" onClick={() => handleSubSort('unrealizedGain')}>Unrealized{subSortIcon('unrealizedGain')}</th>
-                    <th className="text-right">Adj. Gain</th>
-                    <th className="sort-header text-right" onClick={() => handleSubSort('unrealizedGainPercent')}>Gain %{subSortIcon('unrealizedGainPercent')}</th>
+                    {colVisible('unrealized', 'sharesHeld') && <th className="sort-header text-right" onClick={() => handleSubSort('sharesHeld')}>Shares{subSortIcon('sharesHeld')}</th>}
+                    {colVisible('unrealized', 'avgBuyPrice') && <th className="sort-header text-right" onClick={() => handleSubSort('avgBuyPrice')}>Avg Buy{subSortIcon('avgBuyPrice')}</th>}
+                    {colVisible('unrealized', 'lastTrade') && <th className="sort-header text-right" onClick={() => handleSubSort('lastTrade')}>Last Trade{subSortIcon('lastTrade')}</th>}
+                    {colVisible('unrealized', 'totalInvested') && <th className="sort-header text-right" onClick={() => handleSubSort('totalInvested')}>Invested{subSortIcon('totalInvested')}</th>}
+                    {colVisible('unrealized', 'currentValue') && <th className="sort-header text-right" onClick={() => handleSubSort('currentValue')}>Value{subSortIcon('currentValue')}</th>}
+                    {colVisible('unrealized', 'unrealizedGain') && <th className="sort-header text-right" onClick={() => handleSubSort('unrealizedGain')}>Unrealized{subSortIcon('unrealizedGain')}</th>}
+                    {colVisible('unrealized', 'unrealizedGainPercent') && <th className="sort-header text-right" onClick={() => handleSubSort('unrealizedGainPercent')}>Gain %{subSortIcon('unrealizedGainPercent')}</th>}
+                    {colVisible('unrealized', 'adjGain') && <th className="sort-header text-right" onClick={() => handleSubSort('adjGain')}>Adj. Gain{subSortIcon('adjGain')}</th>}
+                    {colVisible('unrealized', 'adjGainPct') && <th className="sort-header text-right" onClick={() => handleSubSort('adjGainPct')}>Adj. Gain %{subSortIcon('adjGainPct')}</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {sortedItems.map(p => {
-                    const adjGain = p.currentValue - p.currentValue * SELL_COMMISSION_RATE - p.totalInvested;
                     return (
                     <tr key={p.companyCode}>
                       <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${p.companyCode}`)}>
@@ -1047,39 +1046,40 @@ export default function Dashboard() {
                           </div>
                         </div>
                       </td>
-                      <td className="text-right mono">{p.sharesHeld}</td>
-                      <td className="text-right mono">{fmt(p.avgBuyPrice)}</td>
-                      <td className="text-right mono">{fmt(p.lastTrade)}</td>
-                      <td className="text-right mono">{fmt(p.totalInvested)}</td>
-                      <td className="text-right mono">{fmt(p.currentValue)}</td>
-                      <td className={`text-right mono ${gainClass(p.unrealizedGain)}`}>
-                        {gainSign(p.unrealizedGain)}{fmt(p.unrealizedGain)}
-                      </td>
-                      <td className={`text-right mono ${gainClass(adjGain)}`}>
-                        {gainSign(adjGain)}{fmt(adjGain)}
-                      </td>
-                      <td className="text-right mono">
-                        <span className={`gain-pill ${p.unrealizedGainPercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
-                          {gainSign(p.unrealizedGainPercent)}{fmt(p.unrealizedGainPercent)}%
-                        </span>
-                      </td>
+                      {colVisible('unrealized', 'sharesHeld') && <td className="text-right mono">{p.sharesHeld}</td>}
+                      {colVisible('unrealized', 'avgBuyPrice') && <td className="text-right mono">{fmt(p.avgBuyPrice)}</td>}
+                      {colVisible('unrealized', 'lastTrade') && <td className="text-right mono">{fmt(p.lastTrade)}</td>}
+                      {colVisible('unrealized', 'totalInvested') && <td className="text-right mono">{fmt(p.totalInvested)}</td>}
+                      {colVisible('unrealized', 'currentValue') && <td className="text-right mono">{fmt(p.currentValue)}</td>}
+                      {colVisible('unrealized', 'unrealizedGain') && <td className={`text-right mono ${gainClass(p.unrealizedGain)}`}>{gainSign(p.unrealizedGain)}{fmt(p.unrealizedGain)}</td>}
+                      {colVisible('unrealized', 'unrealizedGainPercent') && <td className="text-right mono"><span className={`gain-pill ${p.unrealizedGainPercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>{gainSign(p.unrealizedGainPercent)}{fmt(p.unrealizedGainPercent)}%</span></td>}
+                      {colVisible('unrealized', 'adjGain') && <td className={`text-right mono ${gainClass(p.adjGain)}`}>{gainSign(p.adjGain)}{fmt(p.adjGain)}</td>}
+                      {colVisible('unrealized', 'adjGainPct') && <td className="text-right mono"><span className={`gain-pill ${p.adjGainPct >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>{gainSign(p.adjGainPct)}{fmt(p.adjGainPct)}%</span></td>}
                     </tr>
                     );
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="portfolio-total">
-                    <td colSpan={4}>Total ({items.length} companies)</td>
-                    <td className="text-right mono">{fmt(items.reduce((s, p) => s + p.totalInvested, 0))}</td>
-                    <td className="text-right mono">{fmt(items.reduce((s, p) => s + p.currentValue, 0))}</td>
-                    <td className={`text-right mono ${gainClass(total)}`}>
-                      {gainSign(total)}{fmt(total)}
-                    </td>
-                    <td className={`text-right mono ${gainClass(items.reduce((s, p) => s + (p.currentValue - p.currentValue * SELL_COMMISSION_RATE - p.totalInvested), 0))}`}>
-                      {gainSign(items.reduce((s, p) => s + (p.currentValue - p.currentValue * SELL_COMMISSION_RATE - p.totalInvested), 0))}{fmt(items.reduce((s, p) => s + (p.currentValue - p.currentValue * SELL_COMMISSION_RATE - p.totalInvested), 0))}
-                    </td>
-                    <td></td>
-                  </tr>
+                  {(() => {
+                    const totInv = items.reduce((s, p) => s + p.totalInvested, 0);
+                    const totVal = items.reduce((s, p) => s + p.currentValue, 0);
+                    const totAdj = items.reduce((s, p) => s + (p.currentValue - p.currentValue * SELL_COMMISSION_RATE - p.totalInvested), 0);
+                    const totGainPct = totInv !== 0 ? (total / totInv) * 100 : 0;
+                    const totAdjPct = totInv !== 0 ? (totAdj / totInv) * 100 : 0;
+                    // Count visible columns before "totalInvested" for colSpan
+                    const preColSpan = 1 + ['sharesHeld', 'avgBuyPrice', 'lastTrade'].filter(c => colVisible('unrealized', c)).length;
+                    return (
+                    <tr className="portfolio-total">
+                      <td colSpan={preColSpan}>Total ({items.length} companies)</td>
+                      {colVisible('unrealized', 'totalInvested') && <td className="text-right mono">{fmt(totInv)}</td>}
+                      {colVisible('unrealized', 'currentValue') && <td className="text-right mono">{fmt(totVal)}</td>}
+                      {colVisible('unrealized', 'unrealizedGain') && <td className={`text-right mono ${gainClass(total)}`}>{gainSign(total)}{fmt(total)}</td>}
+                      {colVisible('unrealized', 'unrealizedGainPercent') && <td className={`text-right mono ${gainClass(totGainPct)}`}>{gainSign(totGainPct)}{fmt(totGainPct)}%</td>}
+                      {colVisible('unrealized', 'adjGain') && <td className={`text-right mono ${gainClass(totAdj)}`}>{gainSign(totAdj)}{fmt(totAdj)}</td>}
+                      {colVisible('unrealized', 'adjGainPct') && <td className={`text-right mono ${gainClass(totAdjPct)}`}>{gainSign(totAdjPct)}{fmt(totAdjPct)}%</td>}
+                    </tr>
+                    );
+                  })()}
                 </tfoot>
               </table>
             </div>

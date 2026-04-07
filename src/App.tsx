@@ -81,7 +81,7 @@ function App() {
             )}
           </div>
           <div className="nav-right">
-            <span className="nav-username">{user.username}{isReadMode && <span style={{ marginLeft: '0.4rem', fontSize: '0.7rem', color: '#ecc94b', fontWeight: 600 }}>(READ)</span>}</span>
+            <span className="nav-username">{user.username}<span style={{ marginLeft: '0.4rem', fontSize: '0.85rem' }} title={isReadMode ? 'Read Only' : 'Privileged'}>{isReadMode ? '\uD83D\uDC41' : '\u270F\uFE0F'}</span></span>
             {!isAdmin && (
               <button
                 className="btn-settings-gear"

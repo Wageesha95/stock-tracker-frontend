@@ -32,8 +32,10 @@ export const login = (username: string, password: string) =>
     return res.data;
   });
 export const logout = () => {
-  localStorage.removeItem('token');
-  return api.post('/auth/logout').then(res => res.data);
+  return api.post('/auth/logout').then(res => {
+    localStorage.removeItem('token');
+    return res.data;
+  });
 };
 export const getMe = () =>
   api.get<AuthUser>('/auth/me').then(res => res.data);
@@ -150,10 +152,13 @@ export interface UserSettingsData {
   id?: string;
   userId?: string;
   selectedBrokerIds: string[];
+  tableColumns: Record<string, string[]>;
 }
 export const getUserSettings = () => cached('settings', () => api.get<UserSettingsData>('/settings').then(res => res.data));
 export const updateSelectedBrokers = (selectedBrokerIds: string[]) =>
   api.put<UserSettingsData>('/settings/brokers', { selectedBrokerIds }).then(res => { invalidate('settings'); return res.data; });
+export const updateTableColumns = (tableColumns: Record<string, string[]>) =>
+  api.put<UserSettingsData>('/settings/table-columns', tableColumns).then(res => { invalidate('settings'); return res.data; });
 
 // Dividends
 export const getDividends = () => cached('dividends', () => api.get<Dividend[]>('/dividends').then(res => res.data));

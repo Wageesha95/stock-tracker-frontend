@@ -34,14 +34,13 @@ export default function AdminDashboard() {
   const [editError, setEditError] = useState('');
 
   const loadData = () => {
-    Promise.all([getAdminStats(), getLoginHistory()])
-      .then(([data, history]) => {
-        setTotalUsers(data.totalUsers);
-        setUsers(data.users);
-        setLoginHistory(history);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+    const p1 = getAdminStats()
+      .then(data => { setTotalUsers(data.totalUsers); setUsers(data.users); })
+      .catch(console.error);
+    const p2 = getLoginHistory()
+      .then(history => setLoginHistory(history))
+      .catch(console.error);
+    Promise.all([p1, p2]).finally(() => setLoading(false));
   };
 
   useEffect(() => { loadData(); }, []);
@@ -197,6 +196,7 @@ export default function AdminDashboard() {
             <tr>
               <th>User</th>
               <th>Action</th>
+              <th>Mode</th>
               <th>Device</th>
               <th>IP</th>
               <th>Time</th>
@@ -205,15 +205,17 @@ export default function AdminDashboard() {
           <tbody>
             {loginHistory.map(h => (
               <tr key={h.id}>
-                <td style={{ fontWeight: 600 }}>
-                  {h.username}
-                  {h.readMode && <span style={{ marginLeft: '0.4rem', fontSize: '0.65rem', color: '#ecc94b', fontWeight: 600 }}>(READ)</span>}
-                </td>
+                <td style={{ fontWeight: 600 }}>{h.username}</td>
                 <td>
                   <span className="gain-pill" style={h.action === 'LOGIN'
                     ? { background: '#c6f6d5', color: '#276749' }
                     : { background: '#fed7d7', color: '#9b2c2c' }
                   }>{h.action}</span>
+                </td>
+                <td title={h.action === 'LOGIN' ? (h.readMode ? 'Read Only' : 'Privileged') : ''} style={{ textAlign: 'center' }}>
+                  {h.action === 'LOGIN' && (
+                    <span style={{ fontSize: '1rem' }}>{h.readMode ? '\uD83D\uDC41' : '\u270F\uFE0F'}</span>
+                  )}
                 </td>
                 <td style={{ fontSize: '0.75rem', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={h.device}>
                   {h.device}
@@ -225,7 +227,7 @@ export default function AdminDashboard() {
               </tr>
             ))}
             {loginHistory.length === 0 && (
-              <tr><td colSpan={5} style={{ color: 'var(--text-muted)', textAlign: 'center' }}>No login history yet</td></tr>
+              <tr><td colSpan={6} style={{ color: 'var(--text-muted)', textAlign: 'center' }}>No login history yet</td></tr>
             )}
           </tbody>
         </table>
