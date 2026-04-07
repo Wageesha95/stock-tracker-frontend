@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAdminStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser } from '../api';
+import { getAdminStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser, getLoginHistory, LoginHistoryItem } from '../api';
 import ActionMenu from '../components/ActionMenu';
 
 interface UserStat {
@@ -23,6 +23,9 @@ export default function AdminDashboard() {
   const [newRole, setNewRole] = useState('USER');
   const [createError, setCreateError] = useState('');
 
+  // Login history
+  const [loginHistory, setLoginHistory] = useState<LoginHistoryItem[]>([]);
+
   // Edit user
   const [editUser, setEditUser] = useState<UserStat | null>(null);
   const [editUsername, setEditUsername] = useState('');
@@ -31,8 +34,12 @@ export default function AdminDashboard() {
   const [editError, setEditError] = useState('');
 
   const loadData = () => {
-    getAdminStats()
-      .then(data => { setTotalUsers(data.totalUsers); setUsers(data.users); })
+    Promise.all([getAdminStats(), getLoginHistory()])
+      .then(([data, history]) => {
+        setTotalUsers(data.totalUsers);
+        setUsers(data.users);
+        setLoginHistory(history);
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
@@ -179,6 +186,47 @@ export default function AdminDashboard() {
                 </td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+
+      <h2 style={{ marginTop: '2rem', marginBottom: '1rem' }}>Login History</h2>
+      <div className="portfolio-table-wrap">
+        <table className="portfolio-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Action</th>
+              <th>Device</th>
+              <th>IP</th>
+              <th>Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loginHistory.map(h => (
+              <tr key={h.id}>
+                <td style={{ fontWeight: 600 }}>
+                  {h.username}
+                  {h.readMode && <span style={{ marginLeft: '0.4rem', fontSize: '0.65rem', color: '#ecc94b', fontWeight: 600 }}>(READ)</span>}
+                </td>
+                <td>
+                  <span className="gain-pill" style={h.action === 'LOGIN'
+                    ? { background: '#c6f6d5', color: '#276749' }
+                    : { background: '#fed7d7', color: '#9b2c2c' }
+                  }>{h.action}</span>
+                </td>
+                <td style={{ fontSize: '0.75rem', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={h.device}>
+                  {h.device}
+                </td>
+                <td className="mono" style={{ fontSize: '0.8rem' }}>{h.ipAddress}</td>
+                <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                  {new Date(h.timestamp).toLocaleString()}
+                </td>
+              </tr>
+            ))}
+            {loginHistory.length === 0 && (
+              <tr><td colSpan={5} style={{ color: 'var(--text-muted)', textAlign: 'center' }}>No login history yet</td></tr>
+            )}
           </tbody>
         </table>
       </div>

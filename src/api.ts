@@ -206,6 +206,17 @@ export const deleteAdminUser = (id: string) =>
 export const unlockUser = (id: string) =>
   api.put(`/admin/users/${id}/unlock`).then(res => { invalidate('admin-stats'); return res.data; });
 
+export interface LoginHistoryItem {
+  id: string;
+  username: string;
+  action: string;
+  device: string;
+  ipAddress: string;
+  readMode: boolean;
+  timestamp: string;
+}
+export const getLoginHistory = () => api.get<LoginHistoryItem[]>('/admin/login-history').then(res => res.data);
+
 export const getDashboardAll = () => cached('dashboard-all', () => api.get<{
   portfolio: PortfolioItem[];
   realizedItems: RealizedGainItem[];
