@@ -1510,6 +1510,9 @@ button:active {
   .search-bar::placeholder {
     color: transparent;
   }
+  .dashboard-toolbar-right {
+    flex-direction: row-reverse;
+  }
 
   .company-select-chip {
     display: none !important;

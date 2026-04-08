@@ -221,7 +221,7 @@ export default function Dashboard() {
           </button>
           {historicalMode && <span style={{ fontSize: '0.75rem', color: '#3182ce', fontWeight: 600 }}>Viewing {selectedDate}</span>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="dashboard-toolbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <MarketDatePicker
             availableDates={availableDates}
             selectedDate={selectedDate}
