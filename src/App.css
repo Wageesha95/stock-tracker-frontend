@@ -419,6 +419,13 @@ select {
   transition: border-color 0.2s;
 }
 
+.calendar-icon-emoji {
+  display: none;
+}
+.calendar-icon-svg {
+  display: inline-block;
+}
+
 .search-bar {
   width: 250px;
   padding: 0.55rem 0.85rem 0.55rem 2.5rem;
@@ -1512,6 +1519,12 @@ button:active {
   }
   .dashboard-toolbar-right {
     flex-direction: row-reverse;
+  }
+  .calendar-icon-emoji {
+    display: inline;
+  }
+  .calendar-icon-svg {
+    display: none;
   }
 
   .company-select-chip {
