@@ -20,6 +20,9 @@ import RightsAndIpo from './pages/RightsAndIpo';
 import SettingsPanel from './components/SettingsPanel';
 import './App.css';
 
+const PING_URL = 'https://stock-tracker-backend-2.onrender.com/api/auth/me';
+const PING_INTERVAL = 14 * 60 * 1000 + 50 * 1000; // 14m 50s
+
 function App() {
   const { user, loading, isAdmin, isReadMode, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -27,6 +30,11 @@ function App() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
   });
+
+  useEffect(() => {
+    const id = setInterval(() => { fetch(PING_URL).catch(() => {}); }, PING_INTERVAL);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
