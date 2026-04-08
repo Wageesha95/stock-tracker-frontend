@@ -195,7 +195,7 @@ export default function Dashboard() {
   const adjustedPnl = totalPnl - opportunityCost;
 
   const loadingPulse = <span className="loading-pulse" />;
-  const v = (content: React.ReactNode) => loading ? loadingPulse : content;
+  const v = (content: React.ReactNode) => loading || refreshing ? loadingPulse : content;
 
   return (
     <div>
@@ -230,6 +230,7 @@ export default function Dashboard() {
                 setSelectedDate('');
                 setHistoricalMode(false);
                 setRefreshing(true);
+                await new Promise(r => setTimeout(r, 0));
                 invalidate('dashboard-all', 'dividends', 'market', 'transactions', 'companies', 'settings', 'market-dates');
                 loadData().finally(() => setRefreshing(false));
                 return;
@@ -237,6 +238,7 @@ export default function Dashboard() {
               setSelectedDate(finalDate);
               setHistoricalMode(true);
               setRefreshing(true);
+              await new Promise(r => setTimeout(r, 0));
               try {
                 const md = await getMarketDataByDate(finalDate);
                 const priceMap: Record<string, number> = {};
