@@ -1,10 +1,11 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, getUserSettings, invalidate } from '../api';
+import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, getUserSettings, getAvailableDates, getMarketDataByDate, invalidate } from '../api';
 import { PortfolioItem, Dividend, RealizedGainItem, Transaction, Company } from '../types';
 import { SELL_COMMISSION_RATE } from '../constants';
 import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
+import MarketDatePicker from '../components/MarketDatePicker';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, PieChart, Pie, Cell } from 'recharts';
 
 interface InterestBreakdown {
@@ -24,6 +25,8 @@ export default function Dashboard() {
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [realizedItems, setRealizedItems] = useState<RealizedGainItem[]>([]);
+  const [origDividends, setOrigDividends] = useState<Dividend[]>([]);
+  const [origRealizedItems, setOrigRealizedItems] = useState<RealizedGainItem[]>([]);
   const [opportunityCost, setOpportunityCost] = useState(0);
   const [interestBreakdown, setInterestBreakdown] = useState<InterestBreakdown[]>([]);
   const sectionRef = useRef<HTMLDivElement>(null);
@@ -33,6 +36,7 @@ export default function Dashboard() {
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [latestTradeDate, setLatestTradeDate] = useState('');
+  const [originalLatestDate, setOriginalLatestDate] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('companyCode');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
@@ -41,6 +45,9 @@ export default function Dashboard() {
   const [subSortKey, setSubSortKey] = useState<string>('');
   const [subSortDir, setSubSortDir] = useState<SortDir>('desc');
   const [tableColumns, setTableColumns] = useState<Record<string, string[]>>({});
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string>('');
+  const [historicalMode, setHistoricalMode] = useState(false);
 
   const colVisible = (table: string, col: string) => {
     const cols = tableColumns[table] || DEFAULT_COLUMNS[table];
@@ -48,19 +55,23 @@ export default function Dashboard() {
   };
 
   const loadData = useCallback(() => {
-    return Promise.all([getDashboardAll(), getDividends(), getMarketData(), getTransactions(), getCompanies(), getUserSettings()])
-      .then(([dash, d, md, txns, comps, settings]) => {
+    return Promise.all([getDashboardAll(), getDividends(), getMarketData(), getTransactions(), getCompanies(), getUserSettings(), getAvailableDates()])
+      .then(([dash, d, md, txns, comps, settings, dates]) => {
         setPortfolio(dash.portfolio);
         setDividends(d);
+        setOrigDividends(d);
         setRealizedItems(dash.realizedItems);
+        setOrigRealizedItems(dash.realizedItems);
         setOpportunityCost(dash.opportunityCost);
         setInterestBreakdown(dash.interestBreakdown);
         setTransactions(txns);
         setAllCompanies(comps);
         setTableColumns(settings.tableColumns || {});
+        setAvailableDates(dates);
         if (md.length > 0) {
           const latest = md.reduce((a, b) => a.tradeDate > b.tradeDate ? a : b);
           setLatestTradeDate(latest.tradeDate);
+          setOriginalLatestDate(latest.tradeDate);
         }
       })
       .catch(console.error);
@@ -208,11 +219,87 @@ export default function Dashboard() {
           >
             {refreshing ? 'Refreshing...' : '\u21BB Refresh'}
           </button>
+          {historicalMode && <span style={{ fontSize: '0.75rem', color: '#3182ce', fontWeight: 600 }}>Viewing {selectedDate}</span>}
         </div>
-        <div style={{ position: 'relative' }}>
-          <input
-            className="search-bar"
-            value={companySearch}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <MarketDatePicker
+            availableDates={availableDates}
+            selectedDate={selectedDate}
+            onSelect={async (finalDate) => {
+              if (finalDate === originalLatestDate) {
+                setSelectedDate('');
+                setHistoricalMode(false);
+                setRefreshing(true);
+                invalidate('dashboard-all', 'dividends', 'market', 'transactions', 'companies', 'settings', 'market-dates');
+                loadData().finally(() => setRefreshing(false));
+                return;
+              }
+              setSelectedDate(finalDate);
+              setHistoricalMode(true);
+              setRefreshing(true);
+              try {
+                const md = await getMarketDataByDate(finalDate);
+                const priceMap: Record<string, number> = {};
+                md.forEach(m => { priceMap[m.companyCode] = m.lastTrade; });
+                const txUpToDate = transactions.filter(t => t.date <= finalDate);
+                const grouped: Record<string, typeof txUpToDate> = {};
+                txUpToDate.forEach(t => { (grouped[t.companyCode] = grouped[t.companyCode] || []).push(t); });
+                const histPortfolio: PortfolioItem[] = [];
+                for (const [code, txns] of Object.entries(grouped)) {
+                  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
+                  let shares = 0, cost = 0, realized = 0;
+                  for (const t of sorted) {
+                    if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+                      cost += t.count * t.price + t.commission;
+                      shares += t.count;
+                    } else if (t.type === 'SELL') {
+                      const avg = shares > 0 ? cost / shares : 0;
+                      const sellRev = t.count * t.price - t.commission;
+                      realized += sellRev - avg * t.count;
+                      cost -= avg * t.count;
+                      shares -= t.count;
+                    }
+                  }
+                  if (shares <= 0) continue;
+                  const avgBuy = shares > 0 ? cost / shares : 0;
+                  const price = priceMap[code] || 0;
+                  const currentValue = shares * price;
+                  const totalInv = shares * avgBuy;
+                  const unrealized = currentValue - totalInv;
+                  const unrealizedPct = totalInv !== 0 ? (unrealized / totalInv) * 100 : 0;
+                  const comp = allCompanies.find(c => c.code === code);
+                  const mdItem = md.find(m => m.companyCode === code);
+                  histPortfolio.push({
+                    companyCode: code,
+                    companyName: comp?.name || mdItem?.companyName || code,
+                    sharesHeld: shares,
+                    avgBuyPrice: avgBuy,
+                    lastTrade: price,
+                    change: mdItem?.change || 0,
+                    changePercent: mdItem?.changePercent || 0,
+                    currentValue,
+                    totalInvested: totalInv,
+                    unrealizedGain: unrealized,
+                    unrealizedGainPercent: unrealizedPct,
+                    unrealizedDayGain: currentValue * (mdItem?.changePercent || 0) / 100,
+                    realizedGain: realized,
+                  });
+                }
+                setPortfolio(histPortfolio);
+                setLatestTradeDate(finalDate);
+                setDividends(origDividends.filter(d => d.date <= finalDate));
+                setRealizedItems(origRealizedItems.filter(r => r.sellDate <= finalDate));
+              } catch (err) {
+                console.error(err);
+              } finally {
+                setRefreshing(false);
+              }
+            }}
+          />
+          <div style={{ position: 'relative' }}>
+            <input
+              className="search-bar"
+              value={companySearch}
             onChange={e => { setCompanySearch(e.target.value); setShowSuggestions(true); }}
             onFocus={() => setShowSuggestions(true)}
             onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
@@ -244,6 +331,7 @@ export default function Dashboard() {
               ))}
             </div>
           )}
+          </div>
         </div>
       </div>
 
@@ -333,10 +421,10 @@ export default function Dashboard() {
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: loading ? '#3182ce' : totalPnl >= 0 ? '#38a169' : '#e53e3e' }} onClick={() => !loading && setActiveSection(s => s === 'totalPnl' ? 'none' : 'totalPnl')} title="Click to show Total P&L timeline">
               <h3>{'\uD83E\uDDEE'} Total P&L</h3>
               <p className="stat-value">{v(<span className={gainClass(totalPnl)}>{gainSign(totalPnl)}LKR {fmt(totalPnl)}</span>)}</p>
-              <small style={{ color: '#718096' }}>Unrealized + Realized + Dividends</small>
+              <small style={{ color: '#718096' }}>Unr. + Real. + Div.</small>
             </div>
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: '#d69e2e' }} onClick={() => !loading && setActiveSection(s => s === 'interest' ? 'none' : 'interest')} title="Click to see per-transaction interest breakdown">
-              <h3>{'\u231B'} Opportunity Cost</h3>
+              <h3>{'\u231B'} Opp. Cost</h3>
               <p className="stat-value">{v(<span style={{ color: '#d69e2e' }}>LKR {fmt(opportunityCost)}</span>)}</p>
               <small style={{ color: '#718096' }}>6.5% FD rate</small>
             </div>
@@ -624,11 +712,19 @@ export default function Dashboard() {
             return next;
           });
         };
-        // Pie chart data: group interest by company
-        const pieData = Object.entries(grouped).map(([code, items]) => ({
+        // Pie chart data: group interest by company, merge <2% into "Others"
+        const rawPieData = Object.entries(grouped).map(([code, items]) => ({
           name: code,
           value: Math.round(items.reduce((s, b) => s + b.interest, 0) * 100) / 100,
         })).filter(d => d.value > 0).sort((a, b) => b.value - a.value);
+        const rawTotal = rawPieData.reduce((s, d) => s + d.value, 0);
+        const major = rawPieData.filter(d => rawTotal > 0 && (d.value / rawTotal) * 100 >= 2);
+        const minor = rawPieData.filter(d => rawTotal > 0 && (d.value / rawTotal) * 100 < 2);
+        const pieData = minor.length > 0
+          ? [...major, { name: 'Others', value: Math.round(minor.reduce((s, d) => s + d.value, 0) * 100) / 100 }]
+          : major;
+        const othersDetail = minor.map(d => `${d.name}: LKR ${fmt(d.value)} (${rawTotal > 0 ? ((d.value / rawTotal) * 100).toFixed(1) : '0.0'}%)`);
+        const pieTotal = pieData.reduce((s, d) => s + d.value, 0);
         const PIE_COLORS = ['#3182ce', '#38a169', '#dd6b20', '#805ad5', '#e53e3e', '#d69e2e', '#319795', '#b83280', '#2b6cb0', '#c05621', '#6b46c1', '#c53030'];
 
         return (
@@ -657,8 +753,25 @@ export default function Dashboard() {
                       ))}
                     </Pie>
                     <Tooltip
-                      contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.85rem' }}
-                      formatter={(value: any) => [`LKR ${fmt(value)}`, 'Interest']}
+                      contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
+                      content={({ active, payload }: any) => {
+                        if (!active || !payload || !payload[0]) return null;
+                        const entry = payload[0];
+                        const name = entry.name;
+                        const value = entry.value;
+                        const pct = pieTotal > 0 ? ((value / pieTotal) * 100).toFixed(1) : '0.0';
+                        return (
+                          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '0.5rem 0.75rem', fontSize: '0.8rem' }}>
+                            <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>{name}</div>
+                            <div>LKR {fmt(value)} ({pct}%)</div>
+                            {name === 'Others' && othersDetail.length > 0 && (
+                              <div style={{ marginTop: '0.35rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.35rem', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                                {othersDetail.map((line, i) => <div key={i}>{line}</div>)}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }}
                     />
                   </PieChart>
                 </ResponsiveContainer>

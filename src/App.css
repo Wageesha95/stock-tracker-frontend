@@ -447,6 +447,36 @@ select {
   padding-left: 0.85rem !important;
 }
 
+/* Date picker icon-only mode */
+.date-picker-icon {
+  position: relative;
+}
+
+.date-picker-icon::-webkit-datetime-edit,
+.date-picker-icon::-webkit-datetime-edit-fields-wrapper,
+.date-picker-icon::-webkit-datetime-edit-text,
+.date-picker-icon::-webkit-datetime-edit-month-field,
+.date-picker-icon::-webkit-datetime-edit-day-field,
+.date-picker-icon::-webkit-datetime-edit-year-field {
+  display: none;
+}
+
+/* Date input calendar icon */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.4);
+  cursor: pointer;
+  opacity: 0.8;
+  font-size: 1.1rem;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+}
+
 input:focus,
 select:focus {
   outline: none;

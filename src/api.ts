@@ -191,6 +191,8 @@ export const getRealizedGains = () => cached('realized', () => api.get<RealizedG
 export const getMarketData = () => cached('market', () => api.get<MarketData[]>('/market-data').then(res => res.data));
 export const getMarketDataHistory = (code: string) =>
   cached(`market-history:${code}`, () => api.get<MarketData[]>(`/market-data/${code}/history`).then(res => res.data));
+export const getAvailableDates = () => cached('market-dates', () => api.get<string[]>('/market-data/dates').then(res => res.data));
+export const getMarketDataByDate = (date: string) => api.get<MarketData[]>(`/market-data/by-date/${date}`).then(res => res.data);
 export const getDashboardSummary = () => cached('summary', () => api.get<{
   bankInterestRate: number;
   opportunityCost: number;
