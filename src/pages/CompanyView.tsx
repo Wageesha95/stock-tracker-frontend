@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getTransactionsByCompany, getDividendsByCompany, getDashboardAll, getCompanies, getMarketDataHistory, getShareSplits, ShareSplitData } from '../api';
+import { getTransactionsByCompany, getDividendsByCompany, getDashboardAll, getCompanies, getMarketDataHistory, getShareSplits, ShareSplitData, getDividendPayouts, DividendPayoutData } from '../api';
 import { Transaction, Dividend, RealizedGainItem, Company, MarketData, PortfolioItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -9,13 +9,13 @@ import { deleteTransaction, deleteDividend, invalidate } from '../api';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 import { SELL_COMMISSION_RATE } from '../constants';
 
-type Tab = 'transactions' | 'dividends' | 'realized';
+type Tab = 'transactions' | 'dividends' | 'realized' | 'payouts';
 type Period = '1d' | '2d' | '5d' | '2w' | '1m' | '3m' | '6m';
 
 export default function CompanyView() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
-  const { isReadMode } = useAuth();
+  const { isReadMode, dividendPayoutsEnabled } = useAuth();
   const [tab, setTab] = useState<Tab>('transactions');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [dividends, setDividends] = useState<Dividend[]>([]);
@@ -24,6 +24,7 @@ export default function CompanyView() {
   const [portfolioItem, setPortfolioItem] = useState<PortfolioItem | null>(null);
   const [marketHistory, setMarketHistory] = useState<MarketData[]>([]);
   const [shareSplits, setShareSplits] = useState<ShareSplitData[]>([]);
+  const [payouts, setPayouts] = useState<DividendPayoutData[]>([]);
   const [loading, setLoading] = useState(true);
   const [lowPeriod, setLowPeriod] = useState<Period>('1d');
   const chartScrollRef = useRef<HTMLDivElement>(null);
@@ -37,7 +38,8 @@ export default function CompanyView() {
       getCompanies(),
       getMarketDataHistory(code),
       getShareSplits(),
-    ]).then(([txns, divs, dash, comps, mh, splits]) => {
+      getDividendPayouts(code).catch(() => [] as DividendPayoutData[]),
+    ]).then(([txns, divs, dash, comps, mh, splits, payoutData]) => {
       setTransactions(txns.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setDividends(divs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setRealizedItems(dash.realizedItems.filter(r => r.companyCode === code));
@@ -45,6 +47,7 @@ export default function CompanyView() {
       setCompany(comps.find(c => c.code === code) || null);
       setMarketHistory(mh);
       setShareSplits(splits.filter(s => s.companyCode === code));
+      setPayouts(payoutData as DividendPayoutData[]);
     });
   };
 
@@ -265,6 +268,46 @@ export default function CompanyView() {
         })()}
       </div>
 
+      {dividendPayoutsEnabled && (() => {
+        if (payouts.length === 0) {
+          return (
+            <div className="stats-grid" style={{ marginBottom: '1.25rem' }}>
+              <div className="stat-card" style={{ borderLeftColor: '#805ad5' }}>
+                <h3>Dividend Yield (TTM)</h3>
+                <p className="stat-value" style={{ color: 'var(--text-muted)' }}>No data</p>
+              </div>
+            </div>
+          );
+        }
+        const now = new Date();
+        const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString().split('T')[0];
+        const ttmPayouts = payouts.filter(p => p.exDividendDate >= oneYearAgo);
+        const ttmTotal = ttmPayouts.reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
+        const latestPrice = marketHistory.length > 0
+          ? Math.max(...marketHistory.map(m => m.lastTrade))
+          : portfolioItem?.currentValue && portfolioItem?.sharesHeld
+            ? portfolioItem.currentValue / portfolioItem.sharesHeld
+            : 0;
+        const yieldPct = latestPrice > 0 ? (ttmTotal / latestPrice) * 100 : 0;
+        const lastPayout = payouts[0];
+
+        return (
+          <div className="stats-grid" style={{ marginBottom: '1.25rem' }}>
+            <div className="stat-card" style={{ borderLeftColor: '#805ad5' }}>
+              <h3>Dividend Yield (TTM)</h3>
+              <p className="stat-value">{ttmTotal > 0 ? yieldPct.toFixed(2) + '%' : 'No data'}</p>
+            </div>
+            <div className="stat-card" style={{ borderLeftColor: '#805ad5' }}>
+              <h3>Last 12M Total/Share</h3>
+              <p className="stat-value">{fmt(ttmTotal)}</p>
+              <small style={{ color: '#718096' }}>
+                {ttmPayouts.length} payout{ttmPayouts.length !== 1 ? 's' : ''} ({ttmPayouts.map(p => p.exDividendDate).join(', ')})
+              </small>
+            </div>
+          </div>
+        );
+      })()}
+
       {portfolioItem && (
         <div className="stats-grid" style={{ marginBottom: '1.25rem' }}>
           <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}>
@@ -427,6 +470,11 @@ export default function CompanyView() {
           <button className={tab === 'realized' ? 'active' : ''} onClick={() => setTab('realized')}>
             Realized Gains ({realizedItems.length})
           </button>
+          {dividendPayoutsEnabled && (
+            <button className={tab === 'payouts' ? 'active' : ''} onClick={() => setTab('payouts')}>
+              Payouts ({payouts.length})
+            </button>
+          )}
         </div>
       </div>
 
@@ -542,6 +590,35 @@ export default function CompanyView() {
               </tfoot>
             </table>
           </div>
+        )
+      )}
+
+      {tab === 'payouts' && (
+        payouts.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)' }}>No dividend payout data for {code}.</p>
+        ) : (
+        <div className="portfolio-table-wrap">
+          <table className="portfolio-table">
+            <thead>
+              <tr>
+                <th>Ex-Dividend Date</th>
+                <th>Payment Date</th>
+                <th className="text-right">Amount (LKR)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {payouts.map((p, i) => (
+                <tr key={i}>
+                  <td>{p.exDividendDate || '-'}</td>
+                  <td>{p.paymentDate || '-'}</td>
+                  <td className="text-right mono">
+                    {p.amountPerShare != null ? Number(p.amountPerShare).toFixed(2) : '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         )
       )}
 
