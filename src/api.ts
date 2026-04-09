@@ -211,6 +211,8 @@ export const deleteAdminUser = (id: string) =>
   api.delete(`/admin/users/${id}`).then(res => { invalidate('admin-stats'); return res; });
 export const unlockUser = (id: string) =>
   api.put(`/admin/users/${id}/unlock`).then(res => { invalidate('admin-stats'); return res.data; });
+export const toggleDividendPayouts = (id: string) =>
+  api.put(`/admin/users/${id}/dividend-payouts`).then(res => { invalidate('admin-stats'); return res.data; });
 
 export interface LoginHistoryItem {
   id: string;
@@ -223,6 +225,30 @@ export interface LoginHistoryItem {
   timestamp: string;
 }
 export const getLoginHistory = () => api.get<LoginHistoryItem[]>('/admin/login-history').then(res => res.data);
+
+// Dividend Payout Scraper
+export interface DividendPayoutData {
+  id?: string;
+  companyCode: string;
+  exDividendDate: string;
+  amountPerShare: number | null;
+  type: string | null;
+  paymentDate: string | null;
+  declarationDate: string | null;
+  recordDate: string | null;
+  yield: number | null;
+  scrapedAt: string | null;
+}
+export const scrapeDividendPreview = (companyCode: string) =>
+  api.post<DividendPayoutData[]>(`/admin/scrape/dividends/${companyCode}/preview`).then(res => res.data);
+export const scrapeDividendConfirm = (companyCode: string, payouts: DividendPayoutData[]) =>
+  api.post<{ companyCode: string; newRecords: number; totalScraped: number }>(`/admin/scrape/dividends/${companyCode}/confirm`, payouts).then(res => res.data);
+export const getAllDividendPayouts = () =>
+  cached('dividend-payouts', () => api.get<DividendPayoutData[]>('/dividend-payouts').then(res => res.data));
+export const getDividendPayouts = (companyCode: string) =>
+  api.get<DividendPayoutData[]>(`/dividend-payouts/company/${companyCode}`).then(res => res.data);
+export const scrapeDividendDebug = (companyCode: string) =>
+  api.post<string>(`/admin/scrape/dividends/${companyCode}/debug`).then(res => res.data);
 
 export const getDashboardAll = () => cached('dashboard-all', () => api.get<{
   portfolio: PortfolioItem[];

@@ -17,6 +17,7 @@ import RightsPage from './pages/Rights';
 import AvgCalculator from './pages/AvgCalculator';
 import IpoPage from './pages/Ipos';
 import RightsAndIpo from './pages/RightsAndIpo';
+import DividendScraper from './pages/DividendScraper';
 import SettingsPanel from './components/SettingsPanel';
 import './App.css';
 
@@ -73,6 +74,7 @@ function App() {
                 <NavLink to="/companies" onClick={() => setMenuOpen(false)}>Companies</NavLink>
                 <NavLink to="/sectors" onClick={() => setMenuOpen(false)}>Sectors</NavLink>
                 <NavLink to="/upload-summary" onClick={() => setMenuOpen(false)}>Upload Trade Summary</NavLink>
+                <NavLink to="/scrape-dividends" onClick={() => setMenuOpen(false)}>Scrape Dividends</NavLink>
               </>
             ) : (
               <>
@@ -134,6 +136,7 @@ function App() {
             <Route path="/stock-prices/:code" element={<StockPrices />} />
             <Route path="/upload" element={<PdfUpload />} />
             <Route path="/upload-summary" element={isAdmin ? <TradeSummaryUpload /> : <Navigate to="/" />} />
+            <Route path="/scrape-dividends" element={isAdmin ? <DividendScraper /> : <Navigate to="/" />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
