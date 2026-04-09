@@ -241,13 +241,16 @@ export default function Dividends() {
                     })}
                   </select>
                 );
-              })()
-              ) : (
+              })() : (
                 <input type="date" value={xdDate} onChange={e => handleXdDateChange(e.target.value)} />
               )}
             </label>
             <label>
-              {type === 'CASH' ? 'Transaction Date' : 'Date'}
+              <span>{type === 'CASH' ? 'Transaction Date' : 'Date'}{selectedPayout && (
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 400, marginLeft: '0.5rem' }}>
+                  ({xdDate} to {selectedPayout.paymentDate || 'any'})
+                </span>
+              )}</span>
               <input
                 type="date"
                 value={date}
@@ -256,11 +259,6 @@ export default function Dividends() {
                 min={xdDate || undefined}
                 max={selectedPayout?.paymentDate || undefined}
               />
-              {selectedPayout && (
-                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                  {xdDate} to {selectedPayout.paymentDate || 'any'}
-                </small>
-              )}
             </label>
             <label>
               Type
@@ -532,7 +530,11 @@ export default function Dividends() {
                 )}
               </label>
               <label>
-                Transaction Date
+                <span>Transaction Date{editSelectedPayout && (
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 400, marginLeft: '0.5rem' }}>
+                    ({editXdDate} to {editSelectedPayout.paymentDate || 'any'})
+                  </span>
+                )}</span>
                 <input
                   type="date"
                   value={editDate}
@@ -541,11 +543,6 @@ export default function Dividends() {
                   min={editXdDate || undefined}
                   max={editSelectedPayout?.paymentDate || undefined}
                 />
-                {editSelectedPayout && (
-                  <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                    {editXdDate} to {editSelectedPayout.paymentDate || 'any'}
-                  </small>
-                )}
               </label>
               <label>
                 Type
