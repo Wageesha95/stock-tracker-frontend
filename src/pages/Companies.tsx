@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCompanies, getIndustryGroups, getMarketData, updateCompany, invalidate } from '../api';
+import { getCompanies, getIndustryGroups, getMarketData, getAllDividendPayouts, updateCompany, invalidate, DividendPayoutData } from '../api';
 import { Company, IndustryGroup, MarketData } from '../types';
 import { useAuth } from '../context/AuthContext';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 export default function Companies() {
-  const { isAdmin, isReadMode } = useAuth();
+  const { isAdmin, isReadMode, dividendPayoutsEnabled } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [industryGroups, setIndustryGroups] = useState<IndustryGroup[]>([]);
   const [groups, setGroups] = useState<Record<string, string>>({});
@@ -14,12 +14,18 @@ export default function Companies() {
   const [, setPriceChange] = useState<Record<string, number>>({});
   const [changePercent, setChangePercent] = useState<Record<string, number>>({});
   const [ytdChange, setYtdChange] = useState<Record<string, number>>({});
+  const [ttmYield, setTtmYield] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    Promise.all([getCompanies(), getIndustryGroups(), getMarketData()])
-      .then(([comps, gs, md]) => {
+    Promise.all([
+      getCompanies(),
+      getIndustryGroups(),
+      getMarketData(),
+      dividendPayoutsEnabled ? getAllDividendPayouts().catch(() => [] as DividendPayoutData[]) : Promise.resolve([] as DividendPayoutData[]),
+    ])
+      .then(([comps, gs, md, payouts]) => {
         setCompanies(comps);
         setIndustryGroups(gs);
         const map: Record<string, string> = {};
@@ -57,6 +63,27 @@ export default function Companies() {
         setPriceChange(changes);
         setChangePercent(changePcts);
         setYtdChange(ytd);
+
+        // Compute TTM dividend yield per company
+        if (payouts.length > 0) {
+          const oneYearAgo = new Date();
+          oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+          const cutoff = oneYearAgo.toISOString().split('T')[0];
+          const yields: Record<string, number> = {};
+          const byCode: Record<string, DividendPayoutData[]> = {};
+          payouts.forEach(p => {
+            (byCode[p.companyCode] = byCode[p.companyCode] || []).push(p);
+          });
+          for (const [code, divs] of Object.entries(byCode)) {
+            const ttm = divs.filter(d => d.exDividendDate >= cutoff);
+            const total = ttm.reduce((s, d) => s + (d.amountPerShare ? Number(d.amountPerShare) : 0), 0);
+            const price = prices[code];
+            if (total > 0 && price > 0) {
+              yields[code] = (total / price) * 100;
+            }
+          }
+          setTtmYield(yields);
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -77,12 +104,12 @@ export default function Companies() {
   };
 
   const [search, setSearch] = useState('');
-  const [cSortKey, setCSortKey] = useState<'code' | 'name' | 'lastTrade' | 'ytd' | 'industry'>('code');
+  const [cSortKey, setCSortKey] = useState<'code' | 'name' | 'lastTrade' | 'ytd' | 'yield' | 'industry'>('code');
   const [cSortDir, setCSortDir] = useState<'asc' | 'desc'>('asc');
   const handleCSort = useCallback((key: typeof cSortKey) => {
     setCSortKey(prev => {
       if (prev === key) { setCSortDir(d => d === 'asc' ? 'desc' : 'asc'); return prev; }
-      setCSortDir(key === 'lastTrade' || key === 'ytd' ? 'desc' : 'asc');
+      setCSortDir(key === 'lastTrade' || key === 'ytd' || key === 'yield' ? 'desc' : 'asc');
       return key;
     });
   }, []);
@@ -101,10 +128,11 @@ export default function Companies() {
       else if (cSortKey === 'name') cmp = a.name.localeCompare(b.name);
       else if (cSortKey === 'lastTrade') cmp = (latestPrice[a.code] || 0) - (latestPrice[b.code] || 0);
       else if (cSortKey === 'ytd') cmp = (ytdChange[a.code] || 0) - (ytdChange[b.code] || 0);
+      else if (cSortKey === 'yield') cmp = (ttmYield[a.code] || 0) - (ttmYield[b.code] || 0);
       else if (cSortKey === 'industry') cmp = (groups[a.industryGroupId || ''] || '').localeCompare(groups[b.industryGroupId || ''] || '');
       return cSortDir === 'asc' ? cmp : -cmp;
     });
-  }, [companies, searchLower, groups, latestPrice, ytdChange, cSortKey, cSortDir]);
+  }, [companies, searchLower, groups, latestPrice, ytdChange, ttmYield, cSortKey, cSortDir]);
 
   const [viewMode, setViewMode] = useState<'list' | 'industry'>('list');
 
@@ -148,6 +176,11 @@ export default function Companies() {
           </span>
         ) : '\u2014'}
       </td>
+      {dividendPayoutsEnabled && (
+        <td className="text-right mono">
+          {ttmYield[c.code] != null ? ttmYield[c.code].toFixed(2) + '%' : '\u2014'}
+        </td>
+      )}
       {viewMode === 'list' && (
         <td>
           {isAdmin && !isReadMode ? (
@@ -202,6 +235,9 @@ export default function Companies() {
                 <th className="sort-header text-right" onClick={() => handleCSort('lastTrade')}>Last Trade{csi('lastTrade')}</th>
                 <th className="text-right">Change</th>
                 <th className="sort-header text-right" onClick={() => handleCSort('ytd')}>YTD{csi('ytd')}</th>
+                {dividendPayoutsEnabled && (
+                  <th className="sort-header text-right" onClick={() => handleCSort('yield')}>Yield (TTM){csi('yield')}</th>
+                )}
                 <th className="sort-header" onClick={() => handleCSort('industry')}>Industry{csi('industry')}</th>
               </tr>
             </thead>
@@ -236,6 +272,7 @@ export default function Companies() {
                         <th className="text-right">Last Trade</th>
                         <th className="text-right">Change</th>
                         <th className="text-right">YTD</th>
+                        {dividendPayoutsEnabled && <th className="text-right">Yield (TTM)</th>}
                       </tr>
                     </thead>
                     <tbody>{comps.map(companyRow)}</tbody>
