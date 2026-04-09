@@ -373,16 +373,6 @@ function ScrapeResultsTable({ results, onSave, defaultSort }: {
     }
   }, [defaultSort?.key, defaultSort?.dir]);
 
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) {
-      setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortKey(key);
-      setSortDir(key === 'records' ? 'desc' : 'asc');
-    }
-  };
-
-  const sortIcon = (key: SortKey) => sortKey === key ? (sortDir === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
 
   const sorted = [...results].sort((a, b) => {
     let cmp = 0;
