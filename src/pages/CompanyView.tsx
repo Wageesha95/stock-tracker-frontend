@@ -4,6 +4,7 @@ import { getTransactionsByCompany, getDividendsByCompany, getDashboardAll, getCo
 import { Transaction, Dividend, RealizedGainItem, Company, MarketData, PortfolioItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 import CompanyAvatar from '../components/CompanyAvatar';
+import CompanySearchSelect from '../components/CompanySearchSelect';
 import ActionMenu from '../components/ActionMenu';
 import { deleteTransaction, deleteDividend, invalidate } from '../api';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
@@ -21,6 +22,7 @@ export default function CompanyView() {
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [realizedItems, setRealizedItems] = useState<RealizedGainItem[]>([]);
   const [company, setCompany] = useState<Company | null>(null);
+  const [companies, setCompanies] = useState<Company[]>([]);
   const [portfolioItem, setPortfolioItem] = useState<PortfolioItem | null>(null);
   const [marketHistory, setMarketHistory] = useState<MarketData[]>([]);
   const [shareSplits, setShareSplits] = useState<ShareSplitData[]>([]);
@@ -44,6 +46,7 @@ export default function CompanyView() {
       setDividends(divs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setRealizedItems(dash.realizedItems.filter(r => r.companyCode === code));
       setPortfolioItem(dash.portfolio.find((p: PortfolioItem) => p.companyCode === code) || null);
+      setCompanies(comps);
       setCompany(comps.find(c => c.code === code) || null);
       setMarketHistory(mh);
       setShareSplits(splits.filter(s => s.companyCode === code));
@@ -226,6 +229,8 @@ export default function CompanyView() {
     return { valueChartData: valueData, sharesChartData: mergedTx, adjPnlChartData: mergedAdjPnl };
   }, [transactions, marketHistory, dividends, realizedItems]);
 
+  const [navCode, setNavCode] = useState('');
+
   if (loading) return <p>Loading...</p>;
 
   return (
@@ -250,147 +255,197 @@ export default function CompanyView() {
             )}
           </div>
         </div>
-        {(() => {
-          const latestMd = marketHistory.length > 0
-            ? marketHistory.reduce((a, b) => a.tradeDate > b.tradeDate ? a : b)
-            : null;
-          return latestMd && latestMd.lastTrade > 0 ? (
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-stat-value)' }}>
-                {fmt(latestMd.lastTrade)}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ width: '220px' }}>
+            <CompanySearchSelect
+              companies={companies}
+              value={navCode}
+              onChange={c => { if (c) { setNavCode(''); navigate(`/company/${c}`); } else { setNavCode(''); } }}
+            />
+          </div>
+          {/* Price */}
+          {(() => {
+            const latestMd = marketHistory.length > 0
+              ? marketHistory.reduce((a, b) => a.tradeDate > b.tradeDate ? a : b)
+              : null;
+            return latestMd && latestMd.lastTrade > 0 ? (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-stat-value)' }}>
+                  {fmt(latestMd.lastTrade)}
+                </div>
+                <div className={gainClass(latestMd.change)} style={{ fontSize: '0.9rem', fontWeight: 600 }}>
+                  {gainSign(latestMd.change)}{fmt(latestMd.change)} ({gainSign(latestMd.changePercent)}{fmt(latestMd.changePercent)}%)
+                </div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{latestMd.tradeDate}</div>
               </div>
-              <div className={gainClass(latestMd.change)} style={{ fontSize: '0.9rem', fontWeight: 600 }}>
-                {gainSign(latestMd.change)}{fmt(latestMd.change)} ({gainSign(latestMd.changePercent)}{fmt(latestMd.changePercent)}%)
-              </div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{latestMd.tradeDate}</div>
-            </div>
-          ) : null;
-        })()}
+            ) : null;
+          })()}
+        </div>
       </div>
 
-      {dividendPayoutsEnabled && (() => {
-        if (payouts.length === 0) {
-          return (
-            <div className="stats-grid" style={{ marginBottom: '1.25rem' }}>
-              <div className="stat-card" style={{ borderLeftColor: '#805ad5' }}>
-                <h3>Dividend Yield (TTM)</h3>
-                <p className="stat-value" style={{ color: 'var(--text-muted)' }}>No data</p>
-              </div>
-            </div>
-          );
-        }
-        const now = new Date();
-        const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString().split('T')[0];
-        const ttmPayouts = payouts.filter(p => p.exDividendDate >= oneYearAgo);
-        const ttmTotal = ttmPayouts.reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
-        const latestPrice = marketHistory.length > 0
-          ? Math.max(...marketHistory.map(m => m.lastTrade))
-          : portfolioItem?.currentValue && portfolioItem?.sharesHeld
-            ? portfolioItem.currentValue / portfolioItem.sharesHeld
-            : 0;
-        const yieldPct = latestPrice > 0 ? (ttmTotal / latestPrice) * 100 : 0;
-        const lastPayout = payouts[0];
-
-        return (
-          <div className="stats-grid" style={{ marginBottom: '1.25rem' }}>
-            <div className="stat-card" style={{ borderLeftColor: '#805ad5' }}>
-              <h3>Dividend Yield (TTM)</h3>
-              <p className="stat-value">{ttmTotal > 0 ? yieldPct.toFixed(2) + '%' : 'No data'}</p>
-            </div>
-            <div className="stat-card" style={{ borderLeftColor: '#805ad5' }}>
-              <h3>Last 12M Total/Share</h3>
-              <p className="stat-value">{fmt(ttmTotal)}</p>
-              <small style={{ color: '#718096' }}>
-                {ttmPayouts.length} payout{ttmPayouts.length !== 1 ? 's' : ''} ({ttmPayouts.map(p => p.exDividendDate).join(', ')})
-              </small>
-            </div>
-          </div>
-        );
-      })()}
-
+      {/* Portfolio stats - full width grid */}
       {portfolioItem && (
         <div className="stats-grid" style={{ marginBottom: '1.25rem' }}>
-          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}>
-            <h3>Shares Held</h3>
-            <p className="stat-value">{portfolioItem.sharesHeld}</p>
-          </div>
-          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}>
-            <h3>Avg. Buy Price</h3>
-            <p className="stat-value">{fmt(portfolioItem.avgBuyPrice)}</p>
-          </div>
-          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}>
-            <h3>Total Invested</h3>
-            <p className="stat-value">{fmt(portfolioItem.totalInvested)}</p>
-          </div>
-          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}>
-            <h3>Current Value</h3>
-            <p className="stat-value">{fmt(portfolioItem.currentValue)}</p>
-          </div>
+          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}><h3>Shares Held</h3><p className="stat-value">{portfolioItem.sharesHeld}</p></div>
+          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}><h3>Avg. Buy Price</h3><p className="stat-value">{fmt(portfolioItem.avgBuyPrice)}</p></div>
+          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}><h3>Total Invested</h3><p className="stat-value">{fmt(portfolioItem.totalInvested)}</p></div>
+          <div className="stat-card" style={{ borderLeftColor: '#3182ce' }}><h3>Current Value</h3><p className="stat-value">{fmt(portfolioItem.currentValue)}</p></div>
           <div className="stat-card" style={{ borderLeftColor: portfolioItem.unrealizedGain >= 0 ? '#38a169' : '#e53e3e' }}>
             <h3>Unrealized Gain</h3>
-            <p className={`stat-value ${gainClass(portfolioItem.unrealizedGain)}`}>
-              {gainSign(portfolioItem.unrealizedGain)}{fmt(portfolioItem.unrealizedGain)}
-            </p>
+            <p className={`stat-value ${gainClass(portfolioItem.unrealizedGain)}`}>{gainSign(portfolioItem.unrealizedGain)}{fmt(portfolioItem.unrealizedGain)}</p>
             <small style={{ color: '#718096' }}>{gainSign(portfolioItem.unrealizedGainPercent)}{fmt(portfolioItem.unrealizedGainPercent)}%</small>
           </div>
           <div className="stat-card" style={{ borderLeftColor: portfolioItem.realizedGain >= 0 ? '#38a169' : '#e53e3e' }}>
             <h3>Realized Gain</h3>
-            <p className={`stat-value ${gainClass(portfolioItem.realizedGain)}`}>
-              {gainSign(portfolioItem.realizedGain)}{fmt(portfolioItem.realizedGain)}
-            </p>
+            <p className={`stat-value ${gainClass(portfolioItem.realizedGain)}`}>{gainSign(portfolioItem.realizedGain)}{fmt(portfolioItem.realizedGain)}</p>
           </div>
         </div>
       )}
 
-      {marketHistory.length > 0 && (
-        <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem', boxShadow: 'var(--shadow-card)', marginBottom: '1.25rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
-            <h3 style={{ margin: 0, fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>
-              Price Range {lowestData && <span style={{ fontWeight: 400, fontSize: '0.75rem', textTransform: 'none' }}>({lowestData.count} trading day{lowestData.count !== 1 ? 's' : ''})</span>}
-            </h3>
-            <div className="segmented-control" style={{ fontSize: '0.75rem' }}>
-              {(Object.keys(periodLabels) as Period[]).map(p => (
-                <button key={p} className={lowPeriod === p ? 'active' : ''} onClick={() => setLowPeriod(p)}>
-                  {p === '1d' ? 'LTD' : p === '2d' ? '2D' : p === '5d' ? '5D' : p === '2w' ? '2W' : p === '1m' ? '1M' : p === '3m' ? '3M' : '6M'}
-                </button>
-              ))}
-            </div>
-          </div>
-          {lowestData || highestData ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div>
-                <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>{'\u25BC'} Lowest</div>
-                {lowestData ? (
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#e53e3e' }}>{fmt(lowestData.value)}</span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>on {lowestData.date}</span>
-                  </div>
-                ) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}
-              </div>
-              <div>
-                <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>{'\u25B2'} Highest</div>
-                {highestData ? (
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#38a169' }}>{fmt(highestData.value)}</span>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>on {highestData.date}</span>
-                  </div>
-                ) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}
+      {/* Two-column: Price Range | Dividend Yield + Yearly Summary */}
+      <div style={{ display: 'grid', gridTemplateColumns: marketHistory.length > 0 && dividendPayoutsEnabled ? '1fr 1fr' : '1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+        {/* Price Range */}
+        {marketHistory.length > 0 && (
+          <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem', boxShadow: 'var(--shadow-card)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>
+                Price Range {lowestData && <span style={{ fontWeight: 400, fontSize: '0.75rem', textTransform: 'none' }}>({lowestData.count} day{lowestData.count !== 1 ? 's' : ''})</span>}
+              </h3>
+              <div className="segmented-control" style={{ fontSize: '0.75rem' }}>
+                {(Object.keys(periodLabels) as Period[]).map(p => (
+                  <button key={p} className={lowPeriod === p ? 'active' : ''} onClick={() => setLowPeriod(p)}>
+                    {p === '1d' ? 'LTD' : p === '2d' ? '2D' : p === '5d' ? '5D' : p === '2w' ? '2W' : p === '1m' ? '1M' : p === '3m' ? '3M' : '6M'}
+                  </button>
+                ))}
               </div>
             </div>
-          ) : (
-            <p style={{ color: 'var(--text-muted)', margin: 0 }}>No data for {periodLabels[lowPeriod].toLowerCase()}</p>
-          )}
-          {splitsInPeriod.length > 0 && (
-            <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: '#fefcbf', color: '#744210', borderRadius: '6px', fontSize: '0.8rem', border: '1px solid #ecc94b' }}>
-              {splitsInPeriod.map((s, i) => (
-                <div key={i}>
-                  {s.type === 'SUBDIVISION' ? 'Subdivision' : 'Merge'} ({s.fromShares}:{s.toShares}) on {s.date} — prices may not be comparable
+            {lowestData || highestData ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>{'\u25BC'} Lowest</div>
+                    {lowestData ? (
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#e53e3e' }}>{fmt(lowestData.value)}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{lowestData.date}</span>
+                      </div>
+                    ) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>{'\u25B2'} Highest</div>
+                    {highestData ? (
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#38a169' }}>{fmt(highestData.value)}</span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{highestData.date}</span>
+                      </div>
+                    ) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}
+                  </div>
                 </div>
-              ))}
+                {dividendPayoutsEnabled && payouts.length > 0 && (() => {
+                  const now2 = new Date();
+                  const cutoff2 = new Date(now2.getFullYear() - 1, now2.getMonth(), now2.getDate()).toISOString().split('T')[0];
+                  const ttm2 = payouts.filter(p => p.exDividendDate >= cutoff2)
+                    .reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
+                  if (ttm2 <= 0) return null;
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
+                      <div>
+                        <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>TTM Yield @ Low</div>
+                        <span style={{ fontSize: '1.2rem', fontWeight: 700, color: '#805ad5' }}>{lowestData ? (ttm2 / lowestData.value * 100).toFixed(2) + '%' : '-'}</span>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>TTM Yield @ High</div>
+                        <span style={{ fontSize: '1.2rem', fontWeight: 700, color: '#805ad5' }}>{highestData ? (ttm2 / highestData.value * 100).toFixed(2) + '%' : '-'}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
+            ) : (
+              <p style={{ color: 'var(--text-muted)', margin: 0 }}>No data for {periodLabels[lowPeriod].toLowerCase()}</p>
+            )}
+            {splitsInPeriod.length > 0 && (
+              <div style={{ marginTop: '0.75rem', padding: '0.5rem 0.75rem', background: '#fefcbf', color: '#744210', borderRadius: '6px', fontSize: '0.8rem', border: '1px solid #ecc94b' }}>
+                {splitsInPeriod.map((s, i) => (
+                  <div key={i}>{s.type === 'SUBDIVISION' ? 'Subdivision' : 'Merge'} ({s.fromShares}:{s.toShares}) on {s.date}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Dividend Yield + Yearly Summary */}
+        {dividendPayoutsEnabled && (() => {
+          const now = new Date();
+          const cutoff = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString().split('T')[0];
+          const ttmPayouts = payouts.filter(p => p.exDividendDate >= cutoff);
+          const ttmTotal = ttmPayouts.reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
+          const curPrice = marketHistory.length > 0 ? Math.max(...marketHistory.map(m => m.lastTrade))
+            : portfolioItem?.currentValue && portfolioItem?.sharesHeld ? portfolioItem.currentValue / portfolioItem.sharesHeld : 0;
+          const yieldPct = curPrice > 0 ? (ttmTotal / curPrice) * 100 : 0;
+
+          const byYear: Record<string, typeof payouts> = {};
+          payouts.forEach(p => { const y = p.exDividendDate.substring(0, 4); (byYear[y] = byYear[y] || []).push(p); });
+          const years = Object.keys(byYear).sort((a, b) => b.localeCompare(a));
+          const currentYear = String(now.getFullYear());
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {/* TTM cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div className="stat-card" style={{ borderLeftColor: '#805ad5', margin: 0 }}>
+                  <h3>Yield (TTM)</h3>
+                  <p className="stat-value">{payouts.length > 0 && ttmTotal > 0 ? yieldPct.toFixed(2) + '%' : <span style={{ color: 'var(--text-muted)' }}>No data</span>}</p>
+                </div>
+                <div className="stat-card" style={{ borderLeftColor: '#805ad5', margin: 0 }}>
+                  <h3>12M Dividends</h3>
+                  <p className="stat-value">{payouts.length > 0 ? fmt(ttmTotal) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}</p>
+                  {ttmPayouts.length > 0 && <small style={{ color: '#718096' }}>{ttmPayouts.length} payout{ttmPayouts.length !== 1 ? 's' : ''}</small>}
+                </div>
+              </div>
+              {/* Yearly table */}
+              {payouts.length > 0 && (
+                <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem', boxShadow: 'var(--shadow-card)' }}>
+                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Yearly Summary</h3>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <th style={{ textAlign: 'left', padding: '0.3rem 0.5rem', fontWeight: 600 }}></th>
+                          {years.map(y => <th key={y} style={{ textAlign: 'right', padding: '0.3rem 0.5rem', fontWeight: 600 }}>{y}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>Amount</td>
+                          {years.map(y => {
+                            const t = byYear[y].reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
+                            return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{fmt(t)}</td>;
+                          })}
+                        </tr>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>Yield</td>
+                          {years.map(y => {
+                            const t = byYear[y].reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
+                            const isCur = y === currentYear;
+                            return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem', color: isCur ? undefined : 'var(--text-muted)' }}>
+                              {isCur && curPrice > 0 ? (t / curPrice * 100).toFixed(2) + '%' : 'No data'}
+                            </td>;
+                          })}
+                        </tr>
+                        <tr>
+                          <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>Payouts</td>
+                          {years.map(y => <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{byYear[y].length}</td>)}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      )}
+          );
+        })()}
+      </div>
 
       {(valueChartData.length > 1 || sharesChartData.length > 1 || adjPnlChartData.length > 1) && (
         <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
