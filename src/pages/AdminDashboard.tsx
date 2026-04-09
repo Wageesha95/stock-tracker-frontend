@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAdminStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser, getLoginHistory, LoginHistoryItem } from '../api';
+import { getAdminStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser, toggleDividendPayouts, getLoginHistory, LoginHistoryItem } from '../api';
 import ActionMenu from '../components/ActionMenu';
 
 interface UserStat {
@@ -8,6 +8,7 @@ interface UserStat {
   role: string;
   transactionCount: number;
   locked: boolean;
+  dividendPayoutsEnabled: boolean;
   createdAt: string;
 }
 
@@ -86,6 +87,15 @@ export default function AdminDashboard() {
       loadData();
     } catch (err: any) {
       alert(err?.response?.data?.error || 'Failed to unlock user');
+    }
+  };
+
+  const handleToggleDividends = async (u: UserStat) => {
+    try {
+      await toggleDividendPayouts(u.id);
+      loadData();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Failed to toggle dividend payouts');
     }
   };
 
@@ -185,6 +195,7 @@ export default function AdminDashboard() {
                   <ActionMenu actions={[
                     { label: 'Edit', onClick: () => openEdit(u) },
                     ...(u.locked ? [{ label: 'Unlock', onClick: () => handleUnlock(u) }] : []),
+                    { label: u.dividendPayoutsEnabled ? 'Disable Payouts' : 'Enable Payouts', onClick: () => handleToggleDividends(u) },
                     { label: 'Delete', onClick: () => handleDelete(u), danger: true },
                   ]} />
                 </td>

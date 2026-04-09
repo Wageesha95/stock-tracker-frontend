@@ -7,6 +7,7 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   isReadMode: boolean;
+  dividendPayoutsEnabled: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -32,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Preserve readMode from localStorage since /me doesn't return it
         const saved = localStorage.getItem('user');
         const savedUser = saved ? JSON.parse(saved) : {};
-        const authUser = { ...u, readMode: savedUser.readMode ?? false };
+        const authUser = { ...u, readMode: savedUser.readMode ?? false, dividendPayoutsEnabled: u.dividendPayoutsEnabled ?? false };
         setUser(authUser);
         localStorage.setItem('user', JSON.stringify(authUser));
       })
@@ -47,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(async (username: string, password: string) => {
     clearAllCache();
     const u = await apiLogin(username, password);
-    const authUser = { id: u.id, username: u.username, role: u.role, readMode: u.readMode };
+    const authUser = { id: u.id, username: u.username, role: u.role, readMode: u.readMode, dividendPayoutsEnabled: (u as any).dividendPayoutsEnabled ?? false };
     localStorage.setItem('user', JSON.stringify(authUser));
     setUser(authUser);
   }, []);
@@ -61,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin: user?.role === 'ADMIN', isReadMode: user?.readMode ?? false, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin: user?.role === 'ADMIN', isReadMode: user?.readMode ?? false, dividendPayoutsEnabled: user?.dividendPayoutsEnabled ?? false, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

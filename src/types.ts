@@ -3,6 +3,7 @@ export interface AuthUser {
   username: string;
   role: 'USER' | 'ADMIN';
   readMode?: boolean;
+  dividendPayoutsEnabled?: boolean;
 }
 
 export interface Company {
