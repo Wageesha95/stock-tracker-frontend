@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend } from '../api';
+import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend, getDividendPayouts, DividendPayoutData } from '../api';
 import { Dividend, Company, Transaction } from '../types';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
@@ -9,7 +9,7 @@ import CompanySearchSelect from '../components/CompanySearchSelect';
 
 export default function Dividends() {
   const navigate = useNavigate();
-  const { isReadMode } = useAuth();
+  const { isReadMode, dividendPayoutsEnabled } = useAuth();
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -23,6 +23,8 @@ export default function Dividends() {
   const [shares, setShares] = useState('');
   const [scripShares, setScripShares] = useState('');
   const [taxable, setTaxable] = useState(true);
+  const [companyPayouts, setCompanyPayouts] = useState<DividendPayoutData[]>([]);
+  const [selectedPayout, setSelectedPayout] = useState<DividendPayoutData | null>(null);
 
   // Edit modal state
   const [editDividend, setEditDividend] = useState<Dividend | null>(null);
@@ -34,11 +36,19 @@ export default function Dividends() {
   const [editScripShares, setEditScripShares] = useState('');
   const [editTaxable, setEditTaxable] = useState(true);
   const [editTotal, setEditTotal] = useState('');
+  const [editPayouts, setEditPayouts] = useState<DividendPayoutData[]>([]);
+  const [editSelectedPayout, setEditSelectedPayout] = useState<DividendPayoutData | null>(null);
 
   const openEdit = (d: Dividend) => {
     setEditDividend(d);
     setEditXdDate(d.xdDate || '');
     setEditDate(d.date);
+    if (dividendPayoutsEnabled) {
+      getDividendPayouts(d.companyCode).then(p => {
+        setEditPayouts(p);
+        setEditSelectedPayout(p.find(pp => pp.exDividendDate === d.xdDate) || null);
+      }).catch(() => setEditPayouts([]));
+    }
     setEditType(d.type);
     setEditAmount(d.type === 'CASH' ? String(d.amount) : '');
     setEditShares(d.type === 'CASH' ? String(d.shares) : '');
@@ -93,6 +103,12 @@ export default function Dividends() {
   // Auto-suggest shares when XD date or company changes
   const handleXdDateChange = (newXdDate: string) => {
     setXdDate(newXdDate);
+    setDate('');
+    const payout = companyPayouts.find(p => p.exDividendDate === newXdDate) || null;
+    setSelectedPayout(payout);
+    if (payout && payout.amountPerShare != null) {
+      setAmount(String(payout.amountPerShare));
+    }
     if (newXdDate && companyCode) {
       const held = getSharesHeldAtDate(companyCode, newXdDate);
       setShares(held > 0 ? String(held) : '');
@@ -101,7 +117,14 @@ export default function Dividends() {
 
   const handleCompanyChange = (newCode: string) => {
     setCompanyCode(newCode);
-    if (xdDate) {
+    setXdDate('');
+    setDate('');
+    setSelectedPayout(null);
+    setCompanyPayouts([]);
+    if (newCode && dividendPayoutsEnabled) {
+      getDividendPayouts(newCode).then(setCompanyPayouts).catch(() => setCompanyPayouts([]));
+    }
+    if (xdDate && newCode) {
       const held = getSharesHeldAtDate(newCode, xdDate);
       setShares(held > 0 ? String(held) : '');
     }
@@ -202,11 +225,42 @@ export default function Dividends() {
           <div className="form-row">
             <label>
               XD Date
-              <input type="date" value={xdDate} onChange={e => handleXdDateChange(e.target.value)} />
+              {companyPayouts.length > 0 ? (() => {
+                const usedXdDates = new Set(dividends.filter(d => d.companyCode === companyCode).map(d => d.xdDate));
+                const available = companyPayouts.filter(p => !usedXdDates.has(p.exDividendDate));
+                return (
+                  <select value={xdDate} onChange={e => handleXdDateChange(e.target.value)}>
+                    <option value="">— Select XD Date ({available.length} available) —</option>
+                    {companyPayouts.map(p => {
+                      const used = usedXdDates.has(p.exDividendDate);
+                      return (
+                        <option key={p.exDividendDate} value={p.exDividendDate} disabled={used}>
+                          {p.exDividendDate} — {p.amountPerShare != null ? Number(p.amountPerShare).toFixed(2) + ' LKR' : ''}{used ? ' (already added)' : ''}
+                        </option>
+                      );
+                    })}
+                  </select>
+                );
+              })()
+              ) : (
+                <input type="date" value={xdDate} onChange={e => handleXdDateChange(e.target.value)} />
+              )}
             </label>
             <label>
               {type === 'CASH' ? 'Transaction Date' : 'Date'}
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} required />
+              <input
+                type="date"
+                value={date}
+                onChange={e => setDate(e.target.value)}
+                required
+                min={xdDate || undefined}
+                max={selectedPayout?.paymentDate || undefined}
+              />
+              {selectedPayout && (
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                  {xdDate} to {selectedPayout.paymentDate || 'any'}
+                </small>
+              )}
             </label>
             <label>
               Type
@@ -458,11 +512,40 @@ export default function Dividends() {
             <div className="form-row">
               <label>
                 XD Date
-                <input type="date" value={editXdDate} onChange={e => setEditXdDate(e.target.value)} />
+                {editPayouts.length > 0 ? (
+                  <select value={editXdDate} onChange={e => {
+                    setEditXdDate(e.target.value);
+                    setEditDate('');
+                    const p = editPayouts.find(pp => pp.exDividendDate === e.target.value) || null;
+                    setEditSelectedPayout(p);
+                    if (p && p.amountPerShare != null) setEditAmount(String(p.amountPerShare));
+                  }}>
+                    <option value="">— Select XD Date —</option>
+                    {editPayouts.map(p => (
+                      <option key={p.exDividendDate} value={p.exDividendDate}>
+                        {p.exDividendDate} — {p.amountPerShare != null ? Number(p.amountPerShare).toFixed(2) + ' LKR' : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input type="date" value={editXdDate} onChange={e => setEditXdDate(e.target.value)} />
+                )}
               </label>
               <label>
                 Transaction Date
-                <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} required />
+                <input
+                  type="date"
+                  value={editDate}
+                  onChange={e => setEditDate(e.target.value)}
+                  required
+                  min={editXdDate || undefined}
+                  max={editSelectedPayout?.paymentDate || undefined}
+                />
+                {editSelectedPayout && (
+                  <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                    {editXdDate} to {editSelectedPayout.paymentDate || 'any'}
+                  </small>
+                )}
               </label>
               <label>
                 Type
