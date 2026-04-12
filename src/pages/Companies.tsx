@@ -35,7 +35,7 @@ export default function Companies() {
       dividendPayoutsEnabled ? getAllDividendPayouts().catch(() => [] as DividendPayoutData[]) : Promise.resolve([] as DividendPayoutData[]),
       getUserSettings(),
       getYearLow().catch(() => ({} as Record<string, YearLowEntry>)),
-      getYtdData().catch(() => ({} as Record<string, number>)),
+      getYtdData().catch(() => ({} as Record<string, YtdEntry>)),
     ])
       .then(([comps, gs, md, payouts, settings, yearLow, ytdData]) => {
         setTableColumns(settings.tableColumns || {});

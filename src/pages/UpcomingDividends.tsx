@@ -41,7 +41,7 @@ export default function UpcomingDividends() {
       getMarketData(),
       getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
       getUserSettings(),
-      getYearLow().catch(() => ({} as Record<string, number>)),
+      getYearLow().catch(() => ({} as Record<string, YearLowEntry>)),
     ])
       .then(([upcoming, md, payouts, settings, yearLow]) => {
         setTableColumns(settings.tableColumns || {});

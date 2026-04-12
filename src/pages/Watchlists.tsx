@@ -4,7 +4,7 @@ import {
   getWatchlists, createWatchlist, updateWatchlist, deleteWatchlist,
   addWatchlistCompany, removeWatchlistCompany,
   getMarketData, getCompanies, getDashboardAll, getAllDividendPayouts, getUpcomingDividends,
-  getUserSettings, getYearLow, WatchlistData, DividendPayoutData, UpcomingDividendItem, YearLowEntry
+  getUserSettings, WatchlistData, DividendPayoutData, UpcomingDividendItem
 } from '../api';
 import { MarketData, Company, PortfolioItem } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -36,7 +36,6 @@ export default function Watchlists() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [tableColumns, setTableColumns] = useState<Record<string, string[]>>({});
-  const [ytdMap, setYtdMap] = useState<Record<string, number>>({});
   const [ttmYieldMap, setTtmYieldMap] = useState<Record<string, number>>({});
   const [nextDivMap, setNextDivMap] = useState<Record<string, string>>({});
   const [lastDivAmountMap, setLastDivAmountMap] = useState<Record<string, number>>({});
