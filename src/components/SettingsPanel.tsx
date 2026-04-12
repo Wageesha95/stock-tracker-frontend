@@ -41,6 +41,7 @@ const TABLE_COLUMN_OPTIONS: Record<string, { key: string; label: string }[]> = {
     { key: 'ttmYield', label: 'TTM Yield' },
     { key: 'yield2025', label: '2025 XD Yield' },
     { key: 'yieldAtYearLow', label: 'TTM @ Year Low' },
+    { key: 'sparkline', label: 'Price Chart (YTD)' },
     { key: 'industry', label: 'Industry' },
   ],
   upcomingDividends: [

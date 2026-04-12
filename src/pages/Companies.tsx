@@ -1,10 +1,12 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCompanies, getIndustryGroups, getMarketData, getAllDividendPayouts, getYearLow, getYtdData, getUserSettings, updateCompany, invalidate, DividendPayoutData, YearLowEntry, YtdEntry } from '../api';
+import { getCompanies, getIndustryGroups, getMarketData, getAllDividendPayouts, getYearLow, getYtdData, getSparklines, getUserSettings, getDashboardAll, updateCompany, invalidate, DividendPayoutData, YearLowEntry, YtdEntry, SparklineData } from '../api';
+import { PortfolioItem } from '../types';
 import { Company, IndustryGroup, MarketData } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
+import { LineChart, Line, ResponsiveContainer, YAxis, XAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
 
 export default function Companies() {
   const { isAdmin, isReadMode, dividendPayoutsEnabled } = useAuth();
@@ -19,6 +21,9 @@ export default function Companies() {
   const [yield2025, setYield2025] = useState<Record<string, number>>({});
   const [yearLowMap, setYearLowMap] = useState<Record<string, YearLowEntry>>({});
   const [tableColumns, setTableColumns] = useState<Record<string, string[]>>({});
+  const [sparklines, setSparklines] = useState<Record<string, SparklineData>>({});
+  const [avgPriceMap, setAvgPriceMap] = useState<Record<string, number>>({});
+  const [chartPopup, setChartPopup] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -36,8 +41,14 @@ export default function Companies() {
       getUserSettings(),
       getYearLow().catch(() => ({} as Record<string, YearLowEntry>)),
       getYtdData().catch(() => ({} as Record<string, YtdEntry>)),
+      getSparklines().catch(() => ({} as Record<string, SparklineData>)),
+      getDashboardAll().catch(() => ({ portfolio: [] as PortfolioItem[] })),
     ])
-      .then(([comps, gs, md, payouts, settings, yearLow, ytdData]) => {
+      .then(([comps, gs, md, payouts, settings, yearLow, ytdData, sparks, dash]) => {
+        setSparklines(sparks);
+        const avgMap: Record<string, number> = {};
+        (dash as any).portfolio?.forEach((p: PortfolioItem) => { if (p.avgBuyPrice > 0) avgMap[p.companyCode] = p.avgBuyPrice; });
+        setAvgPriceMap(avgMap);
         setTableColumns(settings.tableColumns || {});
         setYearLowMap(yearLow);
         setCompanies(comps);
@@ -221,6 +232,27 @@ export default function Companies() {
           {yld != null ? yld.toFixed(2) + '%' : '\u2014'}
         </td>;
       })()}
+      {colVisible('sparkline') && (() => {
+        const sd = sparklines[c.code];
+        if (!sd || sd.prices.length < 2) return <td style={{ width: 90 }}>{'\u2014'}</td>;
+        const { prices, dates } = sd;
+        const color = prices[prices.length - 1] >= prices[0] ? '#38a169' : '#e53e3e';
+        const min = Math.min(...prices);
+        const max = Math.max(...prices);
+        const range = max - min || 1;
+        const w = 80, h = 28;
+        const points = prices.map((p, i) => `${(i / (prices.length - 1)) * w},${h - ((p - min) / range) * h}`).join(' ');
+        const lastDate = dates[dates.length - 1] || '';
+        const firstDate = dates[0] || '';
+        return (
+          <td style={{ width: 90, padding: '0.2rem', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); setChartPopup(c.code); }}
+            title={`${firstDate} \u2192 ${lastDate} | ${prices[0].toFixed(2)} \u2192 ${prices[prices.length - 1].toFixed(2)}`}>
+            <svg width={w} height={h} style={{ display: 'block' }}>
+              <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" />
+            </svg>
+          </td>
+        );
+      })()}
       {colVisible('industry') && viewMode === 'list' && (
         <td>
           {isAdmin && !isReadMode ? (
@@ -278,6 +310,7 @@ export default function Companies() {
                 {colVisible('ttmYield') && <th className="sort-header text-right" onClick={() => handleCSort('yield')}>Yield (TTM){csi('yield')}</th>}
                 {colVisible('yield2025') && <th className="sort-header text-right" onClick={() => handleCSort('yield2025')}>2025 Yield{csi('yield2025')}</th>}
                 {colVisible('yieldAtYearLow') && <th className="sort-header text-right" onClick={() => handleCSort('yieldAtYearLow')}>TTM @ YR Low{csi('yieldAtYearLow')}</th>}
+                {colVisible('sparkline') && <th style={{ width: 100 }}>YTD</th>}
                 {colVisible('industry') && <th className="sort-header" onClick={() => handleCSort('industry')}>Industry{csi('industry')}</th>}
               </tr>
             </thead>
@@ -315,6 +348,7 @@ export default function Companies() {
                         {colVisible('ttmYield') && <th className="sort-header text-right" onClick={() => handleCSort('yield')}>Yield (TTM){csi('yield')}</th>}
                         {colVisible('yield2025') && <th className="sort-header text-right" onClick={() => handleCSort('yield2025')}>2025 Yield{csi('yield2025')}</th>}
                         {colVisible('yieldAtYearLow') && <th className="sort-header text-right" onClick={() => handleCSort('yieldAtYearLow')}>TTM @ YR Low{csi('yieldAtYearLow')}</th>}
+                        {colVisible('sparkline') && <th style={{ width: 100 }}>YTD</th>}
                       </tr>
                     </thead>
                     <tbody>{comps.map(companyRow)}</tbody>
@@ -325,6 +359,57 @@ export default function Companies() {
           );
         })
       )}
+
+      {chartPopup && (() => {
+        const sd = sparklines[chartPopup];
+        if (!sd || sd.prices.length < 2) return null;
+        const { prices, dates } = sd;
+        const comp = companies.find(c => c.code === chartPopup);
+        const color = prices[prices.length - 1] >= prices[0] ? '#38a169' : '#e53e3e';
+        const data = prices.map((p, i) => ({ date: dates[i] || '', price: p }));
+        const fmt2 = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return (
+          <div onClick={() => setChartPopup(null)} style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem',
+          }}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: 'var(--bg-card)', borderRadius: '12px', padding: '1.5rem',
+              width: '100%', maxWidth: '700px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <CompanyAvatar code={chartPopup} size={32} />
+                  <div>
+                    <span style={{ fontWeight: 700 }}>{chartPopup}</span>
+                    {comp && <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginLeft: '0.5rem' }}>{comp.name}</span>}
+                  </div>
+                </div>
+                <button onClick={() => setChartPopup(null)} style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-muted)', fontSize: '1.5rem', lineHeight: 1,
+                }}>&times;</button>
+              </div>
+              <ResponsiveContainer width="100%" height={350}>
+                <LineChart data={data}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
+                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} domain={['auto', 'auto']} tickFormatter={v => fmt2(v)} />
+                  <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px' }}
+                    formatter={(v: any) => [`LKR ${fmt2(v)}`, 'Price']}
+                    labelFormatter={l => l} />
+                  {avgPriceMap[chartPopup] && (
+                    <ReferenceLine y={avgPriceMap[chartPopup]} stroke="#3182ce" strokeDasharray="6 3" strokeWidth={1.5}
+                      label={{ value: `Avg: ${fmt2(avgPriceMap[chartPopup])}`, position: 'right', fontSize: 10, fill: '#3182ce' }} />
+                  )}
+                  <Line type="monotone" dataKey="price" stroke={color} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

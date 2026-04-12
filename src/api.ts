@@ -189,6 +189,11 @@ export const uploadTradeSummary = (file: File, tradeDate: string) => {
 export const getPortfolio = () => cached('portfolio', () => api.get<PortfolioItem[]>('/dashboard/portfolio').then(res => res.data));
 export const getRealizedGains = () => cached('realized', () => api.get<RealizedGainItem[]>('/dashboard/realized').then(res => res.data));
 export const getMarketData = () => cached('market', () => api.get<MarketData[]>('/market-data').then(res => res.data));
+export interface SparklineData { prices: number[]; dates: string[]; }
+export const getSparklines = (days?: number) => {
+  const d = days || Math.ceil((Date.now() - new Date(new Date().getFullYear(), 0, 1).getTime()) / 86400000);
+  return cached(`sparklines:${d}`, () => api.get<Record<string, SparklineData>>(`/market-data/sparklines?days=${d}`).then(res => res.data));
+};
 export interface YtdEntry { ytd: number; firstPrice: number; firstDate: string; lastPrice: number; }
 export const getYtdData = () => cached('ytd', () => api.get<Record<string, YtdEntry>>('/market-data/ytd').then(res => res.data));
 export interface YearLowEntry { price: number; date: string; }
