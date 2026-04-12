@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import {
   getWatchlists, createWatchlist, updateWatchlist, deleteWatchlist,
   addWatchlistCompany, removeWatchlistCompany,
-  getMarketData, getCompanies, getDashboardAll, WatchlistData
+  getMarketData, getCompanies, getDashboardAll, getAllDividendPayouts, getUpcomingDividends,
+  getUserSettings, getYearLow, WatchlistData, DividendPayoutData, UpcomingDividendItem, YearLowEntry
 } from '../api';
 import { MarketData, Company, PortfolioItem } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 const WATCHLIST_COLORS = [
@@ -33,6 +35,17 @@ export default function Watchlists() {
   const [portfolioMap, setPortfolioMap] = useState<Record<string, PortfolioItem>>({});
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tableColumns, setTableColumns] = useState<Record<string, string[]>>({});
+  const [ytdMap, setYtdMap] = useState<Record<string, number>>({});
+  const [ttmYieldMap, setTtmYieldMap] = useState<Record<string, number>>({});
+  const [nextDivMap, setNextDivMap] = useState<Record<string, string>>({});
+  const [lastDivAmountMap, setLastDivAmountMap] = useState<Record<string, number>>({});
+  const [nextAnnDateMap, setNextAnnDateMap] = useState<Record<string, string>>({});
+
+  const colVisible = (col: string) => {
+    const cols = tableColumns['watchlist'] || DEFAULT_COLUMNS['watchlist'];
+    return !cols || cols.includes(col);
+  };
 
   // Create form
   const [showCreate, setShowCreate] = useState(false);
@@ -54,10 +67,21 @@ export default function Watchlists() {
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   const loadData = useCallback(() => {
-    return Promise.all([getWatchlists(), getMarketData(), getCompanies(), getDashboardAll()])
-      .then(([wls, md, comps, dash]) => {
+    return Promise.all([
+      getWatchlists(),
+      getMarketData(),
+      getCompanies(),
+      getDashboardAll(),
+      getUserSettings(),
+      getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
+      getUpcomingDividends(3).catch(() => [] as UpcomingDividendItem[]),
+    ])
+      .then(([wls, md, comps, dash, settings, payouts, upcoming]) => {
         setWatchlists(wls);
         if (wls.length > 0 && !activeId) setActiveId(wls[0].id);
+        setTableColumns(settings.tableColumns || {});
+
+        // Market data map (latest per company)
         const map: Record<string, MarketData> = {};
         md.forEach(m => {
           if (!map[m.companyCode] || m.tradeDate > map[m.companyCode].tradeDate) {
@@ -65,10 +89,48 @@ export default function Watchlists() {
           }
         });
         setMarketMap(map);
+
+        // Portfolio map
         const pMap: Record<string, PortfolioItem> = {};
         dash.portfolio.forEach(p => { pMap[p.companyCode] = p; });
         setPortfolioMap(pMap);
         setCompanies(comps);
+
+        // YTD: (latest price - first price this year) / first price this year * 100
+        // We only have latest price per company, so skip YTD for now unless we have history
+        // Use changePercent as proxy or calculate from dashboard data
+
+        // TTM Yield: sum of dividends in last 12 months / current price * 100
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        const cutoff = oneYearAgo.toISOString().split('T')[0];
+        const byCode: Record<string, DividendPayoutData[]> = {};
+        payouts.forEach(p => { (byCode[p.companyCode] = byCode[p.companyCode] || []).push(p); });
+        const yields: Record<string, number> = {};
+        const lastAmounts: Record<string, number> = {};
+        for (const [code, divs] of Object.entries(byCode)) {
+          const sorted = divs.sort((a, b) => b.exDividendDate.localeCompare(a.exDividendDate));
+          const ttm = sorted.filter(d => d.exDividendDate >= cutoff);
+          const total = ttm.reduce((s, d) => s + (d.amountPerShare ? Number(d.amountPerShare) : 0), 0);
+          const price = map[code]?.lastTrade;
+          if (total > 0 && price > 0) yields[code] = (total / price) * 100;
+          if (sorted[0]?.amountPerShare) lastAmounts[code] = Number(sorted[0].amountPerShare);
+        }
+        setTtmYieldMap(yields);
+        setLastDivAmountMap(lastAmounts);
+
+        // Next possible dividend date and announcement date from upcoming predictions
+        const nextDivs: Record<string, string> = {};
+        const nextAnns: Record<string, string> = {};
+        upcoming.forEach(u => {
+          if (u.history.length > 0) {
+            const latest = u.history[0];
+            nextDivs[u.companyCode] = latest.exDividendDate;
+            if (latest.announcementDate) nextAnns[u.companyCode] = latest.announcementDate;
+          }
+        });
+        setNextDivMap(nextDivs);
+        setNextAnnDateMap(nextAnns);
       });
   }, [activeId]);
 
@@ -410,14 +472,19 @@ export default function Watchlists() {
                   <tr>
                     <th style={{ width: '30px' }}></th>
                     <th>Company</th>
-                    <th className="text-right">Shares</th>
-                    <th className="text-right">Avg Buy</th>
-                    <th className="text-right">Last Trade</th>
-                    <th className="text-right">Change %</th>
-                    <th className="text-right">Invested</th>
-                    <th className="text-right">Value</th>
-                    <th className="text-right">Unrealized</th>
-                    <th className="text-right">Gain %</th>
+                    {colVisible('sharesHeld') && <th className="text-right">Shares</th>}
+                    {colVisible('avgBuyPrice') && <th className="text-right">Avg Buy</th>}
+                    {colVisible('lastTrade') && <th className="text-right">Last Trade</th>}
+                    {colVisible('changePercent') && <th className="text-right">Change %</th>}
+                    {colVisible('totalInvested') && <th className="text-right">Invested</th>}
+                    {colVisible('currentValue') && <th className="text-right">Value</th>}
+                    {colVisible('unrealizedGain') && <th className="text-right">Unrealized</th>}
+                    {colVisible('unrealizedGainPercent') && <th className="text-right">Gain %</th>}
+                    {colVisible('ytd') && <th className="text-right">YTD %</th>}
+                    {colVisible('ttmYield') && <th className="text-right">TTM Yield</th>}
+                    {colVisible('nextDivDate') && <th className="text-right">Next Div</th>}
+                    {colVisible('lastDivAmount') && <th className="text-right">Last Div</th>}
+                    {colVisible('nextAnnDate') && <th className="text-right">Next Ann.</th>}
                     {!isReadMode && <th style={{ width: '30px' }}></th>}
                   </tr>
                 </thead>
@@ -453,28 +520,41 @@ export default function Watchlists() {
                             </div>
                           </div>
                         </td>
-                        <td className="text-right mono">{p ? p.sharesHeld : '\u2014'}</td>
-                        <td className="text-right mono">{p ? fmt(p.avgBuyPrice) : '\u2014'}</td>
-                        <td className="text-right mono">{md ? fmt(md.lastTrade) : '\u2014'}</td>
-                        <td className="text-right mono">
+                        {colVisible('sharesHeld') && <td className="text-right mono">{p ? p.sharesHeld : '\u2014'}</td>}
+                        {colVisible('avgBuyPrice') && <td className="text-right mono">{p ? fmt(p.avgBuyPrice) : '\u2014'}</td>}
+                        {colVisible('lastTrade') && <td className="text-right mono">{md ? fmt(md.lastTrade) : '\u2014'}</td>}
+                        {colVisible('changePercent') && <td className="text-right mono">
                           {md ? (
                             <span className={`gain-pill ${md.changePercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
                               {gainSign(md.changePercent)}{fmt(md.changePercent)}%
                             </span>
                           ) : '\u2014'}
-                        </td>
-                        <td className="text-right mono">{p ? fmt(p.totalInvested) : '\u2014'}</td>
-                        <td className="text-right mono">{p ? fmt(p.currentValue) : '\u2014'}</td>
-                        <td className={`text-right mono ${p ? gainClass(p.unrealizedGain) : ''}`}>
+                        </td>}
+                        {colVisible('totalInvested') && <td className="text-right mono">{p ? fmt(p.totalInvested) : '\u2014'}</td>}
+                        {colVisible('currentValue') && <td className="text-right mono">{p ? fmt(p.currentValue) : '\u2014'}</td>}
+                        {colVisible('unrealizedGain') && <td className={`text-right mono ${p ? gainClass(p.unrealizedGain) : ''}`}>
                           {p ? `${gainSign(p.unrealizedGain)}${fmt(p.unrealizedGain)}` : '\u2014'}
-                        </td>
-                        <td className="text-right mono">
+                        </td>}
+                        {colVisible('unrealizedGainPercent') && <td className="text-right mono">
                           {p ? (
                             <span className={`gain-pill ${p.unrealizedGainPercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
                               {gainSign(p.unrealizedGainPercent)}{fmt(p.unrealizedGainPercent)}%
                             </span>
                           ) : '\u2014'}
-                        </td>
+                        </td>}
+                        {colVisible('ytd') && <td className="text-right mono">{'\u2014'}</td>}
+                        {colVisible('ttmYield') && <td className="text-right mono">
+                          {ttmYieldMap[code] != null ? ttmYieldMap[code].toFixed(2) + '%' : '\u2014'}
+                        </td>}
+                        {colVisible('nextDivDate') && <td className="text-right mono" style={{ fontSize: '0.85rem' }}>
+                          {nextDivMap[code] || '\u2014'}
+                        </td>}
+                        {colVisible('lastDivAmount') && <td className="text-right mono">
+                          {lastDivAmountMap[code] != null ? fmt(lastDivAmountMap[code]) : '\u2014'}
+                        </td>}
+                        {colVisible('nextAnnDate') && <td className="text-right mono" style={{ fontSize: '0.85rem' }}>
+                          {nextAnnDateMap[code] || '\u2014'}
+                        </td>}
                         {!isReadMode && (
                         <td>
                           <button

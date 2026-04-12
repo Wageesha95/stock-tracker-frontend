@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getUpcomingDividends, getMarketData, getAllDividendPayouts, UpcomingDividendItem, DividendPayoutData } from '../api';
+import { getUpcomingDividends, getMarketData, getAllDividendPayouts, getUserSettings, getYearLow, UpcomingDividendItem, DividendPayoutData, YearLowEntry } from '../api';
 import { MarketData } from '../types';
+import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 type Period = 1 | 2 | 3;
-type SortKey = 'companyCode' | 'yearsAppeared' | 'avgAmountPerShare' | 'yield';
+type SortKey = 'companyCode' | 'yearsAppeared' | 'avgAmountPerShare' | 'yield' | 'lastXdDate' | 'announcementDate' | 'lastTrade' | 'yield2025' | 'yieldAtYearLow';
 
 export default function UpcomingDividends() {
   const [months, setMonths] = useState<Period>(1);
@@ -24,7 +25,14 @@ export default function UpcomingDividends() {
   });
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [ttmYield, setTtmYield] = useState<Record<string, number>>({});
+  const [tableColumns, setTableColumns] = useState<Record<string, string[]>>({});
+  const [yearLowMap, setYearLowMap] = useState<Record<string, YearLowEntry>>({});
   const navigate = useNavigate();
+
+  const colVisible = (col: string) => {
+    const cols = tableColumns['upcomingDividends'] || DEFAULT_COLUMNS['upcomingDividends'];
+    return !cols || cols.includes(col);
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -32,8 +40,12 @@ export default function UpcomingDividends() {
       getUpcomingDividends(months),
       getMarketData(),
       getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
+      getUserSettings(),
+      getYearLow().catch(() => ({} as Record<string, number>)),
     ])
-      .then(([upcoming, md, payouts]) => {
+      .then(([upcoming, md, payouts, settings, yearLow]) => {
+        setTableColumns(settings.tableColumns || {});
+        setYearLowMap(yearLow);
         setData(upcoming);
 
         const byCompany: Record<string, MarketData[]> = {};
@@ -86,15 +98,31 @@ export default function UpcomingDividends() {
     if (filters.yieldMax) list = list.filter(d => (ttmYield[d.companyCode] || 0) <= Number(filters.yieldMax));
     if (filters.lastXdYear) list = list.filter(d => d.history[0]?.exDividendDate?.startsWith(filters.lastXdYear));
 
+    const getY2025 = (item: UpcomingDividendItem) => {
+      const h = item.history.find(h => h.year === 2025);
+      return h?.amountPerShare && h?.priceOnXdDate && h.priceOnXdDate > 0 ? (h.amountPerShare / h.priceOnXdDate * 100) : 0;
+    };
+    const getYLow = (item: UpcomingDividendItem) => {
+      const ttm = ttmYield[item.companyCode];
+      const yl = yearLowMap[item.companyCode];
+      const price = prices[item.companyCode];
+      return ttm != null && yl?.price > 0 && price > 0 ? (ttm / 100 * price / yl.price * 100) : 0;
+    };
+
     return [...list].sort((a, b) => {
       let cmp = 0;
       if (sortKey === 'companyCode') cmp = a.companyCode.localeCompare(b.companyCode);
       else if (sortKey === 'yearsAppeared') cmp = a.yearsAppeared - b.yearsAppeared;
       else if (sortKey === 'avgAmountPerShare') cmp = a.avgAmountPerShare - b.avgAmountPerShare;
       else if (sortKey === 'yield') cmp = (ttmYield[a.companyCode] || 0) - (ttmYield[b.companyCode] || 0);
+      else if (sortKey === 'lastXdDate') cmp = (a.history[0]?.exDividendDate || '').localeCompare(b.history[0]?.exDividendDate || '');
+      else if (sortKey === 'announcementDate') cmp = (a.history[0]?.announcementDate || '').localeCompare(b.history[0]?.announcementDate || '');
+      else if (sortKey === 'lastTrade') cmp = (prices[a.companyCode] || 0) - (prices[b.companyCode] || 0);
+      else if (sortKey === 'yield2025') cmp = getY2025(a) - getY2025(b);
+      else if (sortKey === 'yieldAtYearLow') cmp = getYLow(a) - getYLow(b);
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }, [data, search, sortKey, sortDir, ttmYield, filters]);
+  }, [data, search, sortKey, sortDir, ttmYield, prices, yearLowMap, filters]);
 
   const toggleExpand = (code: string) => {
     setExpanded(prev => {
@@ -164,13 +192,15 @@ export default function UpcomingDividends() {
               <tr>
                 <th style={{ width: 32 }}></th>
                 <th className="sort-header" onClick={() => handleSort('companyCode')}>Company{si('companyCode')}</th>
-                <th className="sort-header text-right" onClick={() => handleSort('yearsAppeared')}>Years (5yr){si('yearsAppeared')}</th>
-                <th className="sort-header text-right" onClick={() => handleSort('avgAmountPerShare')}>Avg Amount{si('avgAmountPerShare')}</th>
-                <th className="sort-header text-right" onClick={() => handleSort('yield')}>Yield (TTM){si('yield')}</th>
-                <th className="text-right">Last XD Date</th>
-                <th>Type</th>
-                <th>Announced</th>
-                <th className="text-right">Last Trade</th>
+                {colVisible('yearsAppeared') && <th className="sort-header text-right" onClick={() => handleSort('yearsAppeared')}>Years (5yr){si('yearsAppeared')}</th>}
+                {colVisible('avgAmountPerShare') && <th className="sort-header text-right" onClick={() => handleSort('avgAmountPerShare')}>Avg Amount{si('avgAmountPerShare')}</th>}
+                {colVisible('ttmYield') && <th className="sort-header text-right" onClick={() => handleSort('yield')}>Yield (TTM){si('yield')}</th>}
+                {colVisible('lastXdDate') && <th className="sort-header text-right" onClick={() => handleSort('lastXdDate')}>Last XD Date{si('lastXdDate')}</th>}
+                {colVisible('dividendType') && <th>Type</th>}
+                {colVisible('announcementDate') && <th className="sort-header" onClick={() => handleSort('announcementDate')}>Announced{si('announcementDate')}</th>}
+                {colVisible('lastTrade') && <th className="sort-header text-right" onClick={() => handleSort('lastTrade')}>Last Trade{si('lastTrade')}</th>}
+                {colVisible('yield2025') && <th className="sort-header text-right" onClick={() => handleSort('yield2025')}>2025 Yield{si('yield2025')}</th>}
+                {colVisible('yieldAtYearLow') && <th className="sort-header text-right" onClick={() => handleSort('yieldAtYearLow')}>TTM @ YR Low{si('yieldAtYearLow')}</th>}
               </tr>
               {showFilters && (
                 <tr style={{ background: 'var(--bg-thead)' }}>
@@ -194,17 +224,19 @@ export default function UpcomingDividends() {
                       <input type="number" placeholder="Max%" value={filters.yieldMax} onChange={e => setFilters(f => ({ ...f, yieldMax: e.target.value }))} style={fInput} step="0.5" />
                     </div>
                   </th>
-                  <th>
+                  {colVisible('lastXdDate') && <th>
                     <select value={filters.lastXdYear} onChange={e => setFilters(f => ({ ...f, lastXdYear: e.target.value }))} style={{ ...fInput, width: 'auto' }}>
                       <option value="">All</option>
                       {[...new Set(data.map(d => d.history[0]?.exDividendDate?.substring(0, 4)).filter(Boolean))].sort().reverse().map(y => (
                         <option key={y} value={y}>{y}</option>
                       ))}
                     </select>
-                  </th>
-                  <th></th>
-                  <th></th>
-                  <th></th>
+                  </th>}
+                  {colVisible('dividendType') && <th></th>}
+                  {colVisible('announcementDate') && <th></th>}
+                  {colVisible('lastTrade') && <th></th>}
+                  {colVisible('yield2025') && <th></th>}
+                  {colVisible('yieldAtYearLow') && <th></th>}
                 </tr>
               )}
             </thead>
@@ -222,31 +254,53 @@ export default function UpcomingDividends() {
                           <span className="company-code">{item.companyCode}</span>
                         </div>
                       </td>
-                      <td className="text-right mono">
+                      {colVisible('yearsAppeared') && <td className="text-right mono">
                         <span className={`gain-pill ${item.yearsAppeared >= 4 ? 'gain-pill-up' : item.yearsAppeared >= 2 ? 'gain-pill-neutral' : ''}`}>
                           {item.yearsAppeared}/5
                         </span>
-                      </td>
-                      <td className="text-right mono">{item.avgAmountPerShare > 0 ? item.avgAmountPerShare.toFixed(2) : '\u2014'}</td>
-                      <td className="text-right mono">{ttmYield[item.companyCode] != null ? ttmYield[item.companyCode].toFixed(2) + '%' : '\u2014'}</td>
-                      <td className="text-right mono">{latest?.exDividendDate || '\u2014'}</td>
-                      <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{latest?.dividendType || '\u2014'}</td>
-                      <td style={{ fontSize: '0.85rem' }}>{latest?.announcementDate || '\u2014'}</td>
-                      <td className="text-right mono">{prices[item.companyCode] != null ? prices[item.companyCode].toFixed(2) : '\u2014'}</td>
+                      </td>}
+                      {colVisible('avgAmountPerShare') && <td className="text-right mono">{item.avgAmountPerShare > 0 ? item.avgAmountPerShare.toFixed(2) : '\u2014'}</td>}
+                      {colVisible('ttmYield') && <td className="text-right mono">{ttmYield[item.companyCode] != null ? ttmYield[item.companyCode].toFixed(2) + '%' : '\u2014'}</td>}
+                      {colVisible('lastXdDate') && <td className="text-right mono">{latest?.exDividendDate || '\u2014'}</td>}
+                      {colVisible('dividendType') && <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{latest?.dividendType || '\u2014'}</td>}
+                      {colVisible('announcementDate') && <td style={{ fontSize: '0.85rem' }}>{latest?.announcementDate || '\u2014'}</td>}
+                      {colVisible('lastTrade') && <td className="text-right mono">{prices[item.companyCode] != null ? prices[item.companyCode].toFixed(2) : '\u2014'}</td>}
+                      {colVisible('yield2025') && (() => {
+                        const h2025 = item.history.find(h => h.year === 2025);
+                        const yld = h2025?.amountPerShare && h2025?.priceOnXdDate && h2025.priceOnXdDate > 0
+                          ? (h2025.amountPerShare / h2025.priceOnXdDate * 100) : null;
+                        return <td className="text-right mono">{yld != null ? yld.toFixed(2) + '%' : '\u2014'}</td>;
+                      })()}
+                      {colVisible('yieldAtYearLow') && (() => {
+                        const ttm = ttmYield[item.companyCode];
+                        const yl = yearLowMap[item.companyCode];
+                        const price = prices[item.companyCode];
+                        const yld = ttm != null && yl?.price > 0 && price > 0
+                          ? (ttm / 100 * price / yl.price * 100) : null;
+                        return <td className="text-right mono" title={yl ? `Low: ${yl.price.toFixed(2)} on ${yl.date}` : ''}>
+                          {yld != null ? yld.toFixed(2) + '%' : '\u2014'}
+                        </td>;
+                      })()}
                     </tr>
-                    {isExpanded && item.history.map(h => (
-                      <tr key={`${item.companyCode}-${h.year}`} style={{ background: 'var(--bg-card-hover, rgba(0,0,0,0.02))' }}>
-                        <td></td>
-                        <td style={{ paddingLeft: '2.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{h.year}</td>
-                        <td></td>
-                        <td className="text-right mono" style={{ fontSize: '0.85rem' }}>{h.amountPerShare != null ? Number(h.amountPerShare).toFixed(2) : '\u2014'}</td>
-                        <td></td>
-                        <td className="text-right mono" style={{ fontSize: '0.85rem' }}>{h.exDividendDate}</td>
-                        <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{h.dividendType || '\u2014'}</td>
-                        <td style={{ fontSize: '0.85rem' }}>{h.announcementDate || '\u2014'}</td>
-                        <td className="text-right mono" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{h.paymentDate || '\u2014'}</td>
-                      </tr>
-                    ))}
+                    {isExpanded && item.history.map(h => {
+                      const hYld = h.amountPerShare && h.priceOnXdDate && h.priceOnXdDate > 0
+                        ? (h.amountPerShare / h.priceOnXdDate * 100) : null;
+                      return (
+                        <tr key={`${item.companyCode}-${h.year}`} style={{ background: 'var(--bg-card-hover, rgba(0,0,0,0.02))' }}>
+                          <td></td>
+                          <td style={{ paddingLeft: '2.5rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>{h.year}</td>
+                          {colVisible('yearsAppeared') && <td></td>}
+                          {colVisible('avgAmountPerShare') && <td className="text-right mono" style={{ fontSize: '0.85rem' }}>{h.amountPerShare != null ? Number(h.amountPerShare).toFixed(2) : '\u2014'}</td>}
+                          {colVisible('ttmYield') && <td className="text-right mono" style={{ fontSize: '0.85rem' }}>{hYld != null ? hYld.toFixed(2) + '%' : '\u2014'}</td>}
+                          {colVisible('lastXdDate') && <td className="text-right mono" style={{ fontSize: '0.85rem' }}>{h.exDividendDate}</td>}
+                          {colVisible('dividendType') && <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{h.dividendType || '\u2014'}</td>}
+                          {colVisible('announcementDate') && <td style={{ fontSize: '0.85rem' }}>{h.announcementDate || '\u2014'}</td>}
+                          {colVisible('lastTrade') && <td className="text-right mono" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{h.priceOnXdDate != null ? h.priceOnXdDate.toFixed(2) : '\u2014'}</td>}
+                          {colVisible('yield2025') && <td></td>}
+                          {colVisible('yieldAtYearLow') && <td></td>}
+                        </tr>
+                      );
+                    })}
                   </React.Fragment>
                 );
               })}

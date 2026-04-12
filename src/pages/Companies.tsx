@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getCompanies, getIndustryGroups, getMarketData, getAllDividendPayouts, updateCompany, invalidate, DividendPayoutData } from '../api';
+import { getCompanies, getIndustryGroups, getMarketData, getAllDividendPayouts, getYearLow, getYtdData, getUserSettings, updateCompany, invalidate, DividendPayoutData, YearLowEntry, YtdEntry } from '../api';
 import { Company, IndustryGroup, MarketData } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 export default function Companies() {
@@ -13,10 +14,18 @@ export default function Companies() {
   const [latestPrice, setLatestPrice] = useState<Record<string, number>>({});
   const [, setPriceChange] = useState<Record<string, number>>({});
   const [changePercent, setChangePercent] = useState<Record<string, number>>({});
-  const [ytdChange, setYtdChange] = useState<Record<string, number>>({});
+  const [ytdChange, setYtdChange] = useState<Record<string, YtdEntry>>({});
   const [ttmYield, setTtmYield] = useState<Record<string, number>>({});
+  const [yield2025, setYield2025] = useState<Record<string, number>>({});
+  const [yearLowMap, setYearLowMap] = useState<Record<string, YearLowEntry>>({});
+  const [tableColumns, setTableColumns] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  const colVisible = (col: string) => {
+    const cols = tableColumns['companies'] || DEFAULT_COLUMNS['companies'];
+    return !cols || cols.includes(col);
+  };
 
   useEffect(() => {
     Promise.all([
@@ -24,8 +33,13 @@ export default function Companies() {
       getIndustryGroups(),
       getMarketData(),
       dividendPayoutsEnabled ? getAllDividendPayouts().catch(() => [] as DividendPayoutData[]) : Promise.resolve([] as DividendPayoutData[]),
+      getUserSettings(),
+      getYearLow().catch(() => ({} as Record<string, YearLowEntry>)),
+      getYtdData().catch(() => ({} as Record<string, number>)),
     ])
-      .then(([comps, gs, md, payouts]) => {
+      .then(([comps, gs, md, payouts, settings, yearLow, ytdData]) => {
+        setTableColumns(settings.tableColumns || {});
+        setYearLowMap(yearLow);
         setCompanies(comps);
         setIndustryGroups(gs);
         const map: Record<string, string> = {};
@@ -41,8 +55,6 @@ export default function Companies() {
         const prices: Record<string, number> = {};
         const changes: Record<string, number> = {};
         const changePcts: Record<string, number> = {};
-        const ytd: Record<string, number> = {};
-        const currentYear = new Date().getFullYear().toString();
 
         for (const [code, entries] of Object.entries(byCompany)) {
           const sorted = entries.sort((a, b) => b.tradeDate.localeCompare(a.tradeDate));
@@ -50,19 +62,11 @@ export default function Companies() {
           prices[code] = latest.lastTrade;
           changes[code] = latest.change;
           changePcts[code] = latest.changePercent;
-
-          const thisYear = sorted.filter(e => e.tradeDate.startsWith(currentYear));
-          if (thisYear.length > 0) {
-            const earliest = thisYear[thisYear.length - 1];
-            if (earliest.lastTrade > 0) {
-              ytd[code] = ((latest.lastTrade - earliest.lastTrade) / earliest.lastTrade) * 100;
-            }
-          }
         }
         setLatestPrice(prices);
         setPriceChange(changes);
         setChangePercent(changePcts);
-        setYtdChange(ytd);
+        setYtdChange(ytdData);
 
         // Compute TTM dividend yield per company
         if (payouts.length > 0) {
@@ -83,6 +87,20 @@ export default function Companies() {
             }
           }
           setTtmYield(yields);
+
+          // 2025 XD yield: sum of 2025 dividends / price on XD date
+          const y2025: Record<string, number> = {};
+          for (const [code, divs] of Object.entries(byCode)) {
+            const divs2025 = divs.filter(d => d.exDividendDate.startsWith('2025'));
+            if (divs2025.length > 0) {
+              const total = divs2025.reduce((s, d) => s + (d.amountPerShare ? Number(d.amountPerShare) : 0), 0);
+              const xdPrice = divs2025[0].priceOnXdDate;
+              if (total > 0 && xdPrice && xdPrice > 0) {
+                y2025[code] = (total / xdPrice) * 100;
+              }
+            }
+          }
+          setYield2025(y2025);
         }
       })
       .catch(console.error)
@@ -104,12 +122,12 @@ export default function Companies() {
   };
 
   const [search, setSearch] = useState('');
-  const [cSortKey, setCSortKey] = useState<'code' | 'name' | 'lastTrade' | 'ytd' | 'yield' | 'industry'>('code');
+  const [cSortKey, setCSortKey] = useState<'code' | 'name' | 'lastTrade' | 'ytd' | 'yield' | 'yield2025' | 'yieldAtYearLow' | 'industry'>('code');
   const [cSortDir, setCSortDir] = useState<'asc' | 'desc'>('asc');
   const handleCSort = useCallback((key: typeof cSortKey) => {
     setCSortKey(prev => {
       if (prev === key) { setCSortDir(d => d === 'asc' ? 'desc' : 'asc'); return prev; }
-      setCSortDir(key === 'lastTrade' || key === 'ytd' || key === 'yield' ? 'desc' : 'asc');
+      setCSortDir(key === 'lastTrade' || key === 'ytd' || key === 'yield' || key === 'yield2025' || key === 'yieldAtYearLow' ? 'desc' : 'asc');
       return key;
     });
   }, []);
@@ -127,12 +145,20 @@ export default function Companies() {
       if (cSortKey === 'code') cmp = a.code.localeCompare(b.code);
       else if (cSortKey === 'name') cmp = a.name.localeCompare(b.name);
       else if (cSortKey === 'lastTrade') cmp = (latestPrice[a.code] || 0) - (latestPrice[b.code] || 0);
-      else if (cSortKey === 'ytd') cmp = (ytdChange[a.code] || 0) - (ytdChange[b.code] || 0);
+      else if (cSortKey === 'ytd') cmp = (ytdChange[a.code]?.ytd || 0) - (ytdChange[b.code]?.ytd || 0);
       else if (cSortKey === 'yield') cmp = (ttmYield[a.code] || 0) - (ttmYield[b.code] || 0);
+      else if (cSortKey === 'yield2025') cmp = (yield2025[a.code] || 0) - (yield2025[b.code] || 0);
+      else if (cSortKey === 'yieldAtYearLow') {
+        const aLow = yearLowMap[a.code]?.price || 0;
+        const bLow = yearLowMap[b.code]?.price || 0;
+        const aYld = ttmYield[a.code] && aLow && latestPrice[a.code] ? (ttmYield[a.code] / 100 * latestPrice[a.code] / aLow * 100) : 0;
+        const bYld = ttmYield[b.code] && bLow && latestPrice[b.code] ? (ttmYield[b.code] / 100 * latestPrice[b.code] / bLow * 100) : 0;
+        cmp = aYld - bYld;
+      }
       else if (cSortKey === 'industry') cmp = (groups[a.industryGroupId || ''] || '').localeCompare(groups[b.industryGroupId || ''] || '');
       return cSortDir === 'asc' ? cmp : -cmp;
     });
-  }, [companies, searchLower, groups, latestPrice, ytdChange, ttmYield, cSortKey, cSortDir]);
+  }, [companies, searchLower, groups, latestPrice, ytdChange, ttmYield, yield2025, yearLowMap, cSortKey, cSortDir]);
 
   const [viewMode, setViewMode] = useState<'list' | 'industry'>('list');
 
@@ -158,30 +184,44 @@ export default function Companies() {
           <span className="company-code">{c.code}</span>
         </div>
       </td>
-      <td>{c.name}</td>
-      <td className="text-right mono">
+      {colVisible('name') && <td>{c.name}</td>}
+      {colVisible('lastTrade') && <td className="text-right mono">
         {latestPrice[c.code] != null ? latestPrice[c.code].toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '\u2014'}
-      </td>
-      <td className={`text-right mono`}>
+      </td>}
+      {colVisible('change') && <td className="text-right mono">
         {changePercent[c.code] != null ? (
           <span className={`gain-pill ${changePercent[c.code] >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
             {changePercent[c.code] >= 0 ? '+' : ''}{changePercent[c.code].toFixed(2)}%
           </span>
         ) : '\u2014'}
-      </td>
-      <td className="text-right mono">
-        {ytdChange[c.code] != null ? (
-          <span className={`gain-pill ${ytdChange[c.code] >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
-            {ytdChange[c.code] >= 0 ? '+' : ''}{ytdChange[c.code].toFixed(1)}%
-          </span>
-        ) : '\u2014'}
-      </td>
-      {dividendPayoutsEnabled && (
-        <td className="text-right mono">
-          {ttmYield[c.code] != null ? ttmYield[c.code].toFixed(2) + '%' : '\u2014'}
-        </td>
-      )}
-      {viewMode === 'list' && (
+      </td>}
+      {colVisible('ytd') && (() => {
+        const yd = ytdChange[c.code];
+        const tip = yd?.firstPrice != null ? `${yd.firstDate}: ${yd.firstPrice.toFixed(2)}` : '';
+        return <td className="text-right mono" title={tip}>
+          {yd?.ytd != null ? (
+            <span className={`gain-pill ${yd.ytd >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
+              {yd.ytd >= 0 ? '+' : ''}{yd.ytd.toFixed(1)}%
+            </span>
+          ) : '\u2014'}
+        </td>;
+      })()}
+      {colVisible('ttmYield') && <td className="text-right mono">
+        {ttmYield[c.code] != null ? ttmYield[c.code].toFixed(2) + '%' : '\u2014'}
+      </td>}
+      {colVisible('yield2025') && <td className="text-right mono">
+        {yield2025[c.code] != null ? yield2025[c.code].toFixed(2) + '%' : '\u2014'}
+      </td>}
+      {colVisible('yieldAtYearLow') && (() => {
+        const ttm = ttmYield[c.code];
+        const yl = yearLowMap[c.code];
+        const price = latestPrice[c.code];
+        const yld = ttm != null && yl?.price > 0 && price > 0 ? (ttm / 100 * price / yl.price * 100) : null;
+        return <td className="text-right mono" title={yl ? `Low: ${yl.price.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2})} on ${yl.date}` : ''}>
+          {yld != null ? yld.toFixed(2) + '%' : '\u2014'}
+        </td>;
+      })()}
+      {colVisible('industry') && viewMode === 'list' && (
         <td>
           {isAdmin && !isReadMode ? (
             <select
@@ -231,14 +271,14 @@ export default function Companies() {
             <thead>
               <tr>
                 <th className="sort-header" onClick={() => handleCSort('code')}>Code{csi('code')}</th>
-                <th className="sort-header" onClick={() => handleCSort('name')}>Name{csi('name')}</th>
-                <th className="sort-header text-right" onClick={() => handleCSort('lastTrade')}>Last Trade{csi('lastTrade')}</th>
-                <th className="text-right">Change</th>
-                <th className="sort-header text-right" onClick={() => handleCSort('ytd')}>YTD{csi('ytd')}</th>
-                {dividendPayoutsEnabled && (
-                  <th className="sort-header text-right" onClick={() => handleCSort('yield')}>Yield (TTM){csi('yield')}</th>
-                )}
-                <th className="sort-header" onClick={() => handleCSort('industry')}>Industry{csi('industry')}</th>
+                {colVisible('name') && <th className="sort-header" onClick={() => handleCSort('name')}>Name{csi('name')}</th>}
+                {colVisible('lastTrade') && <th className="sort-header text-right" onClick={() => handleCSort('lastTrade')}>Last Trade{csi('lastTrade')}</th>}
+                {colVisible('change') && <th className="text-right">Change</th>}
+                {colVisible('ytd') && <th className="sort-header text-right" onClick={() => handleCSort('ytd')}>YTD{csi('ytd')}</th>}
+                {colVisible('ttmYield') && <th className="sort-header text-right" onClick={() => handleCSort('yield')}>Yield (TTM){csi('yield')}</th>}
+                {colVisible('yield2025') && <th className="sort-header text-right" onClick={() => handleCSort('yield2025')}>2025 Yield{csi('yield2025')}</th>}
+                {colVisible('yieldAtYearLow') && <th className="sort-header text-right" onClick={() => handleCSort('yieldAtYearLow')}>TTM @ YR Low{csi('yieldAtYearLow')}</th>}
+                {colVisible('industry') && <th className="sort-header" onClick={() => handleCSort('industry')}>Industry{csi('industry')}</th>}
               </tr>
             </thead>
             <tbody>{filtered.map(companyRow)}</tbody>
@@ -268,11 +308,13 @@ export default function Companies() {
                     <thead>
                       <tr>
                         <th>Code</th>
-                        <th>Name</th>
-                        <th className="text-right">Last Trade</th>
-                        <th className="text-right">Change</th>
-                        <th className="text-right">YTD</th>
-                        {dividendPayoutsEnabled && <th className="text-right">Yield (TTM)</th>}
+                        {colVisible('name') && <th>Name</th>}
+                        {colVisible('lastTrade') && <th className="text-right">Last Trade</th>}
+                        {colVisible('change') && <th className="text-right">Change</th>}
+                        {colVisible('ytd') && <th className="text-right">YTD</th>}
+                        {colVisible('ttmYield') && <th className="text-right">Yield (TTM)</th>}
+                        {colVisible('yield2025') && <th className="text-right">2025 Yield</th>}
+                        {colVisible('yieldAtYearLow') && <th className="text-right">TTM @ YR Low</th>}
                       </tr>
                     </thead>
                     <tbody>{comps.map(companyRow)}</tbody>

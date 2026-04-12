@@ -11,7 +11,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { SELL_COMMISSION_RATE } from '../constants';
 
 type Tab = 'transactions' | 'dividends' | 'realized' | 'payouts';
-type Period = '1d' | '2d' | '5d' | '2w' | '1m' | '3m' | '6m';
+type Period = '1d' | '2d' | '5d' | '2w' | '1m' | '3m' | '6m' | 'custom';
 
 export default function CompanyView() {
   const { code } = useParams<{ code: string }>();
@@ -30,6 +30,8 @@ export default function CompanyView() {
   const [financials, setFinancials] = useState<DividendFinancialData[]>([]);
   const [loading, setLoading] = useState(true);
   const [lowPeriod, setLowPeriod] = useState<Period>('1d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
   const [expandedChart, setExpandedChart] = useState<'shares' | 'value' | 'priceAvg' | 'pnl' | 'yearly' | 'yearlyChart' | null>(null);
   const chartScrollRef = useRef<HTMLDivElement>(null);
 
@@ -90,15 +92,22 @@ export default function CompanyView() {
   const gainClass = (n: number) => (n >= 0 ? 'gain-positive' : 'gain-negative');
   const gainSign = (n: number) => (n >= 0 ? '+' : '');
 
-  const periodDays: Record<Period, number> = { '1d': 1, '2d': 2, '5d': 5, '2w': 14, '1m': 30, '3m': 90, '6m': 180 };
-  const periodLabels: Record<Period, string> = { '1d': 'Last Trade Day', '2d': 'Last 2 Days', '5d': 'Last 5 Days', '2w': 'Last 2 Weeks', '1m': 'Last Month', '3m': 'Last 3 Months', '6m': 'Last 6 Months' };
+  const periodDays: Record<Period, number> = { '1d': 1, '2d': 2, '5d': 5, '2w': 14, '1m': 30, '3m': 90, '6m': 180, 'custom': 0 };
+  const periodLabels: Record<Period, string> = { '1d': 'Last Trade Day', '2d': 'Last 2 Days', '5d': 'Last 5 Days', '2w': 'Last 2 Weeks', '1m': 'Last Month', '3m': 'Last 3 Months', '6m': 'Last 6 Months', 'custom': 'Custom Range' };
 
   const { lowestData, highestData, splitsInPeriod } = useMemo(() => {
     if (marketHistory.length === 0) return { lowestData: null, highestData: null, splitsInPeriod: [] as ShareSplitData[] };
 
     let filtered: MarketData[];
     let cutoffStr: string;
-    if (lowPeriod === '1d') {
+    if (lowPeriod === 'custom') {
+      filtered = marketHistory.filter(m => {
+        if (customFrom && m.tradeDate < customFrom) return false;
+        if (customTo && m.tradeDate > customTo) return false;
+        return true;
+      });
+      cutoffStr = customFrom || '1900-01-01';
+    } else if (lowPeriod === '1d') {
       const latestDate = marketHistory.reduce((max, m) => m.tradeDate > max ? m.tradeDate : max, '');
       filtered = marketHistory.filter(m => m.tradeDate === latestDate);
       cutoffStr = latestDate;
@@ -120,7 +129,7 @@ export default function CompanyView() {
       highestData: highest ? { value: highest.high, date: highest.tradeDate, count } : null,
       splitsInPeriod: splits,
     };
-  }, [marketHistory, lowPeriod, shareSplits]);
+  }, [marketHistory, lowPeriod, customFrom, customTo, shareSplits]);
 
   const { valueChartData, sharesChartData, priceVsAvgChartData, adjPnlChartData } = useMemo(() => {
     const sortedTx = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
@@ -349,32 +358,62 @@ export default function CompanyView() {
               <h3 style={{ margin: 0, fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>
                 Price Range {lowestData && <span style={{ fontWeight: 400, fontSize: '0.75rem', textTransform: 'none' }}>({lowestData.count} day{lowestData.count !== 1 ? 's' : ''})</span>}
               </h3>
-              <div className="segmented-control" style={{ fontSize: '0.75rem' }}>
-                {(Object.keys(periodLabels) as Period[]).map(p => (
-                  <button key={p} className={lowPeriod === p ? 'active' : ''} onClick={() => setLowPeriod(p)}>
-                    {p === '1d' ? 'LTD' : p === '2d' ? '2D' : p === '5d' ? '5D' : p === '2w' ? '2W' : p === '1m' ? '1M' : p === '3m' ? '3M' : '6M'}
-                  </button>
-                ))}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                <div className="segmented-control" style={{ fontSize: '0.75rem' }}>
+                  {(['1d', '2d', '5d', '2w', '1m', '3m', '6m'] as Period[]).map(p => (
+                    <button key={p} className={lowPeriod === p ? 'active' : ''} onClick={() => setLowPeriod(p)}>
+                      {p === '1d' ? 'LTD' : p === '2d' ? '2D' : p === '5d' ? '5D' : p === '2w' ? '2W' : p === '1m' ? '1M' : p === '3m' ? '3M' : '6M'}
+                    </button>
+                  ))}
+                  <button className={lowPeriod === 'custom' ? 'active' : ''} onClick={() => setLowPeriod('custom')}>Custom</button>
+                </div>
               </div>
             </div>
-            {lowestData || highestData ? (
-              <>
+            {lowPeriod === 'custom' && (
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)}
+                  style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: '1px solid var(--border-input)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '0.8rem' }} />
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>to</span>
+                <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)}
+                  style={{ padding: '0.25rem 0.4rem', borderRadius: '4px', border: '1px solid var(--border-input)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '0.8rem' }} />
+              </div>
+            )}
+            {lowestData || highestData ? (() => {
+              const ltdPrice = marketHistory.length > 0
+                ? marketHistory.reduce((a, b) => a.tradeDate > b.tradeDate ? a : b).lastTrade : 0;
+              const lowPct = lowestData && ltdPrice > 0 ? ((ltdPrice - lowestData.value) / lowestData.value) * 100 : null;
+              const highPct = highestData && ltdPrice > 0 ? ((ltdPrice - highestData.value) / highestData.value) * 100 : null;
+              return <>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div>
                     <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>{'\u25BC'} Lowest</div>
                     {lowestData ? (
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#e53e3e' }}>{fmt(lowestData.value)}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{lowestData.date}</span>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#e53e3e' }}>{fmt(lowestData.value)}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{lowestData.date}</span>
+                        </div>
+                        {lowPct != null && (
+                          <span className={`gain-pill ${lowPct >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`} style={{ fontSize: '0.75rem', marginTop: '0.25rem', display: 'inline-block' }}>
+                            {lowPct >= 0 ? '+' : ''}{lowPct.toFixed(2)}% vs LTD
+                          </span>
+                        )}
                       </div>
                     ) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}
                   </div>
                   <div>
                     <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>{'\u25B2'} Highest</div>
                     {highestData ? (
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#38a169' }}>{fmt(highestData.value)}</span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{highestData.date}</span>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#38a169' }}>{fmt(highestData.value)}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{highestData.date}</span>
+                        </div>
+                        {highPct != null && (
+                          <span className={`gain-pill ${highPct >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`} style={{ fontSize: '0.75rem', marginTop: '0.25rem', display: 'inline-block' }}>
+                            {highPct >= 0 ? '+' : ''}{highPct.toFixed(2)}% vs LTD
+                          </span>
+                        )}
                       </div>
                     ) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}
                   </div>
@@ -398,8 +437,8 @@ export default function CompanyView() {
                     </div>
                   );
                 })()}
-              </>
-            ) : (
+              </>;
+            })() : (
               <p style={{ color: 'var(--text-muted)', margin: 0 }}>No data for {periodLabels[lowPeriod].toLowerCase()}</p>
             )}
             {splitsInPeriod.length > 0 && (

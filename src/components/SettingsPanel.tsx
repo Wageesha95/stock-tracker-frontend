@@ -18,6 +18,42 @@ const TABLE_COLUMN_OPTIONS: Record<string, { key: string; label: string }[]> = {
     { key: 'unrealizedDayGain', label: 'Day Gain' },
     { key: 'changePercent', label: 'Day %' },
   ],
+  watchlist: [
+    { key: 'sharesHeld', label: 'Shares' },
+    { key: 'avgBuyPrice', label: 'Avg Buy' },
+    { key: 'lastTrade', label: 'Last Trade' },
+    { key: 'changePercent', label: 'Change %' },
+    { key: 'totalInvested', label: 'Invested' },
+    { key: 'currentValue', label: 'Value' },
+    { key: 'unrealizedGain', label: 'Unrealized' },
+    { key: 'unrealizedGainPercent', label: 'Gain %' },
+    { key: 'ytd', label: 'YTD %' },
+    { key: 'ttmYield', label: 'TTM Yield' },
+    { key: 'nextDivDate', label: 'Next Div Date' },
+    { key: 'lastDivAmount', label: 'Last Div Amount' },
+    { key: 'nextAnnDate', label: 'Next Ann. Date' },
+  ],
+  companies: [
+    { key: 'name', label: 'Name' },
+    { key: 'lastTrade', label: 'Last Trade' },
+    { key: 'change', label: 'Change %' },
+    { key: 'ytd', label: 'YTD %' },
+    { key: 'ttmYield', label: 'TTM Yield' },
+    { key: 'yield2025', label: '2025 XD Yield' },
+    { key: 'yieldAtYearLow', label: 'TTM @ Year Low' },
+    { key: 'industry', label: 'Industry' },
+  ],
+  upcomingDividends: [
+    { key: 'yearsAppeared', label: 'Years (5yr)' },
+    { key: 'avgAmountPerShare', label: 'Avg Amount' },
+    { key: 'ttmYield', label: 'Yield (TTM)' },
+    { key: 'lastXdDate', label: 'Last XD Date' },
+    { key: 'dividendType', label: 'Type' },
+    { key: 'announcementDate', label: 'Announced' },
+    { key: 'lastTrade', label: 'Last Trade' },
+    { key: 'yield2025', label: '2025 XD Yield' },
+    { key: 'yieldAtYearLow', label: 'TTM Yield @ Year Low' },
+  ],
   unrealized: [
     { key: 'sharesHeld', label: 'Shares' },
     { key: 'avgBuyPrice', label: 'Avg Buy' },
@@ -34,11 +70,17 @@ const TABLE_COLUMN_OPTIONS: Record<string, { key: string; label: string }[]> = {
 const TABLE_LABELS: Record<string, string> = {
   portfolio: 'Portfolio',
   unrealized: 'Unrealized (Net / Profit / Loss)',
+  watchlist: 'Watchlist',
+  companies: 'Companies',
+  upcomingDividends: 'Upcoming Dividends',
 };
 
 const DEFAULT_COLUMNS: Record<string, string[]> = {
   portfolio: ['sharesHeld', 'avgBuyPrice', 'lastTrade', 'currentValue', 'totalInvested', 'unrealizedGain', 'unrealizedGainPercent', 'unrealizedDayGain', 'changePercent'],
   unrealized: ['sharesHeld', 'avgBuyPrice', 'lastTrade', 'totalInvested', 'currentValue', 'unrealizedGain', 'unrealizedGainPercent', 'adjGain', 'adjGainPct'],
+  watchlist: ['sharesHeld', 'avgBuyPrice', 'lastTrade', 'changePercent', 'totalInvested', 'currentValue', 'unrealizedGain', 'unrealizedGainPercent'],
+  companies: ['name', 'lastTrade', 'change', 'ytd', 'ttmYield', 'industry'],
+  upcomingDividends: ['yearsAppeared', 'avgAmountPerShare', 'ttmYield', 'lastXdDate', 'dividendType', 'announcementDate', 'lastTrade'],
 };
 
 export { TABLE_COLUMN_OPTIONS, DEFAULT_COLUMNS };

@@ -189,6 +189,10 @@ export const uploadTradeSummary = (file: File, tradeDate: string) => {
 export const getPortfolio = () => cached('portfolio', () => api.get<PortfolioItem[]>('/dashboard/portfolio').then(res => res.data));
 export const getRealizedGains = () => cached('realized', () => api.get<RealizedGainItem[]>('/dashboard/realized').then(res => res.data));
 export const getMarketData = () => cached('market', () => api.get<MarketData[]>('/market-data').then(res => res.data));
+export interface YtdEntry { ytd: number; firstPrice: number; firstDate: string; lastPrice: number; }
+export const getYtdData = () => cached('ytd', () => api.get<Record<string, YtdEntry>>('/market-data/ytd').then(res => res.data));
+export interface YearLowEntry { price: number; date: string; }
+export const getYearLow = () => cached('year-low', () => api.get<Record<string, YearLowEntry>>('/market-data/year-low').then(res => res.data));
 export const getMarketDataHistory = (code: string) =>
   cached(`market-history:${code}`, () => api.get<MarketData[]>(`/market-data/${code}/history`).then(res => res.data));
 export const getAvailableDates = () => cached('market-dates', () => api.get<string[]>('/market-data/dates').then(res => res.data));
@@ -262,7 +266,7 @@ export interface UpcomingDividendItem {
   companyCode: string;
   yearsAppeared: number;
   avgAmountPerShare: number;
-  history: { year: number; exDividendDate: string; amountPerShare: number | null; paymentDate: string | null; announcementDate: string | null; dividendType: string | null }[];
+  history: { year: number; exDividendDate: string; amountPerShare: number | null; paymentDate: string | null; announcementDate: string | null; dividendType: string | null; priceOnXdDate: number | null }[];
 }
 export const getUpcomingDividends = (months: number) =>
   cached(`upcoming-dividends:${months}`, () => api.get<UpcomingDividendItem[]>(`/dividend-payouts/upcoming?months=${months}`).then(res => res.data));
