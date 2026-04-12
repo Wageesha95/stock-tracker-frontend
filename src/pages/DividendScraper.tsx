@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getCompanies, scrapeDividendPreview, scrapeDividendConfirm, getDividendPayouts, DividendPayoutData } from '../api';
+import { getCompanies, scrapeDividendPreview, scrapeDividendConfirm, getDividendPayouts, getAllDividendPayouts, DividendPayoutData, scrapeDividendCalendarPreview, scrapeDividendCalendarConfirm, scrapeDividendFinancialsPreview, scrapeDividendFinancialsConfirm, scrapeDividendFinancialsAll } from '../api';
 import { Company } from '../types';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -292,6 +292,208 @@ export default function DividendScraper() {
       )}
 
       {error && <div className="error-message">{error}</div>}
+
+      <CalendarScraper />
+      <FinancialsScraper companies={companies} />
+    </div>
+  );
+}
+
+function CalendarScraper() {
+  const [calMode, setCalMode] = useState<'idle' | 'scraping' | 'preview' | 'saving' | 'done'>('idle');
+  const [calData, setCalData] = useState<Record<string, any>[]>([]);
+  const [droppedIds, setDroppedIds] = useState<Set<string>>(new Set());
+  const [existingKeys, setExistingKeys] = useState<Set<string>>(new Set());
+  const [calResult, setCalResult] = useState<{ totalScraped: number; created: number; updated: number; skipped: number } | null>(null);
+  const [calError, setCalError] = useState('');
+  const [dateStart, setDateStart] = useState(() => {
+    const d = new Date(); d.setFullYear(d.getFullYear() - 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [dateEnd, setDateEnd] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 3);
+    return d.toISOString().split('T')[0];
+  });
+
+  const displayCols = ['ticker_symbol', 'company_name', 'xd_date', 'payment_date', 'announcement_date', 'dividend_per_share', 'dividend_type'];
+  const colLabels: Record<string, string> = {
+    ticker_symbol: 'Ticker', company_name: 'Company', xd_date: 'XD Date',
+    payment_date: 'Payment', announcement_date: 'Announced',
+    dividend_per_share: 'Amount', dividend_type: 'Type',
+  };
+
+  const rowKey = (row: Record<string, any>) => (row.ticker_symbol || '') + '|' + (row.xd_date || '');
+  const toggleDrop = (key: string) => setDroppedIds(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
+  const activeData = calData.filter(r => !droppedIds.has(rowKey(r)));
+
+  const getCompanyCode = (ticker: string) => ticker?.endsWith('0000') ? ticker.substring(0, ticker.length - 4) : ticker;
+  const months: Record<string, string> = { Jan:'01', Feb:'02', Mar:'03', Apr:'04', May:'05', Jun:'06', Jul:'07', Aug:'08', Sep:'09', Oct:'10', Nov:'11', Dec:'12' };
+  const parseDateToIso = (text: string): string | null => {
+    if (!text) return null;
+    // "DD MMM YYYY" or "D MMM YYYY"
+    const m = text.trim().match(/^(\d{1,2})\s+(\w{3})\s+(\d{4})$/);
+    if (m) {
+      const mon = months[m[2]];
+      if (mon) return `${m[3]}-${mon}-${m[1].padStart(2, '0')}`;
+    }
+    // "YYYY-MM-DD" already
+    if (text.match(/^\d{4}-\d{2}-\d{2}$/)) return text;
+    return null;
+  };
+  const isExisting = (row: Record<string, any>) => {
+    const code = getCompanyCode(row.ticker_symbol);
+    const iso = parseDateToIso(row.xd_date);
+    if (!code || !iso) return false;
+    return existingKeys.has(code + '|' + iso);
+  };
+
+  const newCount = activeData.filter(r => !isExisting(r)).length;
+  const existCount = activeData.length - newCount;
+
+  const handlePreview = async () => {
+    setCalMode('scraping');
+    setCalError('');
+    setCalData([]);
+    try {
+      const [data, existing] = await Promise.all([
+        scrapeDividendCalendarPreview(dateStart, dateEnd),
+        getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
+      ]);
+      setCalData(data);
+      const keys = new Set<string>();
+      existing.forEach(p => {
+        if (p.companyCode && p.exDividendDate) keys.add(p.companyCode + '|' + p.exDividendDate);
+      });
+      setExistingKeys(keys);
+      setCalMode('preview');
+    } catch (err: any) {
+      setCalError(err?.response?.data?.error || err?.message || 'Fetch failed.');
+      setCalMode('idle');
+    }
+  };
+
+  const handleConfirm = async () => {
+    setCalMode('saving');
+    setCalError('');
+    try {
+      const result = await scrapeDividendCalendarConfirm(activeData);
+      setCalResult(result);
+      setCalMode('done');
+    } catch (err: any) {
+      setCalError(err?.response?.data?.error || err?.message || 'Save failed.');
+      setCalMode('preview');
+    }
+  };
+
+  const handleReset = () => {
+    setCalMode('idle');
+    setCalData([]);
+    setCalResult(null);
+    setCalError('');
+  };
+
+  return (
+    <div style={{ marginTop: '2rem', borderTop: '2px solid var(--border-color)', paddingTop: '1.5rem' }}>
+      <h2>Dividend Calendar (stockdecision.com)</h2>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+        Fetch announcement dates and dividend types via API and update existing payout records.
+      </p>
+
+      {(calMode === 'idle' || calMode === 'preview') && (
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <label style={{ fontSize: '0.85rem', fontWeight: 600 }}>XD Date Range:</label>
+          <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)}
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '0.85rem' }} />
+          <span style={{ color: 'var(--text-muted)' }}>to</span>
+          <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)}
+            style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '0.85rem' }} />
+          <button className="btn-upload" onClick={handlePreview} disabled={calMode === 'scraping'}>
+            {calMode === 'preview' ? 'Re-fetch' : 'Fetch'}
+          </button>
+        </div>
+      )}
+
+      {calMode === 'scraping' && (
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+          Fetching dividend calendar data...
+        </div>
+      )}
+
+      {calMode === 'preview' && (
+        <>
+          <div className="success-message" style={{ background: 'var(--bg-success)', color: 'var(--text-success)' }}>
+            {activeData.length} record{activeData.length !== 1 ? 's' : ''} — {newCount} new, {existCount} existing
+            {droppedIds.size > 0 && <>, {droppedIds.size} dropped</>}.
+          </div>
+          {calData.length > 0 && (
+            <div className="portfolio-table-wrap" style={{ maxHeight: '400px', overflow: 'auto' }}>
+              <table className="portfolio-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 32 }}></th>
+                    <th>Status</th>
+                    {displayCols.map(h => <th key={h}>{colLabels[h] || h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {calData.map((row, i) => {
+                    const key = rowKey(row);
+                    const dropped = droppedIds.has(key);
+                    const exists = isExisting(row);
+                    return (
+                      <tr key={i} style={dropped ? { opacity: 0.3, textDecoration: 'line-through' } : exists ? { opacity: 0.6 } : undefined}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={!dropped}
+                            onChange={() => toggleDrop(key)}
+                            title={dropped ? 'Include' : 'Drop'}
+                          />
+                        </td>
+                        <td>
+                          {dropped
+                            ? <span style={{ color: 'var(--gain-negative)', fontSize: '0.8rem' }}>Dropped</span>
+                            : exists
+                            ? <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>Exists</span>
+                            : <span className="gain-positive" style={{ fontSize: '0.8rem' }}>New</span>}
+                        </td>
+                        {displayCols.map(h => (
+                          <td key={h} style={{ fontSize: '0.85rem' }}>
+                            {row[h] != null ? String(row[h]) : '-'}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="upload-actions" style={{ marginTop: '1rem' }}>
+            <button className="btn-upload" onClick={handleConfirm} disabled={activeData.length === 0}>
+              Confirm & Save ({activeData.length} records)
+            </button>
+            <button className="btn-reset" onClick={handleReset}>Cancel</button>
+          </div>
+        </>
+      )}
+
+      {calMode === 'saving' && (
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Saving...</div>
+      )}
+
+      {calMode === 'done' && calResult && (
+        <>
+          <div className="success-message">
+            Fetched {calResult.totalScraped} records. Created: {calResult.created}, Updated: {calResult.updated}, Skipped: {calResult.skipped}.
+          </div>
+          <div className="upload-actions" style={{ marginTop: '1rem' }}>
+            <button className="btn-reset" onClick={handleReset}>Done</button>
+          </div>
+        </>
+      )}
+
+      {calError && <div className="error-message">{calError}</div>}
     </div>
   );
 }
@@ -483,6 +685,267 @@ function ScrapeResultsTable({ results, onSave, defaultSort }: {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function FinancialsScraper({ companies }: { companies: Company[] }) {
+  const [code, setCode] = useState('');
+  const [mode, setMode] = useState<'idle' | 'scraping' | 'preview' | 'saving' | 'done' | 'all-scraping' | 'all-done'>('idle');
+  const [data, setData] = useState<{ year: number; dps: number | null; eps: number | null; yield: number | null }[]>([]);
+  const [result, setResult] = useState<{ totalScraped: number; saved: number } | null>(null);
+  const [allResults, setAllResults] = useState<{ code: string; status: 'pending' | 'scraping' | 'scraped' | 'saving' | 'saved' | 'done' | 'error' | 'save-error'; scraped?: number; saved?: number; error?: string }[]>([]);
+  const [allProgress, setAllProgress] = useState({ current: 0, total: 0 });
+  const [error, setError] = useState('');
+
+  const handlePreview = async () => {
+    if (!code) return;
+    setMode('scraping');
+    setError('');
+    setData([]);
+    try {
+      const res = await scrapeDividendFinancialsPreview(code);
+      setData(res);
+      setMode('preview');
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Scraping failed.');
+      setMode('idle');
+    }
+  };
+
+  const handleConfirm = async () => {
+    setMode('saving');
+    setError('');
+    try {
+      const res = await scrapeDividendFinancialsConfirm(code);
+      setResult(res);
+      setMode('done');
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Save failed.');
+      setMode('preview');
+    }
+  };
+
+  const handleScrapeAll = async () => {
+    setMode('all-scraping');
+    setError('');
+    const sorted = [...companies].sort((a, b) => a.code.localeCompare(b.code));
+    const initial = sorted.map(c => ({ code: c.code, status: 'pending' as const }));
+    setAllResults(initial);
+    setAllProgress({ current: 0, total: sorted.length });
+
+    const batchSize = 10;
+    for (let i = 0; i < sorted.length; i += batchSize) {
+      const batch = sorted.slice(i, i + batchSize);
+      batch.forEach(c => {
+        setAllResults(prev => prev.map(r => r.code === c.code ? { ...r, status: 'scraping' } : r));
+      });
+      setAllProgress({ current: Math.min(i + batchSize, sorted.length), total: sorted.length });
+
+      await Promise.all(batch.map(async c => {
+        try {
+          const preview = await scrapeDividendFinancialsPreview(c.code);
+          const validData = preview.filter(d => !('_debug' in d));
+          setAllResults(prev => prev.map(r => r.code === c.code ? { ...r, status: 'scraped', scraped: validData.length } : r));
+        } catch (err: any) {
+          setAllResults(prev => prev.map(r => r.code === c.code ? { ...r, status: 'error', error: err?.message || 'Failed' } : r));
+        }
+      }));
+    }
+    setMode('all-done');
+  };
+
+  const handleSaveOne = async (companyCode: string) => {
+    setAllResults(prev => prev.map(r => r.code === companyCode ? { ...r, status: 'saving' as any } : r));
+    try {
+      const res = await scrapeDividendFinancialsConfirm(companyCode);
+      setAllResults(prev => prev.map(r => r.code === companyCode ? { ...r, status: 'saved' as any, saved: res.saved } : r));
+    } catch {
+      setAllResults(prev => prev.map(r => r.code === companyCode ? { ...r, status: 'save-error' as any } : r));
+    }
+  };
+
+  const handleSaveAllRemaining = async () => {
+    const toSave = allResults.filter(r => r.status === ('scraped' as any) && (r.scraped ?? 0) > 0);
+    for (const r of toSave) {
+      await handleSaveOne(r.code);
+    }
+  };
+
+  const handleReset = () => {
+    setCode('');
+    setData([]);
+    setResult(null);
+    setAllResults([]);
+    setError('');
+    setMode('idle');
+  };
+
+  const fmt = (n: number | null) => n != null ? n.toFixed(2) : '-';
+
+  return (
+    <div style={{ marginTop: '2rem', borderTop: '2px solid var(--border-color)', paddingTop: '1.5rem' }}>
+      <h2>Dividend Financials (TradingView FY Data)</h2>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 1rem' }}>
+        Scrape annual DPS, dividend yield, and payout ratio from TradingView financials page.
+      </p>
+
+      {(mode === 'idle' || mode === 'preview') && (
+        <>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ minWidth: '250px' }}>
+              <CompanySearchSelect companies={companies} value={code} onChange={setCode} />
+            </div>
+            <button className="btn-upload" onClick={handlePreview} disabled={!code || mode === 'scraping'}>
+              {mode === 'preview' ? 'Re-scrape' : 'Scrape'}
+            </button>
+          </div>
+          {mode === 'idle' && (
+            <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem', marginBottom: '1rem' }}>
+              <button className="btn-upload" onClick={handleScrapeAll} disabled={companies.length === 0}>
+                Scrape All Companies ({companies.length})
+              </button>
+              <div style={{ marginTop: '0.35rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                Scrapes FY data for each company sequentially (~10s each). Uses headless browser.
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {mode === 'scraping' && (
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+          Scraping FY dividend data for {code}...
+        </div>
+      )}
+
+      {mode === 'preview' && (
+        <>
+          <div className="success-message" style={{ background: 'var(--bg-success)', color: 'var(--text-success)' }}>
+            Found {data.filter(d => !('_debug' in d)).length} year{data.filter(d => !('_debug' in d)).length !== 1 ? 's' : ''} of data for {code}.
+          </div>
+          {data.length > 0 && (data as any)[0]?._debug && (
+            <div className="error-message" style={{ whiteSpace: 'pre-wrap', fontSize: '0.8rem', maxHeight: '200px', overflow: 'auto' }}>
+              Debug: {(data as any)[0]._debug}
+            </div>
+          )}
+          {data.filter(d => !('_debug' in d)).length > 0 && (
+            <div className="portfolio-table-wrap">
+              <table className="portfolio-table">
+                <thead>
+                  <tr>
+                    <th>Year</th>
+                    <th className="text-right">DPS (LKR)</th>
+                    <th className="text-right">EPS (LKR)</th>
+                    <th className="text-right">Yield %</th>
+                    <th className="text-right">Payout %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...data].sort((a, b) => b.year - a.year).map(d => {
+                    const payout = d.dps && d.eps && d.eps !== 0 ? (d.dps / d.eps * 100) : null;
+                    return (
+                      <tr key={d.year}>
+                        <td style={{ fontWeight: 600 }}>{d.year}</td>
+                        <td className="text-right mono">{fmt(d.dps)}</td>
+                        <td className="text-right mono">{fmt(d.eps)}</td>
+                        <td className="text-right mono">{fmt(d.yield)}</td>
+                        <td className="text-right mono">{payout != null ? payout.toFixed(2) : '-'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="upload-actions" style={{ marginTop: '1rem' }}>
+            <button className="btn-upload" onClick={handleConfirm} disabled={data.filter(d => !('_debug' in d)).length === 0}>
+              Confirm & Save ({data.filter(d => !('_debug' in d)).length} records)
+            </button>
+            <button className="btn-reset" onClick={handleReset}>Cancel</button>
+          </div>
+        </>
+      )}
+
+      {mode === 'saving' && (
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Saving...</div>
+      )}
+
+      {mode === 'done' && result && (
+        <>
+          <div className="success-message">
+            Saved {result.saved} of {result.totalScraped} records for {code}.
+          </div>
+          <div className="upload-actions" style={{ marginTop: '1rem' }}>
+            <button className="btn-reset" onClick={handleReset}>Done</button>
+          </div>
+        </>
+      )}
+
+      {(mode === 'all-scraping' || mode === 'all-done') && (
+        <>
+          <div className="success-message" style={{ background: 'var(--bg-success)', color: 'var(--text-success)' }}>
+            {mode === 'all-scraping'
+              ? `Scraping ${allProgress.current} / ${allProgress.total} companies...`
+              : `Done. ${allResults.filter(r => r.status === 'done').length} succeeded, ${allResults.filter(r => r.status === 'error').length} failed.`}
+          </div>
+          {mode === 'all-scraping' && (
+            <div style={{ margin: '0.5rem 0' }}>
+              <div style={{ height: '6px', background: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${(allProgress.current / allProgress.total) * 100}%`, background: 'var(--accent)', transition: 'width 0.3s' }} />
+              </div>
+            </div>
+          )}
+          <div className="portfolio-table-wrap" style={{ maxHeight: '400px', overflow: 'auto', marginTop: '0.5rem' }}>
+            <table className="portfolio-table">
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th className="text-right">Years</th>
+                  <th>Scrape</th>
+                  <th>Save</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allResults.map(r => (
+                  <tr key={r.code} style={r.status === 'error' ? { opacity: 0.6 } : undefined}>
+                    <td style={{ fontWeight: 600 }}>{r.code}</td>
+                    <td className="text-right mono">{r.scraped ?? '-'}</td>
+                    <td>
+                      {r.status === 'pending' && <span style={{ color: 'var(--text-muted)' }}>Pending</span>}
+                      {r.status === 'scraping' && <span style={{ color: 'var(--accent)' }}>Scraping...</span>}
+                      {(r.status === 'scraped' || r.status === 'saving' || r.status === 'saved' || r.status === 'save-error') && <span className="gain-positive">Done</span>}
+                      {r.status === 'error' && <span className="gain-negative" title={r.error}>Failed</span>}
+                    </td>
+                    <td>
+                      {r.status === 'scraped' && (r.scraped ?? 0) > 0 && (
+                        <button className="btn-upload" style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+                          onClick={() => handleSaveOne(r.code)}>Save</button>
+                      )}
+                      {r.status === 'scraped' && (r.scraped ?? 0) === 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No data</span>}
+                      {r.status === 'saving' && <span style={{ color: 'var(--accent)', fontSize: '0.8rem' }}>Saving...</span>}
+                      {r.status === 'saved' && <span className="gain-positive" style={{ fontSize: '0.8rem' }}>Saved{r.saved != null ? ` (${r.saved})` : ''}</span>}
+                      {r.status === 'save-error' && <span className="gain-negative" style={{ fontSize: '0.8rem' }}>Error</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {mode === 'all-done' && (
+            <div className="upload-actions" style={{ marginTop: '1rem' }}>
+              {allResults.filter(r => r.status === 'scraped' && (r.scraped ?? 0) > 0).length > 0 && (
+                <button className="btn-upload" onClick={handleSaveAllRemaining}>
+                  Save All ({allResults.filter(r => r.status === 'scraped' && (r.scraped ?? 0) > 0).length} companies)
+                </button>
+              )}
+              <button className="btn-reset" onClick={handleReset}>Done</button>
+            </div>
+          )}
+        </>
+      )}
+
+      {error && <div className="error-message">{error}</div>}
     </div>
   );
 }

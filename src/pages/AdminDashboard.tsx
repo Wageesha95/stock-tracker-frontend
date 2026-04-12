@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAdminStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser, toggleDividendPayouts, getLoginHistory, LoginHistoryItem } from '../api';
+import { getAdminStats, getSystemStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser, toggleDividendPayouts } from '../api';
 import ActionMenu from '../components/ActionMenu';
 
 interface UserStat {
@@ -16,6 +16,11 @@ export default function AdminDashboard() {
   const [totalUsers, setTotalUsers] = useState(0);
   const [users, setUsers] = useState<UserStat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sysStats, setSysStats] = useState<{
+    companies: number; transactions: number; dividends: number; dividendPayouts: number;
+    marketData: number; stockPrices: number; industryGroups: number; watchlists: number;
+    loginHistory: number; latestMarketDate: string | null; marketDataDates: number;
+  } | null>(null);
 
   // Create user
   const [showCreate, setShowCreate] = useState(false);
@@ -25,7 +30,6 @@ export default function AdminDashboard() {
   const [createError, setCreateError] = useState('');
 
   // Login history
-  const [loginHistory, setLoginHistory] = useState<LoginHistoryItem[]>([]);
 
   // Edit user
   const [editUser, setEditUser] = useState<UserStat | null>(null);
@@ -35,13 +39,10 @@ export default function AdminDashboard() {
   const [editError, setEditError] = useState('');
 
   const loadData = () => {
-    const p1 = getAdminStats()
-      .then(data => { setTotalUsers(data.totalUsers); setUsers(data.users); })
-      .catch(console.error);
-    const p2 = getLoginHistory()
-      .then(history => setLoginHistory(history))
-      .catch(console.error);
-    Promise.all([p1, p2]).finally(() => setLoading(false));
+    Promise.all([
+      getAdminStats().then(data => { setTotalUsers(data.totalUsers); setUsers(data.users); }),
+      getSystemStats().then(setSysStats),
+    ]).catch(console.error).finally(() => setLoading(false));
   };
 
   useEffect(() => { loadData(); }, []);
@@ -121,14 +122,14 @@ export default function AdminDashboard() {
       </div>
 
       <div className="stats-grid">
-        <div className="stat-card">
-          <h3>Total Users</h3>
-          <p className="stat-value">{totalUsers}</p>
-        </div>
-        <div className="stat-card">
-          <h3>Total Transactions</h3>
-          <p className="stat-value">{users.reduce((s, u) => s + u.transactionCount, 0)}</p>
-        </div>
+        <div className="stat-card"><h3>Users</h3><p className="stat-value">{totalUsers}</p></div>
+        <div className="stat-card"><h3>Companies</h3><p className="stat-value">{sysStats?.companies ?? '-'}</p></div>
+        <div className="stat-card"><h3>Transactions</h3><p className="stat-value">{sysStats?.transactions ?? '-'}</p></div>
+        <div className="stat-card"><h3>Dividends</h3><p className="stat-value">{sysStats?.dividends ?? '-'}</p></div>
+        <div className="stat-card"><h3>Dividend Payouts</h3><p className="stat-value">{sysStats?.dividendPayouts ?? '-'}</p></div>
+        <div className="stat-card"><h3>Market Data</h3><p className="stat-value">{sysStats?.marketData ?? '-'}</p><small style={{ color: 'var(--text-muted)' }}>{sysStats?.marketDataDates ?? 0} dates</small></div>
+        <div className="stat-card"><h3>Industries</h3><p className="stat-value">{sysStats?.industryGroups ?? '-'}</p></div>
+        <div className="stat-card"><h3>Latest Market</h3><p className="stat-value" style={{ fontSize: '1.1rem' }}>{sysStats?.latestMarketDate ?? '-'}</p></div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2rem', marginBottom: '1rem' }}>
@@ -205,53 +206,6 @@ export default function AdminDashboard() {
         </table>
       </div>
 
-      <h2 style={{ marginTop: '2rem', marginBottom: '1rem' }}>Login History</h2>
-      <div className="portfolio-table-wrap">
-        <table className="portfolio-table">
-          <thead>
-            <tr>
-              <th>User</th>
-              <th>Action</th>
-              <th>Mode</th>
-              <th>Device</th>
-              <th>IP</th>
-              <th>Location</th>
-              <th>Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loginHistory.map(h => (
-              <tr key={h.id}>
-                <td style={{ fontWeight: 600 }}>{h.username}</td>
-                <td>
-                  <span className="gain-pill" style={h.action === 'LOGIN'
-                    ? { background: '#c6f6d5', color: '#276749' }
-                    : h.action === 'FAILED_LOGIN'
-                    ? { background: '#fefcbf', color: '#744210' }
-                    : { background: '#fed7d7', color: '#9b2c2c' }
-                  }>{h.action === 'FAILED_LOGIN' ? 'FAILED' : h.action}</span>
-                </td>
-                <td title={h.action === 'LOGIN' ? (h.readMode ? 'Read Only' : 'Privileged') : ''} style={{ textAlign: 'center' }}>
-                  {h.action === 'LOGIN' && (
-                    <span style={{ fontSize: '1rem' }}>{h.readMode ? '\uD83D\uDC41' : '\u270F\uFE0F'}</span>
-                  )}
-                </td>
-                <td style={{ fontSize: '0.75rem', maxWidth: '250px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={h.device}>
-                  {h.device}
-                </td>
-                <td className="mono" style={{ fontSize: '0.8rem' }}>{h.ipAddress}</td>
-                <td style={{ fontSize: '0.8rem' }}>{h.location || ''}</td>
-                <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                  {new Date(h.timestamp).toLocaleString()}
-                </td>
-              </tr>
-            ))}
-            {loginHistory.length === 0 && (
-              <tr><td colSpan={7} style={{ color: 'var(--text-muted)', textAlign: 'center' }}>No login history yet</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
 
       {/* Edit Modal */}
       {editUser && (

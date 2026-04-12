@@ -199,6 +199,12 @@ export const getDashboardSummary = () => cached('summary', () => api.get<{
   breakdown: { companyCode: string; companyName: string; date: string; amount: number; days: number; interest: number }[];
 }>('/dashboard/summary').then(res => res.data));
 // Admin
+export const getSystemStats = () => api.get<{
+  companies: number; transactions: number; dividends: number; dividendPayouts: number;
+  marketData: number; stockPrices: number; industryGroups: number; watchlists: number;
+  loginHistory: number; latestMarketDate: string | null; marketDataDates: number;
+}>('/admin/system-stats').then(res => res.data);
+
 export const getAdminStats = () => cached('admin-stats', () => api.get<{
   totalUsers: number;
   users: { id: string; username: string; role: string; transactionCount: number; locked: boolean; dividendPayoutsEnabled: boolean; createdAt: string }[];
@@ -234,6 +240,10 @@ export interface DividendPayoutData {
   amountPerShare: number | null;
   type: string | null;
   paymentDate: string | null;
+  announcementDate: string | null;
+  dividendType: string | null;
+  priceOnXdDate: number | null;
+  priceOnAnnouncementDate: number | null;
   declarationDate: string | null;
   recordDate: string | null;
   yield: number | null;
@@ -247,8 +257,70 @@ export const getAllDividendPayouts = () =>
   cached('dividend-payouts', () => api.get<DividendPayoutData[]>('/dividend-payouts').then(res => res.data));
 export const getDividendPayouts = (companyCode: string) =>
   api.get<DividendPayoutData[]>(`/dividend-payouts/company/${companyCode}`).then(res => res.data);
+
+export interface UpcomingDividendItem {
+  companyCode: string;
+  yearsAppeared: number;
+  avgAmountPerShare: number;
+  history: { year: number; exDividendDate: string; amountPerShare: number | null; paymentDate: string | null; announcementDate: string | null; dividendType: string | null }[];
+}
+export const getUpcomingDividends = (months: number) =>
+  cached(`upcoming-dividends:${months}`, () => api.get<UpcomingDividendItem[]>(`/dividend-payouts/upcoming?months=${months}`).then(res => res.data));
 export const scrapeDividendDebug = (companyCode: string) =>
   api.post<string>(`/admin/scrape/dividends/${companyCode}/debug`).then(res => res.data);
+
+// Dividend Financials (FY: DPS, yield, payout ratio)
+export interface DividendFinancialData {
+  id?: string;
+  companyCode: string;
+  year: number;
+  dividendPerShare: number | null;
+  dividendYield: number | null;
+  payoutRatio: number | null;
+  scrapedAt: string | null;
+}
+export const scrapeDividendFinancialsPreview = (companyCode: string) =>
+  api.post<{ year: number; dps: number | null; eps: number | null; yield: number | null }[]>(`/admin/scrape/dividend-financials/${companyCode}/preview`).then(res => res.data);
+export const scrapeDividendFinancialsConfirm = (companyCode: string) =>
+  api.post<{ companyCode: string; totalScraped: number; saved: number }>(`/admin/scrape/dividend-financials/${companyCode}/confirm`).then(res => res.data);
+export const getDividendFinancials = (companyCode: string) =>
+  api.get<DividendFinancialData[]>(`/dividend-financials/company/${companyCode}`).then(res => res.data);
+export const scrapeDividendFinancialsAll = () =>
+  api.post<{ totalCompanies: number; succeeded: number; failed: number; details: { companyCode: string; scraped?: number; saved?: number; error?: string }[] }>('/admin/scrape/dividend-financials').then(res => res.data);
+
+// Dividend Calendar Scraper (stockdecision.com)
+export const scrapeDividendCalendarPreview = (dateStart: string, dateEnd: string) =>
+  api.post<Record<string, any>[]>(`/admin/scrape/dividend-calendar/preview?dateStart=${dateStart}&dateEnd=${dateEnd}`).then(res => res.data);
+export const scrapeDividendCalendarConfirm = (records: Record<string, any>[]) =>
+  api.post<{ totalScraped: number; created: number; updated: number; skipped: number }>('/admin/scrape/dividend-calendar/confirm', records).then(res => res.data);
+
+// Market Data Scraper
+export interface ScrapedBar {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+export const scrapeMarketDataPreview = (companyCode: string) =>
+  api.post<ScrapedBar[]>(`/market-data/scrape/${companyCode}/preview`).then(res => res.data);
+export const scrapeMarketDataConfirm = (companyCode: string) =>
+  api.post<{ companyCode: string; totalScraped: number; newRecords: number }>(`/market-data/scrape/${companyCode}/confirm`).then(res => res.data);
+export const scrapeMarketDataSaveBar = (companyCode: string, bar: ScrapedBar) =>
+  api.post<{ date: string; status: string }>(`/market-data/scrape/${companyCode}/save-bar`, bar).then(res => res.data);
+export const scrapeMarketDataSaveBars = (companyCode: string, bars: ScrapedBar[]) =>
+  api.post<{ companyCode: string; totalBars: number; newRecords: number }>(`/market-data/scrape/${companyCode}/save-bars`, bars).then(res => res.data);
+export const scrapeMarketDataAll = () =>
+  api.post<{ totalCompanies: number; succeeded: number; failed: number; details: { companyCode: string; totalScraped?: number; newRecords?: number; error?: string }[] }>('/market-data/scrape-all').then(res => res.data);
+
+// Market Data Delete
+export const deleteMarketDataRange = (from?: string, to?: string) => {
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  return api.delete<{ deletedCount: number; range: string }>(`/market-data/range?${params}`).then(res => { invalidate('market'); return res.data; });
+};
 
 export const getDashboardAll = () => cached('dashboard-all', () => api.get<{
   portfolio: PortfolioItem[];

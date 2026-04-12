@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getTransactionsByCompany, getDividendsByCompany, getDashboardAll, getCompanies, getMarketDataHistory, getShareSplits, ShareSplitData, getDividendPayouts, DividendPayoutData } from '../api';
+import { getTransactionsByCompany, getDividendsByCompany, getDashboardAll, getCompanies, getMarketDataHistory, getShareSplits, ShareSplitData, getDividendPayouts, DividendPayoutData, getDividendFinancials, DividendFinancialData } from '../api';
 import { Transaction, Dividend, RealizedGainItem, Company, MarketData, PortfolioItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -27,8 +27,10 @@ export default function CompanyView() {
   const [marketHistory, setMarketHistory] = useState<MarketData[]>([]);
   const [shareSplits, setShareSplits] = useState<ShareSplitData[]>([]);
   const [payouts, setPayouts] = useState<DividendPayoutData[]>([]);
+  const [financials, setFinancials] = useState<DividendFinancialData[]>([]);
   const [loading, setLoading] = useState(true);
   const [lowPeriod, setLowPeriod] = useState<Period>('1d');
+  const [expandedChart, setExpandedChart] = useState<'shares' | 'value' | 'priceAvg' | 'pnl' | 'yearly' | 'yearlyChart' | null>(null);
   const chartScrollRef = useRef<HTMLDivElement>(null);
 
   const loadData = () => {
@@ -41,7 +43,8 @@ export default function CompanyView() {
       getMarketDataHistory(code),
       getShareSplits(),
       getDividendPayouts(code).catch(() => [] as DividendPayoutData[]),
-    ]).then(([txns, divs, dash, comps, mh, splits, payoutData]) => {
+      getDividendFinancials(code).catch(() => [] as DividendFinancialData[]),
+    ]).then(([txns, divs, dash, comps, mh, splits, payoutData, finData]) => {
       setTransactions(txns.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setDividends(divs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setRealizedItems(dash.realizedItems.filter(r => r.companyCode === code));
@@ -51,6 +54,7 @@ export default function CompanyView() {
       setMarketHistory(mh);
       setShareSplits(splits.filter(s => s.companyCode === code));
       setPayouts(payoutData as DividendPayoutData[]);
+      setFinancials(finData as DividendFinancialData[]);
     });
   };
 
@@ -108,7 +112,7 @@ export default function CompanyView() {
     };
   }, [marketHistory, lowPeriod, shareSplits]);
 
-  const { valueChartData, sharesChartData, adjPnlChartData } = useMemo(() => {
+  const { valueChartData, sharesChartData, priceVsAvgChartData, adjPnlChartData } = useMemo(() => {
     const sortedTx = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
 
     // Build cumulative invested + shares over time (FIFO)
@@ -151,7 +155,7 @@ export default function CompanyView() {
     const txByDate: Record<string, { invested: number; shares: number }> = {};
     mergedTx.forEach(t => { txByDate[t.date] = { invested: t.invested, shares: t.shares }; });
 
-    const valueData: { date: string; invested: number; portfolio: number }[] = [];
+    const valueData: { date: string; invested: number; portfolio: number; price: number }[] = [];
     let lastPrice = 0;
     for (const date of allDates) {
       if (txByDate[date]) {
@@ -167,6 +171,7 @@ export default function CompanyView() {
           date,
           invested: Math.round(lastInvested * 10000) / 10000,
           portfolio: Math.round(portfolio * 10000) / 10000,
+          price: Math.round(lastPrice * 10000) / 10000,
         });
       }
     }
@@ -226,7 +231,30 @@ export default function CompanyView() {
       return acc;
     }, []);
 
-    return { valueChartData: valueData, sharesChartData: mergedTx, adjPnlChartData: mergedAdjPnl };
+    // Build share price vs avg buy price chart data
+    const investedByDate: Record<string, { invested: number; shares: number }> = {};
+    mergedTx.forEach(t => { investedByDate[t.date] = { invested: t.invested, shares: t.shares }; });
+    let lastAvgShares = 0;
+    let lastAvgInvested = 0;
+    let lastMktPrice = 0;
+    const priceVsAvgData: { date: string; sharePrice: number; avgPrice: number }[] = [];
+    for (const date of allDates) {
+      if (investedByDate[date]) {
+        lastAvgShares = investedByDate[date].shares;
+        lastAvgInvested = investedByDate[date].invested;
+      }
+      if (priceByDate[date]) lastMktPrice = priceByDate[date];
+      if (lastAvgShares > 0 && lastMktPrice > 0) {
+        const avgPrice = lastAvgInvested / lastAvgShares;
+        priceVsAvgData.push({
+          date,
+          sharePrice: Math.round(lastMktPrice * 100) / 100,
+          avgPrice: Math.round(avgPrice * 100) / 100,
+        });
+      }
+    }
+
+    return { valueChartData: valueData, sharesChartData: mergedTx, priceVsAvgChartData: priceVsAvgData, adjPnlChartData: mergedAdjPnl };
   }, [transactions, marketHistory, dividends, realizedItems]);
 
   const [navCode, setNavCode] = useState('');
@@ -404,106 +432,152 @@ export default function CompanyView() {
                 </div>
               </div>
               {/* Yearly table */}
-              {payouts.length > 0 && (
-                <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem', boxShadow: 'var(--shadow-card)' }}>
-                  <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Yearly Summary</h3>
+              {(() => {
+                const finByYear: Record<number, DividendFinancialData> = {};
+                financials.forEach(f => { finByYear[f.year] = f; });
+                const summaryYears = financials.length > 0
+                  ? financials.filter(f => f.year < now.getFullYear()).map(f => f.year).sort((a, b) => b - a)
+                  : years.filter(y => y !== currentYear).map(Number).sort((a, b) => b - a);
+                if (summaryYears.length === 0) return null;
+                const displayYears = summaryYears.slice(0, 7);
+                const hasMore = summaryYears.length > 7;
+                const renderTable = (yrs: number[]) => (
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
                       <thead>
                         <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
                           <th style={{ textAlign: 'left', padding: '0.3rem 0.5rem', fontWeight: 600 }}></th>
-                          {years.map(y => <th key={y} style={{ textAlign: 'right', padding: '0.3rem 0.5rem', fontWeight: 600 }}>{y}</th>)}
+                          {yrs.map(y => <th key={y} style={{ textAlign: 'right', padding: '0.3rem 0.5rem', fontWeight: 600 }}>{y}</th>)}
                         </tr>
                       </thead>
                       <tbody>
                         <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>Amount</td>
-                          {years.map(y => {
-                            const t = byYear[y].reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
-                            return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{fmt(t)}</td>;
+                          <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>DPS</td>
+                          {yrs.map(y => {
+                            const fin = finByYear[y];
+                            const payoutTotal = byYear[String(y)]?.reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
+                            const val = fin?.dividendPerShare ?? payoutTotal;
+                            return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{val != null && val > 0 ? fmt(val) : '-'}</td>;
                           })}
                         </tr>
                         <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>Yield</td>
-                          {years.map(y => {
-                            const t = byYear[y].reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
-                            const isCur = y === currentYear;
-                            return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem', color: isCur ? undefined : 'var(--text-muted)' }}>
-                              {isCur && curPrice > 0 ? (t / curPrice * 100).toFixed(2) + '%' : 'No data'}
-                            </td>;
+                          <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>EPS</td>
+                          {yrs.map(y => {
+                            const fin = finByYear[y];
+                            return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{fin?.earningsPerShare != null ? fmt(fin.earningsPerShare) : '-'}</td>;
+                          })}
+                        </tr>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>Yield %</td>
+                          {yrs.map(y => {
+                            const fin = finByYear[y];
+                            return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{fin?.dividendYield != null ? fin.dividendYield.toFixed(2) + '%' : '-'}</td>;
+                          })}
+                        </tr>
+                        <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>Payout %</td>
+                          {yrs.map(y => {
+                            const fin = finByYear[y];
+                            const payout = fin?.dividendPerShare && fin?.earningsPerShare && fin.earningsPerShare !== 0
+                              ? (fin.dividendPerShare / fin.earningsPerShare * 100) : null;
+                            return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{payout != null ? payout.toFixed(2) + '%' : '-'}</td>;
                           })}
                         </tr>
                         <tr>
                           <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>Payouts</td>
-                          {years.map(y => <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{byYear[y].length}</td>)}
+                          {yrs.map(y => {
+                            const count = byYear[String(y)]?.length || 0;
+                            return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{count > 0 ? count : '-'}</td>;
+                          })}
                         </tr>
                       </tbody>
                     </table>
                   </div>
-                </div>
-              )}
+                );
+                return (
+                  <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem', boxShadow: 'var(--shadow-card)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <h3 style={{ margin: 0, fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Yearly Summary</h3>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        {hasMore && (
+                          <button onClick={() => setExpandedChart('yearly' as any)} style={{
+                            background: 'none', border: '1px solid var(--border-input)', borderRadius: '4px',
+                            color: 'var(--text-muted)', fontSize: '0.75rem', padding: '0.2rem 0.5rem', cursor: 'pointer',
+                          }}>All {summaryYears.length} years</button>
+                        )}
+                        <button onClick={() => setExpandedChart('yearlyChart' as any)} style={{
+                          background: 'none', border: '1px solid var(--border-input)', borderRadius: '4px',
+                          color: 'var(--text-muted)', fontSize: '0.75rem', padding: '0.2rem 0.5rem', cursor: 'pointer',
+                        }}>Chart</button>
+                      </div>
+                    </div>
+                    {renderTable(displayYears)}
+                  </div>
+                );
+              })()}
             </div>
           );
         })()}
       </div>
 
-      {(valueChartData.length > 1 || sharesChartData.length > 1 || adjPnlChartData.length > 1) && (
+      {(valueChartData.length > 1 || sharesChartData.length > 1 || priceVsAvgChartData.length > 1 || adjPnlChartData.length > 1) && (
         <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
           <div className="chart-scroll-container" ref={chartScrollRef}>
           {sharesChartData.length > 1 && (
-            <div className="chart-scroll-item" style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)' }}>
+            <div className="chart-scroll-item" onClick={() => setExpandedChart('shares')} style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)', cursor: 'pointer' }}>
               <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Shares Held</h3>
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={sharesChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
-                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} />
-                  <Tooltip
-                    contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
-                    formatter={(value: any) => [value, 'Shares']}
-                    labelFormatter={l => l}
-                  />
-                  <Line type="monotone" dataKey="shares" stroke="#805ad5" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
+                  <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} />
+                  <Line type="monotone" dataKey="shares" stroke="#805ad5" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           )}
           {valueChartData.length > 1 && (
-            <div className="chart-scroll-item" style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)' }}>
+            <div className="chart-scroll-item" onClick={() => setExpandedChart('value')} style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)', cursor: 'pointer' }}>
               <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>
-                <span style={{ color: '#3182ce' }}>Invested</span> / <span style={{ color: '#38a169' }}>Portfolio Value</span>
+                <span style={{ color: '#3182ce' }}>Invested</span> / <span style={{ color: '#38a169' }}>Portfolio</span>
               </h3>
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={valueChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
-                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
-                  <Tooltip
-                    contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
-                    formatter={(value: any, name: any) => [`LKR ${fmt(value)}`, name === 'invested' ? 'Invested' : 'Portfolio']}
-                    labelFormatter={l => l}
-                  />
-                  <Line type="monotone" dataKey="invested" stroke="#3182ce" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="portfolio" stroke="#38a169" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
+                  <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
+                  <Line type="monotone" dataKey="invested" stroke="#3182ce" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="portfolio" stroke="#38a169" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+          {priceVsAvgChartData.length > 1 && (
+            <div className="chart-scroll-item" onClick={() => setExpandedChart('priceAvg')} style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)', cursor: 'pointer' }}>
+              <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>
+                <span style={{ color: '#e53e3e' }}>Price</span> / <span style={{ color: '#3182ce' }}>Avg Cost</span>
+              </h3>
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={priceVsAvgChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
+                  <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={v => v.toFixed(0)} />
+                  <Line type="monotone" dataKey="sharePrice" stroke="#e53e3e" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="avgPrice" stroke="#3182ce" strokeWidth={2} dot={false} strokeDasharray="4 2" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           )}
           {adjPnlChartData.length > 1 && (
-            <div className="chart-scroll-item" style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)' }}>
+            <div className="chart-scroll-item" onClick={() => setExpandedChart('pnl')} style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)', cursor: 'pointer' }}>
               <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Adjusted P&L</h3>
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={180}>
                 <LineChart data={adjPnlChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
-                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
-                  <Tooltip
-                    contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px', fontSize: '0.8rem' }}
-                    formatter={(value: any) => [`LKR ${fmt(value)}`, 'Adjusted P&L']}
-                    labelFormatter={l => l}
-                  />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
+                  <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
                   <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
-                  <Line type="monotone" dataKey="pnl" stroke="#dd6b20" strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="pnl" stroke="#dd6b20" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -511,6 +585,173 @@ export default function CompanyView() {
           </div>
           <button className="chart-scroll-arrow chart-scroll-left" onClick={() => chartScrollRef.current?.scrollBy({ left: -300, behavior: 'smooth' })} aria-label="Scroll left">&lsaquo;</button>
           <button className="chart-scroll-arrow chart-scroll-right" onClick={() => chartScrollRef.current?.scrollBy({ left: 300, behavior: 'smooth' })} aria-label="Scroll right">&rsaquo;</button>
+        </div>
+      )}
+
+      {/* Expanded chart modal */}
+      {expandedChart && (
+        <div onClick={() => setExpandedChart(null)} style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem',
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: 'var(--bg-card)', borderRadius: '12px', padding: '1.5rem',
+            width: '100%', maxWidth: '900px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ margin: 0, fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>
+                {expandedChart === 'shares' && 'Shares Held'}
+                {expandedChart === 'value' && <><span style={{ color: '#3182ce' }}>Invested</span> / <span style={{ color: '#38a169' }}>Portfolio Value</span></>}
+                {expandedChart === 'priceAvg' && <><span style={{ color: '#e53e3e' }}>Share Price</span> / <span style={{ color: '#3182ce' }}>Avg Buy Price</span></>}
+                {expandedChart === 'pnl' && 'Adjusted P&L'}
+                {expandedChart === 'yearly' && 'Yearly Summary — All Years'}
+                {expandedChart === 'yearlyChart' && 'Dividend History Chart'}
+              </h3>
+              <button onClick={() => setExpandedChart(null)} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-muted)', fontSize: '1.5rem', lineHeight: 1,
+              }}>&times;</button>
+            </div>
+            {expandedChart === 'yearlyChart' ? (() => {
+              const finByYear: Record<number, DividendFinancialData> = {};
+              financials.forEach(f => { finByYear[f.year] = f; });
+              const byYearP: Record<string, DividendPayoutData[]> = {};
+              payouts.forEach(p => { const y = p.exDividendDate.substring(0, 4); (byYearP[y] = byYearP[y] || []).push(p); });
+              const allYears = financials.length > 0
+                ? financials.filter(f => f.year < new Date().getFullYear()).map(f => f.year).sort((a, b) => a - b)
+                : [...new Set(payouts.map(p => parseInt(p.exDividendDate.substring(0, 4))))].filter(y => y < new Date().getFullYear()).sort((a, b) => a - b);
+              const chartData = allYears.map(y => {
+                const fin = finByYear[y];
+                const pt = byYearP[String(y)]?.reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
+                const dps = fin?.dividendPerShare ?? pt ?? 0;
+                const eps = fin?.earningsPerShare ?? 0;
+                const yld = fin?.dividendYield ?? 0;
+                const payout = dps && eps && eps !== 0 ? Math.round(dps / eps * 10000) / 100 : 0;
+                return { year: String(y), dps, eps, yield: yld, payout };
+              });
+              return (
+                <ResponsiveContainer width="100%" height={450}>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                    <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                    <YAxis yAxisId="val" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                    <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => v + '%'} />
+                    <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px' }}
+                      formatter={(v: any, name: any) => {
+                        if (name === 'yield' || name === 'payout') return [v.toFixed(2) + '%', name === 'yield' ? 'Yield' : 'Payout'];
+                        return ['LKR ' + fmt(v), name === 'dps' ? 'DPS' : 'EPS'];
+                      }}
+                    />
+                    <Line yAxisId="val" type="monotone" dataKey="dps" stroke="#3182ce" strokeWidth={2} dot={{ r: 3 }} name="dps" />
+                    <Line yAxisId="val" type="monotone" dataKey="eps" stroke="#38a169" strokeWidth={2} dot={{ r: 3 }} name="eps" />
+                    <Line yAxisId="pct" type="monotone" dataKey="yield" stroke="#e53e3e" strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="yield" />
+                    <Line yAxisId="pct" type="monotone" dataKey="payout" stroke="#dd6b20" strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="payout" />
+                  </LineChart>
+                </ResponsiveContainer>
+              );
+            })() : expandedChart === 'yearly' ? (() => {
+              const finByYear: Record<number, DividendFinancialData> = {};
+              financials.forEach(f => { finByYear[f.year] = f; });
+              const byYearP: Record<string, DividendPayoutData[]> = {};
+              payouts.forEach(p => { const y = p.exDividendDate.substring(0, 4); (byYearP[y] = byYearP[y] || []).push(p); });
+              const allYears = financials.length > 0
+                ? financials.filter(f => f.year < new Date().getFullYear()).map(f => f.year).sort((a, b) => b - a)
+                : [...new Set(payouts.map(p => parseInt(p.exDividendDate.substring(0, 4))))].filter(y => y < new Date().getFullYear()).sort((a, b) => b - a);
+              return (
+                <div style={{ overflowX: 'auto', maxHeight: '500px' }}>
+                  <table style={{ width: '100%', fontSize: '0.85rem', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <th style={{ textAlign: 'left', padding: '0.3rem 0.5rem', fontWeight: 600, position: 'sticky', top: 0, background: 'var(--bg-card)' }}></th>
+                        {allYears.map(y => <th key={y} style={{ textAlign: 'right', padding: '0.3rem 0.5rem', fontWeight: 600, position: 'sticky', top: 0, background: 'var(--bg-card)' }}>{y}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>DPS</td>
+                        {allYears.map(y => {
+                          const fin = finByYear[y];
+                          const pt = byYearP[String(y)]?.reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
+                          const val = fin?.dividendPerShare ?? pt;
+                          return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{val != null && val > 0 ? fmt(val) : '-'}</td>;
+                        })}
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>EPS</td>
+                        {allYears.map(y => {
+                          const fin = finByYear[y];
+                          return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{fin?.earningsPerShare != null ? fmt(fin.earningsPerShare) : '-'}</td>;
+                        })}
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>Yield %</td>
+                        {allYears.map(y => {
+                          const fin = finByYear[y];
+                          return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{fin?.dividendYield != null ? fin.dividendYield.toFixed(2) + '%' : '-'}</td>;
+                        })}
+                      </tr>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>Payout %</td>
+                        {allYears.map(y => {
+                          const fin = finByYear[y];
+                          const payout = fin?.dividendPerShare && fin?.earningsPerShare && fin.earningsPerShare !== 0
+                            ? (fin.dividendPerShare / fin.earningsPerShare * 100) : null;
+                          return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{payout != null ? payout.toFixed(2) + '%' : '-'}</td>;
+                        })}
+                      </tr>
+                      <tr>
+                        <td style={{ padding: '0.3rem 0.5rem', fontWeight: 600 }}>Payouts</td>
+                        {allYears.map(y => {
+                          const count = byYearP[String(y)]?.length || 0;
+                          return <td key={y} className="mono" style={{ textAlign: 'right', padding: '0.3rem 0.5rem' }}>{count > 0 ? count : '-'}</td>;
+                        })}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })() : (
+            <ResponsiveContainer width="100%" height={450}>
+              {expandedChart === 'shares' ? (
+                <LineChart data={sharesChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                  <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px' }} formatter={(v: any) => [v, 'Shares']} labelFormatter={l => l} />
+                  <Line type="monotone" dataKey="shares" stroke="#805ad5" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                </LineChart>
+              ) : expandedChart === 'value' ? (
+                <LineChart data={valueChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
+                  <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px' }} formatter={(v: any, n: any) => [`LKR ${fmt(v)}`, n === 'invested' ? 'Invested' : 'Portfolio']} labelFormatter={l => l} />
+                  <Line type="monotone" dataKey="invested" stroke="#3182ce" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                  <Line type="monotone" dataKey="portfolio" stroke="#38a169" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                </LineChart>
+              ) : expandedChart === 'priceAvg' ? (
+                <LineChart data={priceVsAvgChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => v.toFixed(0)} />
+                  <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px' }} formatter={(v: any, n: any) => [`LKR ${fmt(v)}`, n === 'sharePrice' ? 'Share Price' : 'Avg Buy Price']} labelFormatter={l => l} />
+                  <Line type="monotone" dataKey="sharePrice" stroke="#e53e3e" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                  <Line type="monotone" dataKey="avgPrice" stroke="#3182ce" strokeWidth={2} dot={false} activeDot={{ r: 4 }} strokeDasharray="4 2" />
+                </LineChart>
+              ) : (
+                <LineChart data={adjPnlChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                  <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => `${(v / 1000).toFixed(0)}K`} />
+                  <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px' }} formatter={(v: any) => [`LKR ${fmt(v)}`, 'Adjusted P&L']} labelFormatter={l => l} />
+                  <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="3 3" />
+                  <Line type="monotone" dataKey="pnl" stroke="#dd6b20" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                </LineChart>
+              )}
+            </ResponsiveContainer>
+            )}
+          </div>
         </div>
       )}
 
@@ -651,30 +892,84 @@ export default function CompanyView() {
       {tab === 'payouts' && (
         payouts.length === 0 ? (
           <p style={{ color: 'var(--text-muted)' }}>No dividend payout data for {code}.</p>
-        ) : (
-        <div className="portfolio-table-wrap">
-          <table className="portfolio-table">
-            <thead>
-              <tr>
-                <th>Ex-Dividend Date</th>
-                <th>Payment Date</th>
-                <th className="text-right">Amount (LKR)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payouts.map((p, i) => (
-                <tr key={i}>
-                  <td>{p.exDividendDate || '-'}</td>
-                  <td>{p.paymentDate || '-'}</td>
-                  <td className="text-right mono">
-                    {p.amountPerShare != null ? Number(p.amountPerShare).toFixed(2) : '-'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        )
+        ) : (() => {
+          const byYear: Record<string, DividendPayoutData[]> = {};
+          payouts.forEach(p => {
+            const y = p.exDividendDate?.substring(0, 4) || 'Unknown';
+            (byYear[y] = byYear[y] || []).push(p);
+          });
+          const sortedYears = Object.keys(byYear).sort().reverse();
+          const grandTotal = payouts.reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
+          return (
+            <div>
+              <div className="portfolio-table-wrap">
+                <table className="portfolio-table">
+                  <thead>
+                    <tr>
+                      <th>Year</th>
+                      <th>Type</th>
+                      <th>XD Date</th>
+                      <th className="text-right">XD Price</th>
+                      <th className="text-right">XD Yield</th>
+                      <th>Announced</th>
+                      <th className="text-right">Ann. Price</th>
+                      <th className="text-right">Ann. Yield</th>
+                      <th>Payment</th>
+                      <th className="text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const yld = (amt: number | null, price: number | null) => {
+                        if (!amt || !price || price === 0) return '-';
+                        return ((amt / price) * 100).toFixed(2) + '%';
+                      };
+                      const payoutRow = (p: DividendPayoutData, showYear?: string) => (
+                        <>
+                          {showYear !== undefined && <td style={{ fontWeight: showYear ? 600 : undefined }}>{showYear}</td>}
+                          <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{p.dividendType || '-'}</td>
+                          <td>{p.exDividendDate || '-'}</td>
+                          <td className="text-right mono">{p.priceOnXdDate != null ? fmt(p.priceOnXdDate) : '-'}</td>
+                          <td className="text-right mono">{yld(p.amountPerShare, p.priceOnXdDate)}</td>
+                          <td>{p.announcementDate || '-'}</td>
+                          <td className="text-right mono">{p.priceOnAnnouncementDate != null ? fmt(p.priceOnAnnouncementDate) : '-'}</td>
+                          <td className="text-right mono">{yld(p.amountPerShare, p.priceOnAnnouncementDate)}</td>
+                          <td>{p.paymentDate || '-'}</td>
+                          <td className="text-right mono">{p.amountPerShare != null ? Number(p.amountPerShare).toFixed(2) : '-'}</td>
+                        </>
+                      );
+                      return sortedYears.map(year => {
+                        const items = byYear[year];
+                        const yearTotal = items.reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
+                        if (items.length === 1) {
+                          return <tr key={year}>{payoutRow(items[0], year)}</tr>;
+                        }
+                        return (
+                          <React.Fragment key={year}>
+                            <tr style={{ background: 'var(--bg-thead)' }}>
+                              <td style={{ fontWeight: 700 }}>{year}</td>
+                              <td colSpan={8} style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{items.length} payouts</td>
+                              <td className="text-right mono" style={{ fontWeight: 700 }}>{fmt(yearTotal)}</td>
+                            </tr>
+                            {items.map((p, i) => (
+                              <tr key={`${year}-${i}`}>{payoutRow(p, '')}</tr>
+                            ))}
+                          </React.Fragment>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                  <tfoot>
+                    <tr className="portfolio-total">
+                      <td colSpan={9}>{payouts.length} payouts across {sortedYears.length} years</td>
+                      <td className="text-right mono">{fmt(grandTotal)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          );
+        })()
       )}
 
       {tab === 'realized' && (

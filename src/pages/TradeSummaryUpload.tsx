@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, DragEvent } from 'react';
-import { previewTradeSummary, uploadTradeSummary, getMarketData } from '../api';
+import { previewTradeSummary, uploadTradeSummary, getMarketData, deleteMarketDataRange } from '../api';
 import { MarketData } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
 import { useTableSort } from '../hooks/useTableSort';
@@ -232,6 +232,8 @@ export default function TradeSummaryUpload() {
         </>
       )}
 
+      <DeleteMarketDataSection onDeleted={async () => { const refreshed = await getMarketData(); setMarketData(refreshed); }} />
+
       {marketData.length > 0 && (() => {
         const byDate = marketData.reduce<Record<string, MarketData[]>>((acc, md) => {
           const d = md.tradeDate || 'Unknown';
@@ -248,7 +250,7 @@ export default function TradeSummaryUpload() {
         };
         return (
           <>
-            <h2>Market Data</h2>
+            <h2>Market Data ({marketData.length} records, {sortedDates.length} dates)</h2>
             <div className="portfolio-table-wrap">
               <table className="portfolio-table">
                 <thead>
@@ -305,6 +307,84 @@ export default function TradeSummaryUpload() {
           </>
         );
       })()}
+    </div>
+  );
+}
+
+function DeleteMarketDataSection({ onDeleted }: { onDeleted: () => void }) {
+  const [delFrom, setDelFrom] = useState('');
+  const [delTo, setDelTo] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [result, setResult] = useState('');
+
+  const rangeLabel = () => {
+    if (delFrom && delTo) return `${delFrom} to ${delTo}`;
+    if (delFrom) return `from ${delFrom} onwards`;
+    if (delTo) return `up to ${delTo}`;
+    return '';
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setResult('');
+    try {
+      const res = await deleteMarketDataRange(delFrom || undefined, delTo || undefined);
+      setResult(`Deleted ${res.deletedCount} records (${res.range}).`);
+      setConfirmOpen(false);
+      setDelFrom('');
+      setDelTo('');
+      onDeleted();
+    } catch (err: any) {
+      setResult(err?.response?.data?.error || err?.message || 'Delete failed.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <div className="form-card" style={{ maxWidth: '500px', marginTop: '1.5rem' }}>
+      <label style={{ fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Delete Market Data</label>
+      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <input type="date" value={delFrom} onChange={e => setDelFrom(e.target.value)}
+          placeholder="From"
+          style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '0.85rem' }} />
+        <span style={{ color: 'var(--text-muted)' }}>to</span>
+        <input type="date" value={delTo} onChange={e => setDelTo(e.target.value)}
+          placeholder="To"
+          style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '0.85rem' }} />
+      </div>
+      <div style={{ marginTop: '0.35rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+        Leave "from" empty to delete up to a date. Leave "to" empty to delete from a date onwards.
+      </div>
+      <div className="upload-actions" style={{ marginTop: '0.75rem' }}>
+        {!confirmOpen ? (
+          <button
+            className="btn-reset"
+            style={{ background: 'var(--bg-error)', color: 'var(--text-error)' }}
+            onClick={() => setConfirmOpen(true)}
+            disabled={!delFrom && !delTo}
+          >
+            Delete
+          </button>
+        ) : (
+          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-error)' }}>
+              Delete all records {rangeLabel()}?
+            </span>
+            <button
+              className="btn-reset"
+              style={{ background: 'var(--bg-error)', color: 'var(--text-error)' }}
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? 'Deleting...' : 'Confirm Delete'}
+            </button>
+            <button className="btn-reset" onClick={() => setConfirmOpen(false)}>Cancel</button>
+          </div>
+        )}
+      </div>
+      {result && <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>{result}</div>}
     </div>
   );
 }

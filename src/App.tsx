@@ -18,6 +18,9 @@ import AvgCalculator from './pages/AvgCalculator';
 import IpoPage from './pages/Ipos';
 import RightsAndIpo from './pages/RightsAndIpo';
 import DividendScraper from './pages/DividendScraper';
+import LoginHistory from './pages/LoginHistory';
+import UpcomingDividends from './pages/UpcomingDividends';
+import MarketDataScraper from './pages/MarketDataScraper';
 import SettingsPanel from './components/SettingsPanel';
 import './App.css';
 
@@ -75,12 +78,15 @@ function App() {
                 <NavLink to="/sectors" onClick={() => setMenuOpen(false)}>Sectors</NavLink>
                 <NavLink to="/upload-summary" onClick={() => setMenuOpen(false)}>Upload Trade Summary</NavLink>
                 <NavLink to="/scrape-dividends" onClick={() => setMenuOpen(false)}>Scrape Dividends</NavLink>
+                <NavLink to="/scrape-market-data" onClick={() => setMenuOpen(false)}>Scrape Market Data</NavLink>
+                <NavLink to="/login-history" onClick={() => setMenuOpen(false)}>Login History</NavLink>
               </>
             ) : (
               <>
                 <NavLink to="/" end onClick={() => setMenuOpen(false)}>Dashboard</NavLink>
                 <NavLink to="/transactions" onClick={() => setMenuOpen(false)}>Transactions</NavLink>
                 <NavLink to="/dividends" onClick={() => setMenuOpen(false)}>Dividends</NavLink>
+                <NavLink to="/upcoming-dividends" onClick={() => setMenuOpen(false)}>Upcoming Dividends</NavLink>
                 <NavLink to="/rights-ipo" onClick={() => setMenuOpen(false)}>Corporate Actions</NavLink>
                 <NavLink to="/watchlists" onClick={() => setMenuOpen(false)}>Watchlists</NavLink>
                 <NavLink to="/sectors" onClick={() => setMenuOpen(false)}>Sectors</NavLink>
@@ -125,6 +131,7 @@ function App() {
             <Route path="/" element={isAdmin ? <AdminDashboard key={user.username} /> : <Dashboard key={user.username} />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/dividends" element={<Dividends />} />
+            <Route path="/upcoming-dividends" element={<UpcomingDividends />} />
             <Route path="/rights-ipo" element={<RightsAndIpo />} />
             <Route path="/rights" element={<RightsPage />} />
             <Route path="/ipos" element={<IpoPage />} />
@@ -137,6 +144,8 @@ function App() {
             <Route path="/upload" element={<PdfUpload />} />
             <Route path="/upload-summary" element={isAdmin ? <TradeSummaryUpload /> : <Navigate to="/" />} />
             <Route path="/scrape-dividends" element={isAdmin ? <DividendScraper /> : <Navigate to="/" />} />
+            <Route path="/scrape-market-data" element={isAdmin ? <MarketDataScraper /> : <Navigate to="/" />} />
+            <Route path="/login-history" element={isAdmin ? <LoginHistory /> : <Navigate to="/" />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>

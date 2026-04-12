@@ -219,7 +219,22 @@ export default function Dashboard() {
           >
             {refreshing ? 'Refreshing...' : '\u21BB Refresh'}
           </button>
-          {historicalMode && <span style={{ fontSize: '0.75rem', color: '#3182ce', fontWeight: 600 }}>Viewing {selectedDate}</span>}
+          {historicalMode && (
+            <span style={{ fontSize: '0.75rem', color: '#3182ce', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              Viewing {selectedDate}
+              <button
+                onClick={() => {
+                  setSelectedDate('');
+                  setHistoricalMode(false);
+                  setRefreshing(true);
+                  invalidate('dashboard-all', 'dividends', 'market', 'transactions', 'companies', 'settings', 'market-dates');
+                  loadData().finally(() => setRefreshing(false));
+                }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3182ce', fontSize: '0.85rem', padding: '0 0.2rem' }}
+                title="Back to today"
+              >&times;</button>
+            </span>
+          )}
         </div>
         <div className="dashboard-toolbar-right" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <MarketDatePicker
@@ -291,6 +306,44 @@ export default function Dashboard() {
                 setLatestTradeDate(finalDate);
                 setDividends(origDividends.filter(d => d.date <= finalDate));
                 setRealizedItems(origRealizedItems.filter(r => r.sellDate <= finalDate));
+
+                // Recalculate opportunity cost up to selected date
+                const annualRate = 0.065;
+                const sortedAllTx = [...txUpToDate].sort((a, b) => a.date.localeCompare(b.date));
+                let runningCost = 0;
+                let lastTxDate: string | null = null;
+                let totalInterest = 0;
+                const sharesMap: Record<string, number> = {};
+                const costMap: Record<string, number> = {};
+
+                for (const t of sortedAllTx) {
+                  if (lastTxDate && runningCost > 0) {
+                    const days = (new Date(t.date).getTime() - new Date(lastTxDate).getTime()) / 86400000;
+                    if (days > 0) totalInterest += runningCost * annualRate * days / 365;
+                  }
+                  const code = t.companyCode;
+                  const cb = costMap[code] || 0;
+                  const sh = sharesMap[code] || 0;
+                  if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+                    const amt = t.count * t.price + t.commission;
+                    costMap[code] = cb + amt;
+                    sharesMap[code] = sh + t.count;
+                    runningCost += amt;
+                  } else if (t.type === 'SELL') {
+                    const avg = sh > 0 ? cb / sh : 0;
+                    const removed = avg * t.count;
+                    costMap[code] = cb - removed;
+                    sharesMap[code] = sh - t.count;
+                    runningCost -= removed;
+                  }
+                  lastTxDate = t.date;
+                }
+                // Interest from last tx to selected date
+                if (lastTxDate && runningCost > 0) {
+                  const days = (new Date(finalDate).getTime() - new Date(lastTxDate).getTime()) / 86400000;
+                  if (days > 0) totalInterest += runningCost * annualRate * days / 365;
+                }
+                setOpportunityCost(totalInterest);
               } catch (err) {
                 console.error(err);
               } finally {

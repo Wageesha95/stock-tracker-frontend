@@ -70,6 +70,7 @@ export interface MarketData {
   id: string;
   companyCode: string;
   companyName: string;
+  open: number;
   lastTrade: number;
   high: number;
   low: number;
