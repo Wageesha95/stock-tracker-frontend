@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getCompanies, scrapeDividendPreview, scrapeDividendConfirm, getDividendPayouts, getAllDividendPayouts, DividendPayoutData, scrapeDividendCalendarPreview, scrapeDividendCalendarConfirm, scrapeDividendFinancialsPreview, scrapeDividendFinancialsConfirm, scrapeDividendFinancialsAll } from '../api';
+import { getCompanies, scrapeDividendPreview, scrapeDividendConfirm, getDividendPayouts, getAllDividendPayouts, DividendPayoutData, scrapeDividendCalendarPreview, scrapeDividendCalendarConfirm, scrapeDividendFinancialsPreview, scrapeDividendFinancialsConfirm } from '../api';
 import { Company } from '../types';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -407,7 +407,7 @@ function CalendarScraper() {
           <span style={{ color: 'var(--text-muted)' }}>to</span>
           <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)}
             style={{ padding: '0.4rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '0.85rem' }} />
-          <button className="btn-upload" onClick={handlePreview} disabled={calMode === 'scraping'}>
+          <button className="btn-upload" onClick={handlePreview}>
             {calMode === 'preview' ? 'Re-fetch' : 'Fetch'}
           </button>
         </div>
@@ -796,7 +796,7 @@ function FinancialsScraper({ companies }: { companies: Company[] }) {
             <div style={{ minWidth: '250px' }}>
               <CompanySearchSelect companies={companies} value={code} onChange={setCode} />
             </div>
-            <button className="btn-upload" onClick={handlePreview} disabled={!code || mode === 'scraping'}>
+            <button className="btn-upload" onClick={handlePreview} disabled={!code}>
               {mode === 'preview' ? 'Re-scrape' : 'Scrape'}
             </button>
           </div>

@@ -275,8 +275,8 @@ export interface DividendFinancialData {
   companyCode: string;
   year: number;
   dividendPerShare: number | null;
+  earningsPerShare: number | null;
   dividendYield: number | null;
-  payoutRatio: number | null;
   scrapedAt: string | null;
 }
 export const scrapeDividendFinancialsPreview = (companyCode: string) =>

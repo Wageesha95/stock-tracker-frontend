@@ -59,6 +59,16 @@ export default function CompanyView() {
   };
 
   useEffect(() => {
+    setLoading(true);
+    setTransactions([]);
+    setDividends([]);
+    setRealizedItems([]);
+    setPortfolioItem(null);
+    setMarketHistory([]);
+    setShareSplits([]);
+    setPayouts([]);
+    setFinancials([]);
+    setCompany(null);
     loadData().catch(console.error).finally(() => setLoading(false));
   }, [code]);
 
