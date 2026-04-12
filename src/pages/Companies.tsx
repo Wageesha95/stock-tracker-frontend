@@ -307,14 +307,14 @@ export default function Companies() {
                   <table className="portfolio-table">
                     <thead>
                       <tr>
-                        <th>Code</th>
-                        {colVisible('name') && <th>Name</th>}
-                        {colVisible('lastTrade') && <th className="text-right">Last Trade</th>}
+                        <th className="sort-header" onClick={() => handleCSort('code')}>Code{csi('code')}</th>
+                        {colVisible('name') && <th className="sort-header" onClick={() => handleCSort('name')}>Name{csi('name')}</th>}
+                        {colVisible('lastTrade') && <th className="sort-header text-right" onClick={() => handleCSort('lastTrade')}>Last Trade{csi('lastTrade')}</th>}
                         {colVisible('change') && <th className="text-right">Change</th>}
-                        {colVisible('ytd') && <th className="text-right">YTD</th>}
-                        {colVisible('ttmYield') && <th className="text-right">Yield (TTM)</th>}
-                        {colVisible('yield2025') && <th className="text-right">2025 Yield</th>}
-                        {colVisible('yieldAtYearLow') && <th className="text-right">TTM @ YR Low</th>}
+                        {colVisible('ytd') && <th className="sort-header text-right" onClick={() => handleCSort('ytd')}>YTD{csi('ytd')}</th>}
+                        {colVisible('ttmYield') && <th className="sort-header text-right" onClick={() => handleCSort('yield')}>Yield (TTM){csi('yield')}</th>}
+                        {colVisible('yield2025') && <th className="sort-header text-right" onClick={() => handleCSort('yield2025')}>2025 Yield{csi('yield2025')}</th>}
+                        {colVisible('yieldAtYearLow') && <th className="sort-header text-right" onClick={() => handleCSort('yieldAtYearLow')}>TTM @ YR Low{csi('yieldAtYearLow')}</th>}
                       </tr>
                     </thead>
                     <tbody>{comps.map(companyRow)}</tbody>
