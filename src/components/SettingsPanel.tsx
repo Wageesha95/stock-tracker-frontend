@@ -33,6 +33,19 @@ const TABLE_COLUMN_OPTIONS: Record<string, { key: string; label: string }[]> = {
     { key: 'lastDivAmount', label: 'Last Div Amount' },
     { key: 'nextAnnDate', label: 'Next Ann. Date' },
   ],
+  sectors: [
+    { key: 'sharesHeld', label: 'Shares' },
+    { key: 'avgBuyPrice', label: 'Avg Buy Price' },
+    { key: 'lastTrade', label: 'Last Trade' },
+    { key: 'totalInvested', label: 'Invested' },
+    { key: 'currentValue', label: 'Value' },
+    { key: 'allocation', label: 'Allocation %' },
+    { key: 'unrealizedGain', label: 'Unrealized Gain' },
+    { key: 'unrealizedGainPercent', label: 'Gain %' },
+    { key: 'unrealizedDayGain', label: 'Day Gain' },
+    { key: 'changePercent', label: 'Change %' },
+    { key: 'ttmYield', label: 'TTM Yield' },
+  ],
   companies: [
     { key: 'name', label: 'Name' },
     { key: 'lastTrade', label: 'Last Trade' },
@@ -72,6 +85,7 @@ const TABLE_LABELS: Record<string, string> = {
   portfolio: 'Portfolio',
   unrealized: 'Unrealized (Net / Profit / Loss)',
   watchlist: 'Watchlist',
+  sectors: 'Sectors',
   companies: 'Companies',
   upcomingDividends: 'Upcoming Dividends',
 };
@@ -80,6 +94,7 @@ const DEFAULT_COLUMNS: Record<string, string[]> = {
   portfolio: ['sharesHeld', 'avgBuyPrice', 'lastTrade', 'currentValue', 'totalInvested', 'unrealizedGain', 'unrealizedGainPercent', 'unrealizedDayGain', 'changePercent'],
   unrealized: ['sharesHeld', 'avgBuyPrice', 'lastTrade', 'totalInvested', 'currentValue', 'unrealizedGain', 'unrealizedGainPercent', 'adjGain', 'adjGainPct'],
   watchlist: ['sharesHeld', 'avgBuyPrice', 'lastTrade', 'changePercent', 'totalInvested', 'currentValue', 'unrealizedGain', 'unrealizedGainPercent'],
+  sectors: ['sharesHeld', 'totalInvested', 'currentValue', 'allocation', 'unrealizedGain', 'unrealizedDayGain'],
   companies: ['name', 'lastTrade', 'change', 'ytd', 'ttmYield', 'industry'],
   upcomingDividends: ['yearsAppeared', 'avgAmountPerShare', 'ttmYield', 'lastXdDate', 'dividendType', 'announcementDate', 'lastTrade'],
 };

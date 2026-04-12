@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDashboardAll, getIndustryGroups, getCompanies, createIndustryGroup, updateIndustryGroup, deleteIndustryGroup, invalidate } from '../api';
-import { IndustryGroup, Company } from '../types';
+import { getDashboardAll, getIndustryGroups, getCompanies, getMarketData, getAllDividendPayouts, getUserSettings, createIndustryGroup, updateIndustryGroup, deleteIndustryGroup, invalidate, DividendPayoutData } from '../api';
+import { IndustryGroup, Company, MarketData } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import CompanyAvatar from '../components/CompanyAvatar';
 
@@ -47,6 +48,15 @@ export default function Sectors() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedSector, setExpandedSector] = useState<string | null>(null);
+  const [tableColumns, setTableColumns] = useState<Record<string, string[]>>({});
+  const [marketMap, setMarketMap] = useState<Record<string, MarketData>>({});
+  const [ttmYieldMap, setTtmYieldMap] = useState<Record<string, number>>({});
+  const [avgPriceMap, setAvgPriceMap] = useState<Record<string, number>>({});
+
+  const colVisible = (col: string) => {
+    const cols = tableColumns['sectors'] || DEFAULT_COLUMNS['sectors'];
+    return !cols || cols.includes(col);
+  };
 
   // Industry CRUD state
   const [newGroupName, setNewGroupName] = useState('');
@@ -60,11 +70,44 @@ export default function Sectors() {
   const [companySortDir, setCompanySortDir] = useState<SortDir>('desc');
 
   useEffect(() => {
-    Promise.all([getDashboardAll(), getIndustryGroups(), getCompanies()])
-      .then(([data, groups, comps]) => {
+    Promise.all([
+      getDashboardAll(),
+      getIndustryGroups(),
+      getCompanies(),
+      getMarketData(),
+      getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
+      getUserSettings(),
+    ])
+      .then(([data, groups, comps, md, payouts, settings]) => {
         setSectors(data.sectors || []);
         setIndustryGroups(groups);
         setCompanies(comps);
+        setTableColumns(settings.tableColumns || {});
+
+        // Market data map
+        const mMap: Record<string, MarketData> = {};
+        md.forEach(m => { if (!mMap[m.companyCode] || m.tradeDate > mMap[m.companyCode].tradeDate) mMap[m.companyCode] = m; });
+        setMarketMap(mMap);
+
+        // Avg buy price from portfolio
+        const aMap: Record<string, number> = {};
+        data.portfolio?.forEach((p: any) => { if (p.avgBuyPrice > 0) aMap[p.companyCode] = p.avgBuyPrice; });
+        setAvgPriceMap(aMap);
+
+        // TTM yield
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        const cutoff = oneYearAgo.toISOString().split('T')[0];
+        const byCode: Record<string, DividendPayoutData[]> = {};
+        payouts.forEach(p => { (byCode[p.companyCode] = byCode[p.companyCode] || []).push(p); });
+        const yields: Record<string, number> = {};
+        for (const [code, divs] of Object.entries(byCode)) {
+          const ttm = divs.filter(d => d.exDividendDate >= cutoff);
+          const total = ttm.reduce((s, d) => s + (d.amountPerShare ? Number(d.amountPerShare) : 0), 0);
+          const price = mMap[code]?.lastTrade;
+          if (total > 0 && price > 0) yields[code] = (total / price) * 100;
+        }
+        setTtmYieldMap(yields);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -406,87 +449,74 @@ export default function Sectors() {
                       </tr>
                       {isExpanded && (
                         <tr key={`${sec.sector}-header`} style={{ background: 'var(--bg-thead)' }}>
-                          <td
-                            className="sort-header"
-                            style={{ paddingLeft: '2.5rem', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
-                            onClick={e => handleCompanySort('companyCode', e)}
-                          >
-                            Company{sortIcon(companySortKey === 'companyCode', companySortDir)}
-                          </td>
-                          <td
-                            className="sort-header text-right"
-                            style={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
-                            onClick={e => handleCompanySort('sharesHeld', e)}
-                          >
-                            Shares{sortIcon(companySortKey === 'sharesHeld', companySortDir)}
-                          </td>
-                          <td
-                            className="sort-header text-right"
-                            style={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
-                            onClick={e => handleCompanySort('totalInvested', e)}
-                          >
-                            Invested{sortIcon(companySortKey === 'totalInvested', companySortDir)}
-                          </td>
-                          <td
-                            className="sort-header text-right"
-                            style={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
-                            onClick={e => handleCompanySort('currentValue', e)}
-                          >
-                            Value{sortIcon(companySortKey === 'currentValue', companySortDir)}
-                          </td>
-                          <td
-                            className="sort-header text-right"
-                            style={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
-                            onClick={e => handleCompanySort('allocation', e)}
-                          >
-                            Allocation{sortIcon(companySortKey === 'allocation', companySortDir)}
-                          </td>
-                          <td
-                            className="sort-header text-right"
-                            style={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
-                            onClick={e => handleCompanySort('unrealizedGain', e)}
-                          >
-                            Gain{sortIcon(companySortKey === 'unrealizedGain', companySortDir)}
-                          </td>
-                          <td
-                            className="sort-header text-right"
-                            style={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
-                            onClick={e => handleCompanySort('unrealizedDayGain', e)}
-                          >
-                            Day Gain{sortIcon(companySortKey === 'unrealizedDayGain', companySortDir)}
-                          </td>
+                          <td className="sort-header" style={{ paddingLeft: '2.5rem', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                            onClick={e => handleCompanySort('companyCode', e)}>Company{sortIcon(companySortKey === 'companyCode', companySortDir)}</td>
+                          {colVisible('sharesHeld') && <td className="sort-header text-right" style={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                            onClick={e => handleCompanySort('sharesHeld', e)}>Shares{sortIcon(companySortKey === 'sharesHeld', companySortDir)}</td>}
+                          {colVisible('avgBuyPrice') && <td className="text-right" style={{ fontSize: '0.75rem', fontWeight: 600 }}>Avg Buy</td>}
+                          {colVisible('lastTrade') && <td className="text-right" style={{ fontSize: '0.75rem', fontWeight: 600 }}>Last Trade</td>}
+                          {colVisible('totalInvested') && <td className="sort-header text-right" style={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                            onClick={e => handleCompanySort('totalInvested', e)}>Invested{sortIcon(companySortKey === 'totalInvested', companySortDir)}</td>}
+                          {colVisible('currentValue') && <td className="sort-header text-right" style={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                            onClick={e => handleCompanySort('currentValue', e)}>Value{sortIcon(companySortKey === 'currentValue', companySortDir)}</td>}
+                          {colVisible('allocation') && <td className="sort-header text-right" style={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                            onClick={e => handleCompanySort('allocation', e)}>Alloc.{sortIcon(companySortKey === 'allocation', companySortDir)}</td>}
+                          {colVisible('unrealizedGain') && <td className="sort-header text-right" style={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                            onClick={e => handleCompanySort('unrealizedGain', e)}>Gain{sortIcon(companySortKey === 'unrealizedGain', companySortDir)}</td>}
+                          {colVisible('unrealizedGainPercent') && <td className="text-right" style={{ fontSize: '0.75rem', fontWeight: 600 }}>Gain %</td>}
+                          {colVisible('unrealizedDayGain') && <td className="sort-header text-right" style={{ fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                            onClick={e => handleCompanySort('unrealizedDayGain', e)}>Day Gain{sortIcon(companySortKey === 'unrealizedDayGain', companySortDir)}</td>}
+                          {colVisible('changePercent') && <td className="text-right" style={{ fontSize: '0.75rem', fontWeight: 600 }}>Change %</td>}
+                          {colVisible('ttmYield') && <td className="text-right" style={{ fontSize: '0.75rem', fontWeight: 600 }}>TTM Yield</td>}
                         </tr>
                       )}
-                      {isExpanded && sortCompanies(sec.companies).map(c => (
-                        <tr key={c.companyCode} style={{ background: 'var(--bg-row-zebra)' }}>
-                          <td style={{ paddingLeft: '2.5rem', cursor: 'pointer' }} onClick={() => navigate(`/company/${c.companyCode}`)}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <CompanyAvatar code={c.companyCode} size={22} />
-                              <div className="company-cell">
-                                <span className="company-code" style={{ fontSize: '0.8rem' }}>{c.companyCode}</span>
-                                {c.companyName !== c.companyCode && (
-                                  <span className="company-name">{c.companyName}</span>
-                                )}
+                      {isExpanded && sortCompanies(sec.companies).map(c => {
+                        const md = marketMap[c.companyCode];
+                        const avg = avgPriceMap[c.companyCode];
+                        const gainPct = c.totalInvested > 0 ? (c.unrealizedGain / c.totalInvested * 100) : 0;
+                        return (
+                          <tr key={c.companyCode} style={{ background: 'var(--bg-row-zebra)' }}>
+                            <td style={{ paddingLeft: '2.5rem', cursor: 'pointer' }} onClick={() => navigate(`/company/${c.companyCode}`)}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                <CompanyAvatar code={c.companyCode} size={22} />
+                                <div className="company-cell">
+                                  <span className="company-code" style={{ fontSize: '0.8rem' }}>{c.companyCode}</span>
+                                  {c.companyName !== c.companyCode && (
+                                    <span className="company-name">{c.companyName}</span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="text-right mono">{c.sharesHeld}</td>
-                          <td className="text-right mono">{fmt(c.totalInvested)}</td>
-                          <td className="text-right mono">{fmt(c.currentValue)}</td>
-                          <td className="text-right mono">
-                            {totalPortfolioValue > 0
-                              ? ((c.currentValue / totalPortfolioValue) * 100).toFixed(1) + '%'
-                              : '\u2014'}
-                          </td>
-                          <td className={`text-right mono ${gainClass(c.unrealizedGain)}`}>
-                            {gainSign(c.unrealizedGain)}{fmt(c.unrealizedGain)}
-                          </td>
-                          <td className={`text-right mono ${gainClass(c.unrealizedDayGain)}`}>
-                            {gainSign(c.unrealizedDayGain)}{fmt(c.unrealizedDayGain)}
-                            <span className="day-pct"> ({gainSign(c.changePercent)}{c.changePercent.toFixed(2)}%)</span>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            {colVisible('sharesHeld') && <td className="text-right mono">{c.sharesHeld}</td>}
+                            {colVisible('avgBuyPrice') && <td className="text-right mono">{avg ? fmt(avg) : '\u2014'}</td>}
+                            {colVisible('lastTrade') && <td className="text-right mono">{md ? fmt(md.lastTrade) : '\u2014'}</td>}
+                            {colVisible('totalInvested') && <td className="text-right mono">{fmt(c.totalInvested)}</td>}
+                            {colVisible('currentValue') && <td className="text-right mono">{fmt(c.currentValue)}</td>}
+                            {colVisible('allocation') && <td className="text-right mono">
+                              {totalPortfolioValue > 0 ? ((c.currentValue / totalPortfolioValue) * 100).toFixed(1) + '%' : '\u2014'}
+                            </td>}
+                            {colVisible('unrealizedGain') && <td className={`text-right mono ${gainClass(c.unrealizedGain)}`}>
+                              {gainSign(c.unrealizedGain)}{fmt(c.unrealizedGain)}
+                            </td>}
+                            {colVisible('unrealizedGainPercent') && <td className="text-right mono">
+                              <span className={`gain-pill ${gainPct >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
+                                {gainSign(gainPct)}{gainPct.toFixed(2)}%
+                              </span>
+                            </td>}
+                            {colVisible('unrealizedDayGain') && <td className={`text-right mono ${gainClass(c.unrealizedDayGain)}`}>
+                              {gainSign(c.unrealizedDayGain)}{fmt(c.unrealizedDayGain)}
+                            </td>}
+                            {colVisible('changePercent') && <td className="text-right mono">
+                              <span className={`gain-pill ${c.changePercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
+                                {gainSign(c.changePercent)}{c.changePercent.toFixed(2)}%
+                              </span>
+                            </td>}
+                            {colVisible('ttmYield') && <td className="text-right mono">
+                              {ttmYieldMap[c.companyCode] != null ? ttmYieldMap[c.companyCode].toFixed(2) + '%' : '\u2014'}
+                            </td>}
+                          </tr>
+                        );
+                      })}
                     </React.Fragment>
                   );
                 })}
