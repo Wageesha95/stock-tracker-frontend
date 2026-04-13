@@ -1,12 +1,14 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { getCompanies, getDashboardAll } from '../api';
+import { getCompanies, getDashboardAll, getAllDividendPayouts, getMarketData, DividendPayoutData } from '../api';
 import { SELL_COMMISSION_PCT } from '../constants';
-import { Company, PortfolioItem } from '../types';
+import { Company, PortfolioItem, MarketData } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
 
 export default function AvgCalculator() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [portfolioMap, setPortfolioMap] = useState<Record<string, PortfolioItem>>({});
+  const [ttmDivMap, setTtmDivMap] = useState<Record<string, number>>({});
+  const [priceMap, setPriceMap] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const [selectedCode, setSelectedCode] = useState('');
@@ -27,12 +29,38 @@ export default function AvgCalculator() {
   const [targetCommission, setTargetCommission] = useState(SELL_COMMISSION_PCT);
 
   useEffect(() => {
-    Promise.all([getCompanies(), getDashboardAll()])
-      .then(([comps, dash]) => {
+    Promise.all([
+      getCompanies(),
+      getDashboardAll(),
+      getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
+      getMarketData().catch(() => [] as MarketData[]),
+    ])
+      .then(([comps, dash, payouts, md]) => {
         setCompanies(comps);
         const map: Record<string, PortfolioItem> = {};
         dash.portfolio.forEach((p: PortfolioItem) => { map[p.companyCode] = p; });
         setPortfolioMap(map);
+
+        // Latest price per company
+        const pMap: Record<string, number> = {};
+        md.forEach(m => {
+          if (!pMap[m.companyCode] || m.tradeDate > (md.find(x => x.companyCode === m.companyCode)?.tradeDate || '')) {
+            pMap[m.companyCode] = m.lastTrade;
+          }
+        });
+        setPriceMap(pMap);
+
+        // TTM dividend total per company (sum of amounts in last 12 months)
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        const cutoff = oneYearAgo.toISOString().split('T')[0];
+        const divMap: Record<string, number> = {};
+        payouts.forEach(p => {
+          if (p.exDividendDate >= cutoff && p.amountPerShare) {
+            divMap[p.companyCode] = (divMap[p.companyCode] || 0) + Number(p.amountPerShare);
+          }
+        });
+        setTtmDivMap(divMap);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -42,6 +70,10 @@ export default function AvgCalculator() {
   const currentShares = current?.sharesHeld || 0;
   const currentAvg = current?.avgBuyPrice || 0;
   const currentCost = currentShares * currentAvg;
+  const ttmDiv = ttmDivMap[selectedCode] || 0;
+  const lastTrade = priceMap[selectedCode] || 0;
+  const ttmYieldAtMarket = lastTrade > 0 ? (ttmDiv / lastTrade) * 100 : 0;
+  const ttmYieldAtAvg = currentAvg > 0 ? (ttmDiv / currentAvg) * 100 : 0;
 
   // Calculate mode result
   const calcResult = useMemo(() => {
@@ -168,6 +200,18 @@ export default function AvgCalculator() {
                 <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>Invested</div>
                 <div style={{ fontWeight: 700, fontSize: '1rem' }}>{fmt(currentCost)}</div>
               </div>
+              {ttmDiv > 0 && (
+                <div style={{ textAlign: 'center', padding: '0.25rem 0.75rem' }}>
+                  <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.15rem' }} title="TTM Yield at current avg">Yield @ Avg</div>
+                  <div style={{ fontWeight: 700, fontSize: '1rem', color: '#805ad5' }}>{ttmYieldAtAvg.toFixed(2)}%</div>
+                </div>
+              )}
+              {ttmDiv > 0 && lastTrade > 0 && (
+                <div style={{ textAlign: 'center', padding: '0.25rem 0.75rem' }}>
+                  <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.15rem' }} title="TTM Yield at last trade price">Yield @ Mkt</div>
+                  <div style={{ fontWeight: 700, fontSize: '1rem', color: '#805ad5' }}>{ttmYieldAtMarket.toFixed(2)}%</div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -233,6 +277,18 @@ export default function AvgCalculator() {
                         <td className="text-right mono">{fmt(calcResult.totalCost)}</td>
                         <td className="text-right mono">+{fmt(calcResult.buyCost)}</td>
                       </tr>
+                      {ttmDiv > 0 && (
+                        <tr>
+                          <td style={{ fontWeight: 600 }}>TTM Yield @ Avg</td>
+                          <td className="text-right mono">{ttmYieldAtAvg.toFixed(2)}%</td>
+                          <td className="text-right mono" style={{ fontWeight: 700, color: '#805ad5' }}>
+                            {calcResult.newAvg > 0 ? ((ttmDiv / calcResult.newAvg) * 100).toFixed(2) : '0.00'}%
+                          </td>
+                          <td className="text-right mono">
+                            {calcResult.newAvg > 0 ? (((ttmDiv / calcResult.newAvg) * 100) - ttmYieldAtAvg).toFixed(2) : '0.00'}%
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -292,6 +348,17 @@ export default function AvgCalculator() {
                           <td style={{ fontWeight: 600 }}>Total Invested</td>
                           <td className="text-right mono">LKR {fmt(targetResult.totalCost)}</td>
                         </tr>
+                        {ttmDiv > 0 && (
+                          <tr>
+                            <td style={{ fontWeight: 600 }}>TTM Yield @ New Avg</td>
+                            <td className="text-right mono" style={{ fontWeight: 700, color: '#805ad5' }}>
+                              {targetResult.actualAvg > 0 ? ((ttmDiv / targetResult.actualAvg) * 100).toFixed(2) : '0.00'}%
+                              <span style={{ color: 'var(--text-muted)', marginLeft: '0.5rem', fontSize: '0.75rem' }}>
+                                (was {ttmYieldAtAvg.toFixed(2)}%)
+                              </span>
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
