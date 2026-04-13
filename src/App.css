@@ -1852,6 +1852,7 @@ button:active {
   }
   .company-view-price {
     text-align: left !important;
+    order: -1;
   }
   .company-view-two-col {
     grid-template-columns: 1fr !important;
