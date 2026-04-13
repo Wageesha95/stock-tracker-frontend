@@ -4,12 +4,13 @@ import {
   getWatchlists, createWatchlist, updateWatchlist, deleteWatchlist,
   addWatchlistCompany, removeWatchlistCompany,
   getMarketData, getCompanies, getDashboardAll, getAllDividendPayouts, getUpcomingDividends,
-  getUserSettings, WatchlistData, DividendPayoutData, UpcomingDividendItem
+  getUserSettings, getSparklines, WatchlistData, DividendPayoutData, UpcomingDividendItem, SparklineData
 } from '../api';
 import { MarketData, Company, PortfolioItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
+import { LineChart, Line, ResponsiveContainer, YAxis, XAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
 
 const WATCHLIST_COLORS = [
   '#3182ce', '#2b6cb0', '#63b3ed',
@@ -40,6 +41,8 @@ export default function Watchlists() {
   const [nextDivMap, setNextDivMap] = useState<Record<string, string>>({});
   const [lastDivAmountMap, setLastDivAmountMap] = useState<Record<string, number>>({});
   const [nextAnnDateMap, setNextAnnDateMap] = useState<Record<string, string>>({});
+  const [sparklines, setSparklines] = useState<Record<string, SparklineData>>({});
+  const [chartPopup, setChartPopup] = useState<string | null>(null);
 
   const colVisible = (col: string) => {
     const cols = tableColumns['watchlist'] || DEFAULT_COLUMNS['watchlist'];
@@ -74,8 +77,10 @@ export default function Watchlists() {
       getUserSettings(),
       getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
       getUpcomingDividends(3).catch(() => [] as UpcomingDividendItem[]),
+      getSparklines().catch(() => ({} as Record<string, SparklineData>)),
     ])
-      .then(([wls, md, comps, dash, settings, payouts, upcoming]) => {
+      .then(([wls, md, comps, dash, settings, payouts, upcoming, sparks]) => {
+        setSparklines(sparks);
         setWatchlists(wls);
         if (wls.length > 0 && !activeId) setActiveId(wls[0].id);
         setTableColumns(settings.tableColumns || {});
@@ -484,6 +489,7 @@ export default function Watchlists() {
                     {colVisible('nextDivDate') && <th className="text-right">Next Div</th>}
                     {colVisible('lastDivAmount') && <th className="text-right">Last Div</th>}
                     {colVisible('nextAnnDate') && <th className="text-right">Next Ann.</th>}
+                    {colVisible('sparkline') && <th style={{ width: 100 }}>YTD</th>}
                     {!isReadMode && <th style={{ width: '30px' }}></th>}
                   </tr>
                 </thead>
@@ -554,6 +560,25 @@ export default function Watchlists() {
                         {colVisible('nextAnnDate') && <td className="text-right mono" style={{ fontSize: '0.85rem' }}>
                           {nextAnnDateMap[code] || '\u2014'}
                         </td>}
+                        {colVisible('sparkline') && (() => {
+                          const sd = sparklines[code];
+                          if (!sd || sd.prices.length < 2) return <td style={{ width: 90 }}>{'\u2014'}</td>;
+                          const { prices, dates } = sd;
+                          const color = prices[prices.length - 1] >= prices[0] ? '#38a169' : '#e53e3e';
+                          const min = Math.min(...prices);
+                          const max = Math.max(...prices);
+                          const range = max - min || 1;
+                          const w = 80, h = 28;
+                          const points = prices.map((p, i) => `${(i / (prices.length - 1)) * w},${h - ((p - min) / range) * h}`).join(' ');
+                          return (
+                            <td style={{ width: 90, padding: '0.2rem', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); setChartPopup(code); }}
+                              title={`${dates[0]} \u2192 ${dates[dates.length - 1]} | ${prices[0].toFixed(2)} \u2192 ${prices[prices.length - 1].toFixed(2)}`}>
+                              <svg width={w} height={h} style={{ display: 'block' }}>
+                                <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" />
+                              </svg>
+                            </td>
+                          );
+                        })()}
                         {!isReadMode && (
                         <td>
                           <button
@@ -582,6 +607,56 @@ export default function Watchlists() {
       {watchlists.length === 0 && !showCreate && (
         <p style={{ color: 'var(--text-muted)' }}>No watchlists yet. Click "+ New" to create one.</p>
       )}
+
+      {chartPopup && (() => {
+        const sd = sparklines[chartPopup];
+        if (!sd || sd.prices.length < 2) return null;
+        const { prices, dates } = sd;
+        const comp = companies.find(c => c.code === chartPopup);
+        const p = portfolioMap[chartPopup];
+        const color = prices[prices.length - 1] >= prices[0] ? '#38a169' : '#e53e3e';
+        const data = prices.map((pr, i) => ({ date: dates[i] || '', price: pr }));
+        return (
+          <div onClick={() => setChartPopup(null)} style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(0,0,0,0.6)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem',
+          }}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: 'var(--bg-card)', borderRadius: '12px', padding: '1.5rem',
+              width: '100%', maxWidth: '700px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <CompanyAvatar code={chartPopup} size={32} />
+                  <div>
+                    <span style={{ fontWeight: 700 }}>{chartPopup}</span>
+                    {comp && <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginLeft: '0.5rem' }}>{comp.name}</span>}
+                  </div>
+                </div>
+                <button onClick={() => setChartPopup(null)} style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-muted)', fontSize: '1.5rem', lineHeight: 1,
+                }}>&times;</button>
+              </div>
+              <ResponsiveContainer width="100%" height={350}>
+                <LineChart data={data}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
+                  <YAxis tick={{ fontSize: 10, fill: 'var(--text-muted)' }} domain={['auto', 'auto']} tickFormatter={v => fmt(v)} />
+                  <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px' }}
+                    formatter={(v: any) => [`LKR ${fmt(v)}`, 'Price']} labelFormatter={l => l} />
+                  {p && p.avgBuyPrice > 0 && (
+                    <ReferenceLine y={p.avgBuyPrice} stroke="#3182ce" strokeDasharray="6 3" strokeWidth={1.5}
+                      label={{ value: `Avg: ${fmt(p.avgBuyPrice)}`, position: 'right', fontSize: 10, fill: '#3182ce' }} />
+                  )}
+                  <Line type="monotone" dataKey="price" stroke={color} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

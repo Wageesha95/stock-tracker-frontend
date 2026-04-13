@@ -32,6 +32,7 @@ const TABLE_COLUMN_OPTIONS: Record<string, { key: string; label: string }[]> = {
     { key: 'nextDivDate', label: 'Next Div Date' },
     { key: 'lastDivAmount', label: 'Last Div Amount' },
     { key: 'nextAnnDate', label: 'Next Ann. Date' },
+    { key: 'sparkline', label: 'Price Chart (YTD)' },
   ],
   sectors: [
     { key: 'sharesHeld', label: 'Shares' },
