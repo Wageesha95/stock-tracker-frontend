@@ -1851,8 +1851,19 @@ button:active {
     gap: 0.5rem !important;
   }
   .company-view-price {
-    text-align: left !important;
-    order: -1;
+    text-align: right !important;
+    position: absolute;
+    top: 0.5rem;
+    right: 1rem;
+  }
+  .company-view-price > div:first-child {
+    font-size: 1.1rem !important;
+  }
+  .company-view-price > div:nth-child(2) {
+    font-size: 0.75rem !important;
+  }
+  .company-view-header {
+    position: relative;
   }
   .company-view-two-col {
     grid-template-columns: 1fr !important;
