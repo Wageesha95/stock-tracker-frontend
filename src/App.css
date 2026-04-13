@@ -1949,29 +1949,33 @@ button:active {
   }
 }
 
-/* Cards on mobile + medium screens (table would need horizontal scroll) */
-@media (max-width: 1100px) {
+/* Cards on mobile/tablet/medium screens */
+@media (max-width: 1505px) {
   .watchlist-table-desktop {
     display: none !important;
   }
 }
 
-/* Desktop: hide mobile-only elements */
+/* Hide mobile dropdown when pills fit */
 @media (min-width: 701px) {
   .watchlist-selector-mobile {
     display: none !important;
   }
 }
-@media (min-width: 1101px) {
+/* Hide cards on large desktop where full table fits */
+@media (min-width: 1506px) {
   .watchlist-cards-mobile {
     display: none !important;
   }
 }
 
-/* On Watchlists page, expand content wider to fit all columns */
-body:has(.watchlist-table-desktop) .content {
+/* Expand content width for wide tables (Watchlists, Companies, Upcoming Dividends, Sectors, Dashboard) */
+.content:has(.watchlist-table-desktop),
+.content:has(.portfolio-table-wrap) {
   max-width: 1600px;
 }
+
+@media (max-width: 700px) {
   /* Chart popup takes full width on mobile */
   .cv-pair-grid > div > span {
     font-size: 1.1rem !important;

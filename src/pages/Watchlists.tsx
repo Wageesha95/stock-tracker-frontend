@@ -43,8 +43,16 @@ export default function Watchlists() {
   const [nextAnnDateMap, setNextAnnDateMap] = useState<Record<string, string>>({});
   const [sparklines, setSparklines] = useState<Record<string, SparklineData>>({});
   const [ytdData, setYtdData] = useState<Record<string, YtdEntry>>({});
-  const [mobileSortKey, setMobileSortKey] = useState<string>('code');
+  const [mobileSortKey, setMobileSortKey] = useState<string>('default');
   const [mobileSortDir, setMobileSortDir] = useState<'asc' | 'desc'>('asc');
+  const [tableSortKey, setTableSortKey] = useState<string>('default');
+  const [tableSortDir, setTableSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const handleTableSort = (key: string) => {
+    if (tableSortKey === key) setTableSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setTableSortKey(key); setTableSortDir(key === 'code' ? 'asc' : 'desc'); }
+  };
+  const tsi = (key: string) => tableSortKey === key ? (tableSortDir === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
   const [yearLowMap, setYearLowMap] = useState<Record<string, YearLowEntry>>({});
   const [chartPopup, setChartPopup] = useState<string | null>(null);
 
@@ -538,18 +546,18 @@ export default function Watchlists() {
                 <thead>
                   <tr>
                     <th style={{ width: '30px' }}></th>
-                    <th>Company</th>
-                    {colVisible('sharesHeld') && <th className="text-right">Shares</th>}
-                    {colVisible('avgBuyPrice') && <th className="text-right">Avg Buy</th>}
-                    {colVisible('lastTrade') && <th className="text-right">Last Trade</th>}
-                    {colVisible('changePercent') && <th className="text-right">Change %</th>}
-                    {colVisible('totalInvested') && <th className="text-right">Invested</th>}
-                    {colVisible('currentValue') && <th className="text-right">Value</th>}
-                    {colVisible('unrealizedGain') && <th className="text-right">Unrealized</th>}
-                    {colVisible('unrealizedGainPercent') && <th className="text-right">Gain %</th>}
-                    {colVisible('ytd') && <th className="text-right">YTD %</th>}
-                    {colVisible('ttmYield') && <th className="text-right">TTM Yield</th>}
-                    {colVisible('yieldAtYearLow') && <th className="text-right">TTM @ YTD Low</th>}
+                    <th className="sort-header" onClick={() => handleTableSort('code')}>Company{tsi('code')}</th>
+                    {colVisible('sharesHeld') && <th className="sort-header text-right" onClick={() => handleTableSort('sharesHeld')}>Shares{tsi('sharesHeld')}</th>}
+                    {colVisible('avgBuyPrice') && <th className="sort-header text-right" onClick={() => handleTableSort('avgBuyPrice')}>Avg Buy{tsi('avgBuyPrice')}</th>}
+                    {colVisible('lastTrade') && <th className="sort-header text-right" onClick={() => handleTableSort('lastTrade')}>Last Trade{tsi('lastTrade')}</th>}
+                    {colVisible('changePercent') && <th className="sort-header text-right" onClick={() => handleTableSort('changePercent')}>Change %{tsi('changePercent')}</th>}
+                    {colVisible('totalInvested') && <th className="sort-header text-right" onClick={() => handleTableSort('totalInvested')}>Invested{tsi('totalInvested')}</th>}
+                    {colVisible('currentValue') && <th className="sort-header text-right" onClick={() => handleTableSort('currentValue')}>Value{tsi('currentValue')}</th>}
+                    {colVisible('unrealizedGain') && <th className="sort-header text-right" onClick={() => handleTableSort('unrealizedGain')}>Unrealized{tsi('unrealizedGain')}</th>}
+                    {colVisible('unrealizedGainPercent') && <th className="sort-header text-right" onClick={() => handleTableSort('unrealizedGainPercent')}>Gain %{tsi('unrealizedGainPercent')}</th>}
+                    {colVisible('ytd') && <th className="sort-header text-right" onClick={() => handleTableSort('ytd')}>YTD %{tsi('ytd')}</th>}
+                    {colVisible('ttmYield') && <th className="sort-header text-right" onClick={() => handleTableSort('ttmYield')}>TTM Yield{tsi('ttmYield')}</th>}
+                    {colVisible('yieldAtYearLow') && <th className="sort-header text-right" onClick={() => handleTableSort('yieldAtYearLow')}>TTM @ YTD Low{tsi('yieldAtYearLow')}</th>}
                     {colVisible('nextDivDate') && <th className="text-right">Next Div</th>}
                     {colVisible('lastDivAmount') && <th className="text-right">Last Div</th>}
                     {colVisible('nextAnnDate') && <th className="text-right">Next Ann.</th>}
@@ -558,20 +566,51 @@ export default function Watchlists() {
                   </tr>
                 </thead>
                 <tbody>
-                  {active.companyCodes.map((code, idx) => {
+                  {(() => {
+                    const getTblVal = (code: string, key: string): number | string => {
+                      const md = marketMap[code];
+                      const p = portfolioMap[code];
+                      if (key === 'code') return code;
+                      if (key === 'sharesHeld') return p?.sharesHeld || 0;
+                      if (key === 'avgBuyPrice') return p?.avgBuyPrice || 0;
+                      if (key === 'lastTrade') return md?.lastTrade || 0;
+                      if (key === 'changePercent') return md?.changePercent || 0;
+                      if (key === 'totalInvested') return p?.totalInvested || 0;
+                      if (key === 'currentValue') return p?.currentValue || 0;
+                      if (key === 'unrealizedGain') return p?.unrealizedGain || 0;
+                      if (key === 'unrealizedGainPercent') return p?.unrealizedGainPercent || 0;
+                      if (key === 'ytd') return ytdData[code]?.ytd || 0;
+                      if (key === 'ttmYield') return ttmYieldMap[code] || 0;
+                      if (key === 'yieldAtYearLow') {
+                        const ttm = ttmYieldMap[code];
+                        const yl = yearLowMap[code];
+                        const price = md?.lastTrade;
+                        return ttm != null && yl?.price > 0 && price && price > 0 ? (ttm / 100 * price / yl.price * 100) : 0;
+                      }
+                      return 0;
+                    };
+                    const sorted = tableSortKey === 'default'
+                      ? active.companyCodes
+                      : [...active.companyCodes].sort((a, b) => {
+                          const av = getTblVal(a, tableSortKey);
+                          const bv = getTblVal(b, tableSortKey);
+                          const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
+                          return tableSortDir === 'asc' ? cmp : -cmp;
+                        });
+                    return sorted.map((code, idx) => {
                     const md = marketMap[code];
                     const p = portfolioMap[code];
                     const comp = companies.find(c => c.code === code);
                     return (
                       <tr
                         key={code}
-                        draggable
-                        onDragStart={() => handleDragStart(idx)}
-                        onDragOver={e => handleDragOver(e, idx)}
-                        onDrop={() => handleDrop(idx)}
+                        draggable={tableSortKey === 'default'}
+                        onDragStart={() => tableSortKey === 'default' && handleDragStart(idx)}
+                        onDragOver={e => tableSortKey === 'default' && handleDragOver(e, idx)}
+                        onDrop={() => tableSortKey === 'default' && handleDrop(idx)}
                         onDragEnd={handleDragEnd}
                         style={{
-                          cursor: 'grab',
+                          cursor: tableSortKey === 'default' ? 'grab' : 'default',
                           borderTop: dragOverIdx === idx ? `2px solid ${active.color || '#3182ce'}` : undefined,
                         }}
                       >
@@ -679,7 +718,8 @@ export default function Watchlists() {
                         )}
                       </tr>
                     );
-                  })}
+                  });
+                  })()}
                 </tbody>
               </table>
             </div>
@@ -688,6 +728,7 @@ export default function Watchlists() {
           {/* Mobile card view */}
           {active.companyCodes.length > 0 && (() => {
             const sortOptions = [
+              { key: 'default', label: 'Custom Order' },
               { key: 'code', label: 'Code' },
               { key: 'lastTrade', label: 'Price' },
               { key: 'changePercent', label: 'Change %' },
@@ -706,12 +747,14 @@ export default function Watchlists() {
               if (key === 'ttmYield') return ttmYieldMap[code] || 0;
               return 0;
             };
-            const sortedCodes = [...active.companyCodes].sort((a, b) => {
-              const av = getValue(a, mobileSortKey);
-              const bv = getValue(b, mobileSortKey);
-              const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
-              return mobileSortDir === 'asc' ? cmp : -cmp;
-            });
+            const sortedCodes = mobileSortKey === 'default'
+              ? [...active.companyCodes]
+              : [...active.companyCodes].sort((a, b) => {
+                  const av = getValue(a, mobileSortKey);
+                  const bv = getValue(b, mobileSortKey);
+                  const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
+                  return mobileSortDir === 'asc' ? cmp : -cmp;
+                });
             return (
               <div className="watchlist-cards-mobile">
                 <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.75rem', fontSize: '0.85rem' }}>
@@ -735,7 +778,7 @@ export default function Watchlists() {
                     const comp = companies.find(c => c.code === code);
                     const yd = ytdData[code];
                     const origIdx = active.companyCodes.indexOf(code);
-                    const canDrag = mobileSortKey === 'code' && mobileSortDir === 'asc';
+                    const canDrag = mobileSortKey === 'default';
                     return (
                       <div
                         key={code}
