@@ -29,6 +29,7 @@ const TABLE_COLUMN_OPTIONS: Record<string, { key: string; label: string }[]> = {
     { key: 'unrealizedGainPercent', label: 'Gain %' },
     { key: 'ytd', label: 'YTD %' },
     { key: 'ttmYield', label: 'TTM Yield' },
+    { key: 'yieldAtYearLow', label: 'TTM @ YTD Low' },
     { key: 'nextDivDate', label: 'Next Div Date' },
     { key: 'lastDivAmount', label: 'Last Div Amount' },
     { key: 'nextAnnDate', label: 'Next Ann. Date' },

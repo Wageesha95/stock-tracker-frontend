@@ -4,7 +4,7 @@ import {
   getWatchlists, createWatchlist, updateWatchlist, deleteWatchlist,
   addWatchlistCompany, removeWatchlistCompany,
   getMarketData, getCompanies, getDashboardAll, getAllDividendPayouts, getUpcomingDividends,
-  getUserSettings, getSparklines, WatchlistData, DividendPayoutData, UpcomingDividendItem, SparklineData
+  getUserSettings, getSparklines, getYtdData, getYearLow, WatchlistData, DividendPayoutData, UpcomingDividendItem, SparklineData, YtdEntry, YearLowEntry
 } from '../api';
 import { MarketData, Company, PortfolioItem } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -42,6 +42,8 @@ export default function Watchlists() {
   const [lastDivAmountMap, setLastDivAmountMap] = useState<Record<string, number>>({});
   const [nextAnnDateMap, setNextAnnDateMap] = useState<Record<string, string>>({});
   const [sparklines, setSparklines] = useState<Record<string, SparklineData>>({});
+  const [ytdData, setYtdData] = useState<Record<string, YtdEntry>>({});
+  const [yearLowMap, setYearLowMap] = useState<Record<string, YearLowEntry>>({});
   const [chartPopup, setChartPopup] = useState<string | null>(null);
 
   const colVisible = (col: string) => {
@@ -78,9 +80,13 @@ export default function Watchlists() {
       getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
       getUpcomingDividends(3).catch(() => [] as UpcomingDividendItem[]),
       getSparklines().catch(() => ({} as Record<string, SparklineData>)),
+      getYtdData().catch(() => ({} as Record<string, YtdEntry>)),
+      getYearLow().catch(() => ({} as Record<string, YearLowEntry>)),
     ])
-      .then(([wls, md, comps, dash, settings, payouts, upcoming, sparks]) => {
+      .then(([wls, md, comps, dash, settings, payouts, upcoming, sparks, ytd, yearLow]) => {
         setSparklines(sparks);
+        setYtdData(ytd);
+        setYearLowMap(yearLow);
         setWatchlists(wls);
         if (wls.length > 0 && !activeId) setActiveId(wls[0].id);
         setTableColumns(settings.tableColumns || {});
@@ -486,6 +492,7 @@ export default function Watchlists() {
                     {colVisible('unrealizedGainPercent') && <th className="text-right">Gain %</th>}
                     {colVisible('ytd') && <th className="text-right">YTD %</th>}
                     {colVisible('ttmYield') && <th className="text-right">TTM Yield</th>}
+                    {colVisible('yieldAtYearLow') && <th className="text-right">TTM @ YTD Low</th>}
                     {colVisible('nextDivDate') && <th className="text-right">Next Div</th>}
                     {colVisible('lastDivAmount') && <th className="text-right">Last Div</th>}
                     {colVisible('nextAnnDate') && <th className="text-right">Next Ann.</th>}
@@ -547,10 +554,29 @@ export default function Watchlists() {
                             </span>
                           ) : '\u2014'}
                         </td>}
-                        {colVisible('ytd') && <td className="text-right mono">{'\u2014'}</td>}
+                        {colVisible('ytd') && (() => {
+                          const yd = ytdData[code];
+                          const tip = yd?.firstPrice != null ? `${yd.firstDate}: ${yd.firstPrice.toFixed(2)}` : '';
+                          return <td className="text-right mono" title={tip}>
+                            {yd?.ytd != null ? (
+                              <span className={`gain-pill ${yd.ytd >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
+                                {yd.ytd >= 0 ? '+' : ''}{yd.ytd.toFixed(2)}%
+                              </span>
+                            ) : '\u2014'}
+                          </td>;
+                        })()}
                         {colVisible('ttmYield') && <td className="text-right mono">
                           {ttmYieldMap[code] != null ? ttmYieldMap[code].toFixed(2) + '%' : '\u2014'}
                         </td>}
+                        {colVisible('yieldAtYearLow') && (() => {
+                          const ttm = ttmYieldMap[code];
+                          const yl = yearLowMap[code];
+                          const price = md?.lastTrade;
+                          const yld = ttm != null && yl?.price > 0 && price && price > 0 ? (ttm / 100 * price / yl.price * 100) : null;
+                          return <td className="text-right mono" title={yl ? `Low: ${yl.price.toFixed(2)} on ${yl.date}` : ''}>
+                            {yld != null ? yld.toFixed(2) + '%' : '\u2014'}
+                          </td>;
+                        })()}
                         {colVisible('nextDivDate') && <td className="text-right mono" style={{ fontSize: '0.85rem' }}>
                           {nextDivMap[code] || '\u2014'}
                         </td>}
