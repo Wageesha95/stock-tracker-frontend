@@ -403,12 +403,12 @@ export interface WatchlistData {
   createdAt: string;
   updatedAt: string;
 }
-export const getWatchlists = () => api.get<WatchlistData[]>('/watchlists').then(res => res.data);
-export const createWatchlist = (name: string, color: string) => api.post<WatchlistData>('/watchlists', { name, color }).then(res => res.data);
+export const getWatchlists = () => cached('watchlists', () => api.get<WatchlistData[]>('/watchlists').then(res => res.data));
+export const createWatchlist = (name: string, color: string) => api.post<WatchlistData>('/watchlists', { name, color }).then(res => { invalidate('watchlists'); return res.data; });
 export const updateWatchlist = (id: string, data: { name?: string; color?: string; companyCodes?: string[] }) =>
-  api.put<WatchlistData>(`/watchlists/${id}`, data).then(res => res.data);
-export const deleteWatchlist = (id: string) => api.delete(`/watchlists/${id}`);
+  api.put<WatchlistData>(`/watchlists/${id}`, data).then(res => { invalidate('watchlists'); return res.data; });
+export const deleteWatchlist = (id: string) => api.delete(`/watchlists/${id}`).then(res => { invalidate('watchlists'); return res; });
 export const addWatchlistCompany = (id: string, companyCode: string) =>
-  api.post<WatchlistData>(`/watchlists/${id}/companies`, { companyCode }).then(res => res.data);
+  api.post<WatchlistData>(`/watchlists/${id}/companies`, { companyCode }).then(res => { invalidate('watchlists'); return res.data; });
 export const removeWatchlistCompany = (id: string, code: string) =>
-  api.delete<WatchlistData>(`/watchlists/${id}/companies/${code}`).then(res => res.data);
+  api.delete<WatchlistData>(`/watchlists/${id}/companies/${code}`).then(res => { invalidate('watchlists'); return res.data; });

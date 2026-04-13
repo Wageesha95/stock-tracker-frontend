@@ -4,7 +4,7 @@ import {
   getWatchlists, createWatchlist, updateWatchlist, deleteWatchlist,
   addWatchlistCompany, removeWatchlistCompany,
   getMarketData, getCompanies, getDashboardAll, getAllDividendPayouts, getUpcomingDividends,
-  getUserSettings, getSparklines, getYtdData, getYearLow, WatchlistData, DividendPayoutData, UpcomingDividendItem, SparklineData, YtdEntry, YearLowEntry
+  getUserSettings, getSparklines, getYtdData, getYearLow, invalidate, WatchlistData, DividendPayoutData, UpcomingDividendItem, SparklineData, YtdEntry, YearLowEntry
 } from '../api';
 import { MarketData, Company, PortfolioItem } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -43,6 +43,8 @@ export default function Watchlists() {
   const [nextAnnDateMap, setNextAnnDateMap] = useState<Record<string, string>>({});
   const [sparklines, setSparklines] = useState<Record<string, SparklineData>>({});
   const [ytdData, setYtdData] = useState<Record<string, YtdEntry>>({});
+  const [mobileSortKey, setMobileSortKey] = useState<string>('code');
+  const [mobileSortDir, setMobileSortDir] = useState<'asc' | 'desc'>('asc');
   const [yearLowMap, setYearLowMap] = useState<Record<string, YearLowEntry>>({});
   const [chartPopup, setChartPopup] = useState<string | null>(null);
 
@@ -237,10 +239,65 @@ export default function Watchlists() {
 
   return (
     <div>
-      <h1>Watchlists</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+        <h1 style={{ margin: 0 }}>Watchlists</h1>
+        <button
+          onClick={() => {
+            invalidate('watchlists', 'market', 'dashboard-all', 'settings', 'dividend-payouts', 'upcoming-dividends', 'sparklines', 'ytd', 'year-low');
+            setLoading(true);
+            loadData().finally(() => setLoading(false));
+          }}
+          title="Refresh data"
+          style={{
+            background: 'transparent', border: '1.5px solid var(--border-input)',
+            borderRadius: '6px', padding: '0.35rem 0.75rem', cursor: 'pointer',
+            color: 'var(--text-muted)', fontSize: '0.85rem',
+          }}
+        >&#x21BB; Refresh</button>
+      </div>
 
-      {/* Watchlist nav tabs */}
-      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
+      {/* Watchlist selector - dropdown on mobile */}
+      {watchlists.length > 0 && (
+        <div className="watchlist-selector-mobile" style={{ marginBottom: '1rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+          <select
+            value={activeId || ''}
+            onChange={e => { setActiveId(e.target.value); setShowSettings(false); setShowCreate(false); }}
+            style={{
+              flex: 1,
+              padding: '0.5rem 0.75rem',
+              borderRadius: '8px',
+              border: '2px solid var(--border-input)',
+              background: 'var(--bg-input)',
+              color: 'var(--text-primary)',
+              fontSize: '0.9rem',
+              fontWeight: 600,
+            }}
+          >
+            {watchlists.map(wl => (
+              <option key={wl.id} value={wl.id}>
+                {wl.name} ({wl.companyCodes?.length || 0})
+              </option>
+            ))}
+          </select>
+          {!isReadMode && (
+            <button
+              onClick={() => { setShowCreate(!showCreate); setShowSettings(false); }}
+              style={{
+                padding: '0.5rem 0.75rem',
+                borderRadius: '8px',
+                border: '1.5px dashed var(--border-input)',
+                background: 'transparent',
+                color: 'var(--text-muted)',
+                cursor: 'pointer',
+                fontSize: '0.9rem',
+              }}
+            >+ New</button>
+          )}
+        </div>
+      )}
+
+      {/* Watchlist nav tabs - pills on desktop */}
+      <div className="watchlist-tabs-desktop" style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '1rem', alignItems: 'center' }}>
         {watchlists.map(wl => {
           const isActive = activeId === wl.id;
           const color = (wl.color && wl.color.startsWith('#')) ? wl.color : '#3182ce';
@@ -476,7 +533,7 @@ export default function Watchlists() {
           {active.companyCodes.length === 0 ? (
             <p style={{ color: 'var(--text-muted)' }}>No companies in this watchlist. Click "+ Add Company" to get started.</p>
           ) : (
-            <div className="portfolio-table-wrap">
+            <div className="portfolio-table-wrap watchlist-table-desktop">
               <table className="portfolio-table">
                 <thead>
                   <tr>
@@ -627,6 +684,194 @@ export default function Watchlists() {
               </table>
             </div>
           )}
+
+          {/* Mobile card view */}
+          {active.companyCodes.length > 0 && (() => {
+            const sortOptions = [
+              { key: 'code', label: 'Code' },
+              { key: 'lastTrade', label: 'Price' },
+              { key: 'changePercent', label: 'Change %' },
+              { key: 'unrealizedGainPercent', label: 'Gain %' },
+              { key: 'ytd', label: 'YTD %' },
+              { key: 'ttmYield', label: 'TTM Yield' },
+            ];
+            const getValue = (code: string, key: string): number | string => {
+              const md = marketMap[code];
+              const p = portfolioMap[code];
+              if (key === 'code') return code;
+              if (key === 'lastTrade') return md?.lastTrade || 0;
+              if (key === 'changePercent') return md?.changePercent || 0;
+              if (key === 'unrealizedGainPercent') return p?.unrealizedGainPercent || 0;
+              if (key === 'ytd') return ytdData[code]?.ytd || 0;
+              if (key === 'ttmYield') return ttmYieldMap[code] || 0;
+              return 0;
+            };
+            const sortedCodes = [...active.companyCodes].sort((a, b) => {
+              const av = getValue(a, mobileSortKey);
+              const bv = getValue(b, mobileSortKey);
+              const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
+              return mobileSortDir === 'asc' ? cmp : -cmp;
+            });
+            return (
+              <div className="watchlist-cards-mobile">
+                <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center', marginBottom: '0.75rem', fontSize: '0.85rem' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Sort:</span>
+                  <select
+                    value={mobileSortKey}
+                    onChange={e => setMobileSortKey(e.target.value)}
+                    style={{ flex: 1, padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: '0.85rem' }}
+                  >
+                    {sortOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                  </select>
+                  <button
+                    onClick={() => setMobileSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+                    style={{ padding: '0.35rem 0.6rem', borderRadius: '6px', border: '1px solid var(--border-input)', background: 'var(--bg-input)', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.9rem' }}
+                  >{mobileSortDir === 'asc' ? '\u2191' : '\u2193'}</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {sortedCodes.map(code => {
+                    const md = marketMap[code];
+                    const p = portfolioMap[code];
+                    const comp = companies.find(c => c.code === code);
+                    const yd = ytdData[code];
+                    const origIdx = active.companyCodes.indexOf(code);
+                    const canDrag = mobileSortKey === 'code' && mobileSortDir === 'asc';
+                    return (
+                      <div
+                        key={code}
+                        draggable={canDrag}
+                        onDragStart={() => canDrag && handleDragStart(origIdx)}
+                        onDragOver={e => canDrag && handleDragOver(e, origIdx)}
+                        onDrop={() => canDrag && handleDrop(origIdx)}
+                        onDragEnd={handleDragEnd}
+                        onClick={() => navigate(`/company/${code}`)}
+                        style={{
+                          background: 'var(--bg-card)', borderRadius: '8px', padding: '0.75rem',
+                          boxShadow: 'var(--shadow-card)', cursor: canDrag ? 'grab' : 'pointer',
+                          borderTop: dragOverIdx === origIdx ? `2px solid ${active.color || '#3182ce'}` : '2px solid transparent',
+                        }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
+                            <CompanyAvatar code={code} size={32} />
+                            <div style={{ minWidth: 0 }}>
+                              <div className="company-code" style={{ fontSize: '0.9rem', fontWeight: 700 }}>{code}</div>
+                              {comp && comp.name !== code && (
+                                <div style={{ color: 'var(--text-muted)', fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{comp.name}</div>
+                              )}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                            <div style={{ fontSize: '1.05rem', fontWeight: 700 }}>{md ? fmt(md.lastTrade) : '\u2014'}</div>
+                            {md && (
+                              <span className={`gain-pill ${md.changePercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`} style={{ fontSize: '0.7rem' }}>
+                                {gainSign(md.changePercent)}{fmt(md.changePercent)}%
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem 0.75rem', fontSize: '0.75rem' }}>
+                          {colVisible('sharesHeld') && p && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Shares:</span>
+                              <span className="mono">{p.sharesHeld}</span>
+                            </div>
+                          )}
+                          {colVisible('avgBuyPrice') && p && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Avg Buy:</span>
+                              <span className="mono">{fmt(p.avgBuyPrice)}</span>
+                            </div>
+                          )}
+                          {colVisible('totalInvested') && p && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Invested:</span>
+                              <span className="mono">{fmt(p.totalInvested)}</span>
+                            </div>
+                          )}
+                          {colVisible('currentValue') && p && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Value:</span>
+                              <span className="mono">{fmt(p.currentValue)}</span>
+                            </div>
+                          )}
+                          {colVisible('unrealizedGain') && p && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Unrealized:</span>
+                              <span className={`mono ${gainClass(p.unrealizedGain)}`}>{gainSign(p.unrealizedGain)}{fmt(p.unrealizedGain)}</span>
+                            </div>
+                          )}
+                          {colVisible('unrealizedGainPercent') && p && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Gain %:</span>
+                              <span className={`mono ${gainClass(p.unrealizedGainPercent)}`}>{gainSign(p.unrealizedGainPercent)}{fmt(p.unrealizedGainPercent)}%</span>
+                            </div>
+                          )}
+                          {colVisible('ytd') && yd && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>YTD:</span>
+                              <span className={`mono ${yd.ytd >= 0 ? 'gain-positive' : 'gain-negative'}`}>{yd.ytd >= 0 ? '+' : ''}{yd.ytd.toFixed(2)}%</span>
+                            </div>
+                          )}
+                          {colVisible('ttmYield') && ttmYieldMap[code] != null && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>TTM Yield:</span>
+                              <span className="mono">{ttmYieldMap[code].toFixed(2)}%</span>
+                            </div>
+                          )}
+                          {colVisible('yieldAtYearLow') && (() => {
+                            const ttm = ttmYieldMap[code];
+                            const yl = yearLowMap[code];
+                            const price = md?.lastTrade;
+                            const yld = ttm != null && yl?.price > 0 && price && price > 0 ? (ttm / 100 * price / yl.price * 100) : null;
+                            return yld != null ? (
+                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>TTM @ Low:</span>
+                                <span className="mono">{yld.toFixed(2)}%</span>
+                              </div>
+                            ) : null;
+                          })()}
+                          {colVisible('nextDivDate') && nextDivMap[code] && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Next Div:</span>
+                              <span className="mono" style={{ fontSize: '0.7rem' }}>{nextDivMap[code]}</span>
+                            </div>
+                          )}
+                          {colVisible('lastDivAmount') && lastDivAmountMap[code] != null && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Last Div:</span>
+                              <span className="mono">{fmt(lastDivAmountMap[code])}</span>
+                            </div>
+                          )}
+                          {colVisible('nextAnnDate') && nextAnnDateMap[code] && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>Next Ann:</span>
+                              <span className="mono" style={{ fontSize: '0.7rem' }}>{nextAnnDateMap[code]}</span>
+                            </div>
+                          )}
+                        </div>
+                        {colVisible('sparkline') && sparklines[code] && sparklines[code].prices.length >= 2 && (() => {
+                          const sd = sparklines[code];
+                          const color = sd.prices[sd.prices.length - 1] >= sd.prices[0] ? '#38a169' : '#e53e3e';
+                          const min = Math.min(...sd.prices);
+                          const max = Math.max(...sd.prices);
+                          const range = max - min || 1;
+                          const w = 300, h = 40;
+                          const points = sd.prices.map((pr, i) => `${(i / (sd.prices.length - 1)) * w},${h - ((pr - min) / range) * h}`).join(' ');
+                          return (
+                            <div style={{ marginTop: '0.5rem', cursor: 'pointer' }} onClick={e => { e.stopPropagation(); setChartPopup(code); }}>
+                              <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+                                <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" />
+                              </svg>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </>
       )}
 

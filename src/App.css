@@ -1943,6 +1943,24 @@ button:active {
   .cv-pair-grid {
     gap: 0.5rem !important;
   }
+  /* Watchlist: use dropdown on mobile, hide pills */
+  .watchlist-tabs-desktop {
+    display: none !important;
+  }
+  /* Hide wide table on mobile, show cards */
+  .watchlist-table-desktop {
+    display: none !important;
+  }
+}
+
+/* Desktop: hide mobile-only elements */
+@media (min-width: 701px) {
+  .watchlist-selector-mobile {
+    display: none !important;
+  }
+  .watchlist-cards-mobile {
+    display: none !important;
+  }
   /* Chart popup takes full width on mobile */
   .cv-pair-grid > div > span {
     font-size: 1.1rem !important;
