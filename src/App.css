@@ -1844,17 +1844,16 @@ button:active {
   .company-view-header-search > div {
     width: 100% !important;
   }
-  .company-view-actions {
-    flex-direction: column !important;
-    align-items: stretch !important;
-    width: 100%;
-    gap: 0.5rem !important;
+  /* Mobile: price moves into the title row, search on its own row */
+  .company-view-header {
+    position: relative;
   }
   .company-view-price {
-    text-align: right !important;
     position: absolute;
-    top: 0.5rem;
-    right: 1rem;
+    top: 0;
+    right: 0;
+    text-align: right !important;
+    z-index: 1;
   }
   .company-view-price > div:first-child {
     font-size: 1.1rem !important;
@@ -1862,8 +1861,17 @@ button:active {
   .company-view-price > div:nth-child(2) {
     font-size: 0.75rem !important;
   }
-  .company-view-header {
-    position: relative;
+  .company-view-actions {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100%;
+    gap: 0.5rem !important;
+    /* Add top margin so search bar appears below the absolute-positioned price */
+    margin-top: 0;
+  }
+  /* Hide price from actions container by reserving space at top with avatar row */
+  .company-view-header > div:first-child {
+    padding-right: 100px; /* Reserve space for absolute-positioned price */
   }
   .company-view-two-col {
     grid-template-columns: 1fr !important;
