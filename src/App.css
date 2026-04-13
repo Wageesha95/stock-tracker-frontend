@@ -1947,7 +1947,10 @@ button:active {
   .watchlist-tabs-desktop {
     display: none !important;
   }
-  /* Hide wide table on mobile, show cards */
+}
+
+/* Cards on mobile + medium screens (table would need horizontal scroll) */
+@media (max-width: 1100px) {
   .watchlist-table-desktop {
     display: none !important;
   }
@@ -1958,9 +1961,17 @@ button:active {
   .watchlist-selector-mobile {
     display: none !important;
   }
+}
+@media (min-width: 1101px) {
   .watchlist-cards-mobile {
     display: none !important;
   }
+}
+
+/* On Watchlists page, expand content wider to fit all columns */
+body:has(.watchlist-table-desktop) .content {
+  max-width: 1600px;
+}
   /* Chart popup takes full width on mobile */
   .cv-pair-grid > div > span {
     font-size: 1.1rem !important;
