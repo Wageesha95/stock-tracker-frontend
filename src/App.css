@@ -1904,6 +1904,49 @@ button:active {
     font-size: 0.8rem;
     white-space: nowrap;
   }
+  /* Segmented controls wrap on mobile */
+  .segmented-control {
+    flex-wrap: wrap;
+    gap: 0.15rem;
+  }
+  .segmented-control button {
+    font-size: 0.75rem !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+  /* Price Range card - make the period controls fit */
+  .company-view-two-col > div {
+    padding: 0.75rem !important;
+  }
+  /* Stats grid - 2 columns on mobile */
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.4rem !important;
+  }
+  .stat-card {
+    padding: 0.5rem !important;
+  }
+  .stat-card .stat-value {
+    font-size: 1rem !important;
+  }
+  .stat-card h3 {
+    font-size: 0.65rem !important;
+  }
+  /* Content padding reduced */
+  .content {
+    padding: 0.75rem !important;
+  }
+  /* Form cards */
+  .form-card {
+    padding: 0.75rem !important;
+  }
+  /* Pair grids stay tight on mobile */
+  .cv-pair-grid {
+    gap: 0.5rem !important;
+  }
+  /* Chart popup takes full width on mobile */
+  .cv-pair-grid > div > span {
+    font-size: 1.1rem !important;
+  }
   /* Smaller h1 */
   h1 {
     font-size: 1.4rem !important;

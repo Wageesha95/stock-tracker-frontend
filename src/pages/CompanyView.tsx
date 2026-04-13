@@ -386,7 +386,7 @@ export default function CompanyView() {
               const lowPct = lowestData && ltdPrice > 0 ? ((ltdPrice - lowestData.value) / lowestData.value) * 100 : null;
               const highPct = highestData && ltdPrice > 0 ? ((ltdPrice - highestData.value) / highestData.value) * 100 : null;
               return <>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="cv-pair-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div>
                     <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem', letterSpacing: '0.5px' }}>{'\u25BC'} Lowest</div>
                     {lowestData ? (
@@ -427,7 +427,7 @@ export default function CompanyView() {
                     .reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
                   if (ttm2 <= 0) return null;
                   return (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
+                    <div className="cv-pair-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
                       <div>
                         <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>TTM Yield @ Low</div>
                         <span style={{ fontSize: '1.2rem', fontWeight: 700, color: '#805ad5' }}>{lowestData ? (ttm2 / lowestData.value * 100).toFixed(2) + '%' : '-'}</span>
@@ -471,7 +471,7 @@ export default function CompanyView() {
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {/* TTM cards */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <div className="cv-pair-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div className="stat-card" style={{ borderLeftColor: '#805ad5', margin: 0 }}>
                   <h3>Yield (TTM)</h3>
                   <p className="stat-value">{payouts.length > 0 && ttmTotal > 0 ? yieldPct.toFixed(2) + '%' : <span style={{ color: 'var(--text-muted)' }}>No data</span>}</p>
