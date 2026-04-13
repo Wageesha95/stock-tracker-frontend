@@ -282,7 +282,7 @@ export default function CompanyView() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+      <div className="company-view-header" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <button
             onClick={() => navigate(-1)}
@@ -294,7 +294,9 @@ export default function CompanyView() {
           >
             &larr; Back
           </button>
-          <CompanyAvatar code={code || ''} size={56} />
+          <div className="company-view-avatar" style={{ display: 'inline-block' }}>
+            <CompanyAvatar code={code || ''} size={56} />
+          </div>
           <div>
             <h1 style={{ margin: 0 }}>{code}</h1>
             {company && company.name !== code && (
@@ -302,8 +304,8 @@ export default function CompanyView() {
             )}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ width: '220px' }}>
+        <div className="company-view-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div className="company-view-header-search" style={{ width: '220px' }}>
             <CompanySearchSelect
               companies={companies}
               value={navCode}
@@ -316,7 +318,7 @@ export default function CompanyView() {
               ? marketHistory.reduce((a, b) => a.tradeDate > b.tradeDate ? a : b)
               : null;
             return latestMd && latestMd.lastTrade > 0 ? (
-              <div style={{ textAlign: 'right' }}>
+              <div className="company-view-price" style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--text-stat-value)' }}>
                   {fmt(latestMd.lastTrade)}
                 </div>
@@ -350,7 +352,7 @@ export default function CompanyView() {
       )}
 
       {/* Two-column: Price Range | Dividend Yield + Yearly Summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: marketHistory.length > 0 && dividendPayoutsEnabled ? '1fr 1fr' : '1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
+      <div className="company-view-two-col" style={{ display: 'grid', gridTemplateColumns: marketHistory.length > 0 && dividendPayoutsEnabled ? '1fr 1fr' : '1fr', gap: '1.25rem', marginBottom: '1.25rem' }}>
         {/* Price Range */}
         {marketHistory.length > 0 && (
           <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem', boxShadow: 'var(--shadow-card)' }}>
@@ -805,7 +807,7 @@ export default function CompanyView() {
       )}
 
       <div style={{ marginBottom: '1.5rem' }}>
-        <div className="segmented-control">
+        <div className="segmented-control company-view-tabs">
           <button className={tab === 'transactions' ? 'active' : ''} onClick={() => setTab('transactions')}>
             Transactions ({transactions.length})
           </button>
