@@ -606,6 +606,12 @@ export default function CompanyView() {
               </div>
               {/* Yearly table */}
               {(() => {
+                if (!financialsLoaded) return (
+                  <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem', boxShadow: 'var(--shadow-card)' }}>
+                    <h3 style={{ margin: 0, fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px', marginBottom: '0.5rem' }}>Yearly Summary</h3>
+                    <span className="loading-pulse" />
+                  </div>
+                );
                 const finByYear: Record<number, DividendFinancialData> = {};
                 financials.forEach(f => { finByYear[f.year] = f; });
                 const summaryYears = financials.length > 0
