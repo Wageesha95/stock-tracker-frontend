@@ -1,8 +1,9 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
-import { getCompanies, getDashboardAll, getAllDividendPayouts, getMarketData, DividendPayoutData } from '../api';
+import { getCompanies, getDashboardAll, getAllDividendPayouts, getMarketData, getUserSettings, DividendPayoutData } from '../api';
 import { SELL_COMMISSION_PCT } from '../constants';
 import { Company, PortfolioItem, MarketData } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
+import { ttmDividendTotal, groupByCompanyCode } from '../utils/ttm';
 
 export default function AvgCalculator() {
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -34,8 +35,9 @@ export default function AvgCalculator() {
       getDashboardAll(),
       getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
       getMarketData().catch(() => [] as MarketData[]),
+      getUserSettings(),
     ])
-      .then(([comps, dash, payouts, md]) => {
+      .then(([comps, dash, payouts, md, settings]) => {
         setCompanies(comps);
         const map: Record<string, PortfolioItem> = {};
         dash.portfolio.forEach((p: PortfolioItem) => { map[p.companyCode] = p; });
@@ -50,16 +52,14 @@ export default function AvgCalculator() {
         });
         setPriceMap(pMap);
 
-        // TTM dividend total per company (sum of amounts in last 12 months)
-        const oneYearAgo = new Date();
-        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-        const cutoff = oneYearAgo.toISOString().split('T')[0];
+        // TTM dividend total per company, anchored at max(latest XD, today)
+        const weeksByCode = settings.companyTtmWeeks;
+        const byCode = groupByCompanyCode(payouts);
         const divMap: Record<string, number> = {};
-        payouts.forEach(p => {
-          if (p.exDividendDate >= cutoff && p.amountPerShare) {
-            divMap[p.companyCode] = (divMap[p.companyCode] || 0) + Number(p.amountPerShare);
-          }
-        });
+        for (const [code, divs] of Object.entries(byCode)) {
+          const total = ttmDividendTotal(divs, weeksByCode?.[code]);
+          if (total > 0) divMap[code] = total;
+        }
         setTtmDivMap(divMap);
       })
       .catch(console.error)

@@ -4,6 +4,7 @@ import { getUpcomingDividends, getMarketData, getAllDividendPayouts, getUserSett
 import { MarketData } from '../types';
 import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
+import { computeTtmYieldMap } from '../utils/ttm';
 
 type Period = 1 | 2 | 3;
 type SortKey = 'companyCode' | 'yearsAppeared' | 'avgAmountPerShare' | 'yield' | 'lastXdDate' | 'announcementDate' | 'lastTrade' | 'yield2025' | 'yieldAtYearLow';
@@ -57,21 +58,7 @@ export default function UpcomingDividends() {
         }
         setPrices(priceMap);
 
-        const oneYearAgo = new Date();
-        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-        const cutoff = oneYearAgo.toISOString().split('T')[0];
-        const byCode: Record<string, DividendPayoutData[]> = {};
-        payouts.forEach(p => { (byCode[p.companyCode] = byCode[p.companyCode] || []).push(p); });
-        const yields: Record<string, number> = {};
-        for (const [code, divs] of Object.entries(byCode)) {
-          const ttm = divs.filter(d => d.exDividendDate >= cutoff);
-          const total = ttm.reduce((s, d) => s + (d.amountPerShare ? Number(d.amountPerShare) : 0), 0);
-          const price = priceMap[code];
-          if (total > 0 && price > 0) {
-            yields[code] = (total / price) * 100;
-          }
-        }
-        setTtmYield(yields);
+        setTtmYield(computeTtmYieldMap(settings.companyTtmWeeks, payouts, priceMap));
       })
       .catch(console.error)
       .finally(() => setLoading(false));

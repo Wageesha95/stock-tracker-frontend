@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
 import { LineChart, Line, ResponsiveContainer, YAxis, XAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
+import { ttmDividendTotal, groupByCompanyCode } from '../utils/ttm';
 
 const WATCHLIST_COLORS = [
   '#3182ce', '#2b6cb0', '#63b3ed',
@@ -120,18 +121,14 @@ export default function Watchlists() {
         // We only have latest price per company, so skip YTD for now unless we have history
         // Use changePercent as proxy or calculate from dashboard data
 
-        // TTM Yield: sum of dividends in last 12 months / current price * 100
-        const oneYearAgo = new Date();
-        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-        const cutoff = oneYearAgo.toISOString().split('T')[0];
-        const byCode: Record<string, DividendPayoutData[]> = {};
-        payouts.forEach(p => { (byCode[p.companyCode] = byCode[p.companyCode] || []).push(p); });
+        // TTM Yield per company: sum of dividends in TTM window / current price * 100
+        const weeksByCode = settings.companyTtmWeeks;
+        const byCode = groupByCompanyCode(payouts);
         const yields: Record<string, number> = {};
         const lastAmounts: Record<string, number> = {};
         for (const [code, divs] of Object.entries(byCode)) {
           const sorted = divs.sort((a, b) => b.exDividendDate.localeCompare(a.exDividendDate));
-          const ttm = sorted.filter(d => d.exDividendDate >= cutoff);
-          const total = ttm.reduce((s, d) => s + (d.amountPerShare ? Number(d.amountPerShare) : 0), 0);
+          const total = ttmDividendTotal(sorted, weeksByCode?.[code]);
           const price = map[code]?.lastTrade;
           if (total > 0 && price > 0) yields[code] = (total / price) * 100;
           if (sorted[0]?.amountPerShare) lastAmounts[code] = Number(sorted[0].amountPerShare);

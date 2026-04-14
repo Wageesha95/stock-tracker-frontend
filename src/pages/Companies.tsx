@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
 import { LineChart, Line, ResponsiveContainer, YAxis, XAxis, Tooltip, CartesianGrid, ReferenceLine } from 'recharts';
+import { ttmDividendTotal, groupByCompanyCode } from '../utils/ttm';
 
 export default function Companies() {
   const { isAdmin, isReadMode, dividendPayoutsEnabled } = useAuth();
@@ -79,23 +80,15 @@ export default function Companies() {
         setChangePercent(changePcts);
         setYtdChange(ytdData);
 
-        // Compute TTM dividend yield per company
+        // Compute TTM dividend yield per company (uses per-user, per-company ttmWeeks; default 52)
         if (payouts.length > 0) {
-          const oneYearAgo = new Date();
-          oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-          const cutoff = oneYearAgo.toISOString().split('T')[0];
+          const weeksByCode = settings.companyTtmWeeks;
+          const byCode = groupByCompanyCode(payouts);
           const yields: Record<string, number> = {};
-          const byCode: Record<string, DividendPayoutData[]> = {};
-          payouts.forEach(p => {
-            (byCode[p.companyCode] = byCode[p.companyCode] || []).push(p);
-          });
           for (const [code, divs] of Object.entries(byCode)) {
-            const ttm = divs.filter(d => d.exDividendDate >= cutoff);
-            const total = ttm.reduce((s, d) => s + (d.amountPerShare ? Number(d.amountPerShare) : 0), 0);
+            const total = ttmDividendTotal(divs, weeksByCode?.[code]);
             const price = prices[code];
-            if (total > 0 && price > 0) {
-              yields[code] = (total / price) * 100;
-            }
+            if (total > 0 && price > 0) yields[code] = (total / price) * 100;
           }
           setTtmYield(yields);
 

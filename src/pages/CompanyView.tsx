@@ -6,9 +6,11 @@ import { useAuth } from '../context/AuthContext';
 import CompanyAvatar from '../components/CompanyAvatar';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 import ActionMenu from '../components/ActionMenu';
-import { deleteTransaction, deleteDividend, invalidate } from '../api';
+import { deleteTransaction, deleteDividend, getUserSettings, updateCompanyTtmWeeks, invalidate } from '../api';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 import { SELL_COMMISSION_RATE } from '../constants';
+import { ttmWindow, resolveTtmWeeks } from '../utils/ttm';
+import { useTableSort } from '../hooks/useTableSort';
 
 type Tab = 'transactions' | 'dividends' | 'realized' | 'payouts';
 type Period = '1d' | '2d' | '5d' | '2w' | '1m' | '3m' | '6m' | 'custom';
@@ -34,30 +36,54 @@ export default function CompanyView() {
   const [customTo, setCustomTo] = useState('');
   const [expandedChart, setExpandedChart] = useState<'shares' | 'value' | 'priceAvg' | 'pnl' | 'yearly' | 'yearlyChart' | null>(null);
   const chartScrollRef = useRef<HTMLDivElement>(null);
+  const [ttmWeeksInput, setTtmWeeksInput] = useState<string>('');
+  const [savedTtmWeeks, setSavedTtmWeeks] = useState<number | undefined>(undefined);
+  const [savingTtmWeeks, setSavingTtmWeeks] = useState(false);
+  const [ttmEditorOpen, setTtmEditorOpen] = useState(false);
+  const [payoutsLoaded, setPayoutsLoaded] = useState(false);
+  const [financialsLoaded, setFinancialsLoaded] = useState(false);
 
   const loadData = () => {
     if (!code) return Promise.resolve();
-    return Promise.all([
-      getTransactionsByCompany(code),
-      getDividendsByCompany(code),
-      getDashboardAll(),
-      getCompanies(),
-      getMarketDataHistory(code),
-      getShareSplits(),
-      getDividendPayouts(code).catch(() => [] as DividendPayoutData[]),
-      getDividendFinancials(code).catch(() => [] as DividendFinancialData[]),
-    ]).then(([txns, divs, dash, comps, mh, splits, payoutData, finData]) => {
+
+    // Critical path — hide spinner as soon as these resolve.
+    const companiesP = getCompanies().then(comps => {
+      setCompanies(comps);
+      const found = comps.find(c => c.code === code) || null;
+      setCompany(found);
+    });
+    // User-scoped TTM weeks for this company
+    getUserSettings().then(settings => {
+      const weeks = settings.companyTtmWeeks?.[code];
+      setSavedTtmWeeks(weeks);
+      setTtmWeeksInput(weeks ? String(weeks) : '');
+    }).catch(console.error);
+    const transactionsP = getTransactionsByCompany(code).then(txns => {
       setTransactions(txns.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    });
+    const dividendsP = getDividendsByCompany(code).then(divs => {
       setDividends(divs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+    });
+    const marketHistoryP = getMarketDataHistory(code).then(mh => setMarketHistory(mh));
+
+    // Non-critical — fill in progressively, don't block initial render.
+    getDashboardAll().then(dash => {
       setRealizedItems(dash.realizedItems.filter(r => r.companyCode === code));
       setPortfolioItem(dash.portfolio.find((p: PortfolioItem) => p.companyCode === code) || null);
-      setCompanies(comps);
-      setCompany(comps.find(c => c.code === code) || null);
-      setMarketHistory(mh);
-      setShareSplits(splits.filter(s => s.companyCode === code));
-      setPayouts(payoutData as DividendPayoutData[]);
-      setFinancials(finData as DividendFinancialData[]);
-    });
+    }).catch(console.error);
+    getShareSplits()
+      .then(splits => setShareSplits(splits.filter(s => s.companyCode === code)))
+      .catch(console.error);
+    getDividendPayouts(code)
+      .then(p => setPayouts(p as DividendPayoutData[]))
+      .catch(() => setPayouts([]))
+      .finally(() => setPayoutsLoaded(true));
+    getDividendFinancials(code)
+      .then(f => setFinancials(f as DividendFinancialData[]))
+      .catch(() => setFinancials([]))
+      .finally(() => setFinancialsLoaded(true));
+
+    return Promise.all([companiesP, transactionsP, dividendsP, marketHistoryP]);
   };
 
   useEffect(() => {
@@ -71,8 +97,33 @@ export default function CompanyView() {
     setPayouts([]);
     setFinancials([]);
     setCompany(null);
+    setSavedTtmWeeks(undefined);
+    setTtmWeeksInput('');
+    setPayoutsLoaded(false);
+    setFinancialsLoaded(false);
     loadData().catch(console.error).finally(() => setLoading(false));
   }, [code]);
+
+  const handleSaveTtmWeeks = async () => {
+    if (!code) return;
+    const trimmed = ttmWeeksInput.trim();
+    const weeks = trimmed === '' ? null : Number(trimmed);
+    if (weeks !== null && (!Number.isFinite(weeks) || weeks <= 0 || weeks > 520)) {
+      alert('TTM weeks must be between 1 and 520');
+      return;
+    }
+    setSavingTtmWeeks(true);
+    try {
+      await updateCompanyTtmWeeks(code, weeks);
+      setSavedTtmWeeks(weeks ?? undefined);
+      invalidate('settings');
+    } catch (err) {
+      console.error('Failed to save TTM weeks', err);
+      alert('Failed to save TTM weeks');
+    } finally {
+      setSavingTtmWeeks(false);
+    }
+  };
 
   const handleDeleteTx = async (id: string) => {
     if (!confirm('Delete this transaction?')) return;
@@ -91,6 +142,22 @@ export default function CompanyView() {
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const gainClass = (n: number) => (n >= 0 ? 'gain-positive' : 'gain-negative');
   const gainSign = (n: number) => (n >= 0 ? '+' : '');
+
+  // Sortable rows for tab tables
+  const txRows = useMemo(() => transactions.map(t => ({
+    ...t,
+    total: t.count * t.price + t.commission,
+  })), [transactions]);
+  const divRows = useMemo(() => dividends.map(d => ({
+    ...d,
+    amountPerShare: d.type === 'CASH' ? d.amount : 0,
+    sharesCount: d.type === 'CASH' ? d.shares : 0,
+    scripSharesCount: d.type === 'SCRIP' ? d.scripShares : 0,
+    totalValue: d.type === 'CASH' ? d.totalAmount : d.scripShares,
+  })), [dividends]);
+  const { sorted: sortedTx, handleSort: sortTx, sortIcon: txIcon } = useTableSort(txRows, 'date');
+  const { sorted: sortedDivs, handleSort: sortDiv, sortIcon: divIcon } = useTableSort(divRows, 'date');
+  const { sorted: sortedRealized, handleSort: sortRealized, sortIcon: realizedIcon } = useTableSort(realizedItems, 'sellDate');
 
   const periodDays: Record<Period, number> = { '1d': 1, '2d': 2, '5d': 5, '2w': 14, '1m': 30, '3m': 90, '6m': 180, 'custom': 0 };
   const periodLabels: Record<Period, string> = { '1d': 'Last Trade Day', '2d': 'Last 2 Days', '5d': 'Last 5 Days', '2w': 'Last 2 Weeks', '1m': 'Last Month', '3m': 'Last 3 Months', '6m': 'Last 6 Months', 'custom': 'Custom Range' };
@@ -420,10 +487,26 @@ export default function CompanyView() {
                     ) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}
                   </div>
                 </div>
-                {dividendPayoutsEnabled && payouts.length > 0 && (() => {
-                  const now2 = new Date();
-                  const cutoff2 = new Date(now2.getFullYear() - 1, now2.getMonth(), now2.getDate()).toISOString().split('T')[0];
-                  const ttm2 = payouts.filter(p => p.exDividendDate >= cutoff2)
+                {dividendPayoutsEnabled && (() => {
+                  if (!payoutsLoaded) {
+                    return (
+                      <div className="cv-pair-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid var(--border-color)' }}>
+                        <div>
+                          <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>TTM Yield @ Low</div>
+                          <span className="loading-pulse" />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>TTM Yield @ High</div>
+                          <span className="loading-pulse" />
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (payouts.length === 0) return null;
+                  const w = ttmWindow(payouts, savedTtmWeeks);
+                  if (!w) return null;
+                  const ttm2 = payouts
+                    .filter(p => p.exDividendDate >= w.cutoff && p.exDividendDate <= w.anchor)
                     .reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
                   if (ttm2 <= 0) return null;
                   return (
@@ -456,10 +539,14 @@ export default function CompanyView() {
         {/* Dividend Yield + Yearly Summary */}
         {dividendPayoutsEnabled && (() => {
           const now = new Date();
-          const cutoff = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString().split('T')[0];
-          const ttmPayouts = payouts.filter(p => p.exDividendDate >= cutoff);
+          const weeks = resolveTtmWeeks(savedTtmWeeks);
+          const w = ttmWindow(payouts, weeks);
+          const ttmPayouts = w
+            ? payouts.filter(p => p.exDividendDate >= w.cutoff && p.exDividendDate <= w.anchor)
+            : [];
           const ttmTotal = ttmPayouts.reduce((s, p) => s + (p.amountPerShare ? Number(p.amountPerShare) : 0), 0);
-          const curPrice = marketHistory.length > 0 ? Math.max(...marketHistory.map(m => m.lastTrade))
+          // Latest market price: marketHistory is ordered by tradeDate desc, so [0] is newest.
+          const curPrice = marketHistory.length > 0 ? marketHistory[0].lastTrade
             : portfolioItem?.currentValue && portfolioItem?.sharesHeld ? portfolioItem.currentValue / portfolioItem.sharesHeld : 0;
           const yieldPct = curPrice > 0 ? (ttmTotal / curPrice) * 100 : 0;
 
@@ -472,13 +559,48 @@ export default function CompanyView() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
               {/* TTM cards */}
               <div className="cv-pair-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div className="stat-card" style={{ borderLeftColor: '#805ad5', margin: 0 }}>
-                  <h3>Yield (TTM)</h3>
-                  <p className="stat-value">{payouts.length > 0 && ttmTotal > 0 ? yieldPct.toFixed(2) + '%' : <span style={{ color: 'var(--text-muted)' }}>No data</span>}</p>
+                <div className="stat-card" style={{ borderLeftColor: '#805ad5', margin: 0, position: 'relative' }}>
+                  <h3 style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', flexWrap: 'wrap' }}>
+                    <span>Yield (TTM)</span>
+                    {w && <span style={{ fontWeight: 400, color: 'var(--text-muted)', textTransform: 'none', fontSize: '0.7rem' }} title={`${weeks} weeks`}>({w.cutoff} → {w.anchor})</span>}
+                    {!isReadMode && company && (
+                      <button
+                        onClick={() => setTtmEditorOpen(o => !o)}
+                        title="Configure TTM weeks"
+                        aria-label="Configure TTM weeks"
+                        style={{ marginLeft: 'auto', padding: '0 0.25rem', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', lineHeight: 1 }}
+                      >⋮</button>
+                    )}
+                  </h3>
+                  <p className="stat-value">{!payoutsLoaded ? <span className="loading-pulse" /> : payouts.length > 0 && ttmTotal > 0 ? yieldPct.toFixed(2) + '%' : <span style={{ color: 'var(--text-muted)' }}>No data</span>}</p>
+                  {!isReadMode && company && ttmEditorOpen && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.4rem' }}>
+                      <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>TTM weeks:</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={520}
+                        value={ttmWeeksInput}
+                        onChange={e => setTtmWeeksInput(e.target.value)}
+                        placeholder="52"
+                        style={{ width: '64px', padding: '0.15rem 0.3rem', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid var(--border-input)', background: 'var(--bg-input)', color: 'var(--text-primary)' }}
+                      />
+                      <button
+                        onClick={handleSaveTtmWeeks}
+                        disabled={savingTtmWeeks || ttmWeeksInput === (savedTtmWeeks ? String(savedTtmWeeks) : '')}
+                        style={{ padding: '0.15rem 0.5rem', fontSize: '0.7rem', borderRadius: '4px', border: '1px solid #805ad5', background: '#805ad5', color: 'white', cursor: 'pointer' }}
+                      >
+                        {savingTtmWeeks ? '...' : 'Save'}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="stat-card" style={{ borderLeftColor: '#805ad5', margin: 0 }}>
-                  <h3>12M Dividends</h3>
-                  <p className="stat-value">{payouts.length > 0 ? fmt(ttmTotal) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}</p>
+                  <h3 style={{ display: 'flex', alignItems: 'baseline', gap: '0.35rem', flexWrap: 'wrap' }}>
+                    <span>TTM Dividends</span>
+                    {w && <span style={{ fontWeight: 400, color: 'var(--text-muted)', textTransform: 'none', fontSize: '0.7rem' }} title={`${weeks} weeks`}>({w.cutoff} → {w.anchor})</span>}
+                  </h3>
+                  <p className="stat-value">{!payoutsLoaded ? <span className="loading-pulse" /> : payouts.length > 0 ? fmt(ttmTotal) : <span style={{ color: 'var(--text-muted)' }}>No data</span>}</p>
                   {ttmPayouts.length > 0 && <small style={{ color: '#718096' }}>{ttmPayouts.length} payout{ttmPayouts.length !== 1 ? 's' : ''}</small>}
                 </div>
               </div>
@@ -833,17 +955,17 @@ export default function CompanyView() {
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th className="text-right">Count</th>
-                  <th className="text-right">Price</th>
-                  <th className="text-right">Commission</th>
-                  <th className="text-right">Total</th>
+                  <th className="sort-header" onClick={() => sortTx('date')}>Date{txIcon('date')}</th>
+                  <th className="sort-header" onClick={() => sortTx('type')}>Type{txIcon('type')}</th>
+                  <th className="sort-header text-right" onClick={() => sortTx('count')}>Count{txIcon('count')}</th>
+                  <th className="sort-header text-right" onClick={() => sortTx('price')}>Price{txIcon('price')}</th>
+                  <th className="sort-header text-right" onClick={() => sortTx('commission')}>Commission{txIcon('commission')}</th>
+                  <th className="sort-header text-right" onClick={() => sortTx('total')}>Total{txIcon('total')}</th>
                   {!isReadMode && <th></th>}
                 </tr>
               </thead>
               <tbody>
-                {transactions.map(t => (
+                {sortedTx.map(t => (
                   <tr key={t.id}>
                     <td>{t.date}</td>
                     <td>
@@ -894,17 +1016,17 @@ export default function CompanyView() {
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Type</th>
-                  <th className="text-right">Amount/Share</th>
-                  <th className="text-right">Shares</th>
-                  <th className="text-right">Scrip Shares</th>
-                  <th className="text-right">Total</th>
+                  <th className="sort-header" onClick={() => sortDiv('date')}>Date{divIcon('date')}</th>
+                  <th className="sort-header" onClick={() => sortDiv('type')}>Type{divIcon('type')}</th>
+                  <th className="sort-header text-right" onClick={() => sortDiv('amountPerShare')}>Amount/Share{divIcon('amountPerShare')}</th>
+                  <th className="sort-header text-right" onClick={() => sortDiv('sharesCount')}>Shares{divIcon('sharesCount')}</th>
+                  <th className="sort-header text-right" onClick={() => sortDiv('scripSharesCount')}>Scrip Shares{divIcon('scripSharesCount')}</th>
+                  <th className="sort-header text-right" onClick={() => sortDiv('totalValue')}>Total{divIcon('totalValue')}</th>
                   {!isReadMode && <th></th>}
                 </tr>
               </thead>
               <tbody>
-                {dividends.map(d => (
+                {sortedDivs.map(d => (
                   <tr key={d.id}>
                     <td>{d.date}</td>
                     <td>
@@ -1031,17 +1153,17 @@ export default function CompanyView() {
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>Sell Date</th>
-                  <th className="text-right">Shares Sold</th>
-                  <th className="text-right">Avg Buy</th>
-                  <th className="text-right">Sell Price</th>
-                  <th className="text-right">Commission</th>
-                  <th className="text-right">Realized Gain</th>
-                  <th className="text-right">Gain %</th>
+                  <th className="sort-header" onClick={() => sortRealized('sellDate')}>Sell Date{realizedIcon('sellDate')}</th>
+                  <th className="sort-header text-right" onClick={() => sortRealized('sharesSold')}>Shares Sold{realizedIcon('sharesSold')}</th>
+                  <th className="sort-header text-right" onClick={() => sortRealized('avgBuyPrice')}>Avg Buy{realizedIcon('avgBuyPrice')}</th>
+                  <th className="sort-header text-right" onClick={() => sortRealized('sellPrice')}>Sell Price{realizedIcon('sellPrice')}</th>
+                  <th className="sort-header text-right" onClick={() => sortRealized('commission')}>Commission{realizedIcon('commission')}</th>
+                  <th className="sort-header text-right" onClick={() => sortRealized('realizedGain')}>Realized Gain{realizedIcon('realizedGain')}</th>
+                  <th className="sort-header text-right" onClick={() => sortRealized('gainPercent')}>Gain %{realizedIcon('gainPercent')}</th>
                 </tr>
               </thead>
               <tbody>
-                {realizedItems.map((r, i) => (
+                {sortedRealized.map((r, i) => (
                   <tr key={i}>
                     <td>{r.sellDate}</td>
                     <td className="text-right mono">{r.sharesSold}</td>

@@ -152,12 +152,15 @@ export interface UserSettingsData {
   userId?: string;
   selectedBrokerIds: string[];
   tableColumns: Record<string, string[]>;
+  companyTtmWeeks?: Record<string, number>;
 }
 export const getUserSettings = () => cached('settings', () => api.get<UserSettingsData>('/settings').then(res => res.data));
 export const updateSelectedBrokers = (selectedBrokerIds: string[]) =>
   api.put<UserSettingsData>('/settings/brokers', { selectedBrokerIds }).then(res => { invalidate('settings'); return res.data; });
 export const updateTableColumns = (tableColumns: Record<string, string[]>) =>
   api.put<UserSettingsData>('/settings/table-columns', tableColumns).then(res => { invalidate('settings'); return res.data; });
+export const updateCompanyTtmWeeks = (companyCode: string, weeks: number | null) =>
+  api.put<UserSettingsData>(`/settings/company-ttm-weeks/${companyCode}`, { weeks }).then(res => { invalidate('settings'); return res.data; });
 
 // Dividends
 export const getDividends = () => cached('dividends', () => api.get<Dividend[]>('/dividends').then(res => res.data));

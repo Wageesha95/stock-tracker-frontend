@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import CompanyAvatar from '../components/CompanyAvatar';
+import { computeTtmYieldMap } from '../utils/ttm';
 
 interface SectorCompany {
   companyCode: string;
@@ -94,20 +95,10 @@ export default function Sectors() {
         data.portfolio?.forEach((p: any) => { if (p.avgBuyPrice > 0) aMap[p.companyCode] = p.avgBuyPrice; });
         setAvgPriceMap(aMap);
 
-        // TTM yield
-        const oneYearAgo = new Date();
-        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-        const cutoff = oneYearAgo.toISOString().split('T')[0];
-        const byCode: Record<string, DividendPayoutData[]> = {};
-        payouts.forEach(p => { (byCode[p.companyCode] = byCode[p.companyCode] || []).push(p); });
-        const yields: Record<string, number> = {};
-        for (const [code, divs] of Object.entries(byCode)) {
-          const ttm = divs.filter(d => d.exDividendDate >= cutoff);
-          const total = ttm.reduce((s, d) => s + (d.amountPerShare ? Number(d.amountPerShare) : 0), 0);
-          const price = mMap[code]?.lastTrade;
-          if (total > 0 && price > 0) yields[code] = (total / price) * 100;
-        }
-        setTtmYieldMap(yields);
+        // TTM yield per company (anchored at max(latestXdDate, today))
+        const priceByCode: Record<string, number | undefined> = {};
+        for (const [code, m] of Object.entries(mMap)) priceByCode[code] = m?.lastTrade;
+        setTtmYieldMap(computeTtmYieldMap(settings.companyTtmWeeks, payouts, priceByCode));
       })
       .catch(console.error)
       .finally(() => setLoading(false));
