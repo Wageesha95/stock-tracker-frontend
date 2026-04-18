@@ -21,6 +21,7 @@ import DividendScraper from './pages/DividendScraper';
 import LoginHistory from './pages/LoginHistory';
 import UpcomingDividends from './pages/UpcomingDividends';
 import MarketDataScraper from './pages/MarketDataScraper';
+import MarketData from './pages/MarketData';
 import SettingsPanel from './components/SettingsPanel';
 import './App.css';
 
@@ -91,6 +92,7 @@ function App() {
                 <NavLink to="/watchlists" onClick={() => setMenuOpen(false)}>Watchlists</NavLink>
                 <NavLink to="/sectors" onClick={() => setMenuOpen(false)}>Sectors</NavLink>
                 <NavLink to="/companies" onClick={() => setMenuOpen(false)}>Companies</NavLink>
+                <NavLink to="/market-data" onClick={() => setMenuOpen(false)}>Market Data</NavLink>
                 <NavLink to="/calculator" onClick={() => setMenuOpen(false)}>Calculator</NavLink>
                 {!isReadMode && <NavLink to="/upload" onClick={() => setMenuOpen(false)}>Upload PDF</NavLink>}
               </>
@@ -142,6 +144,7 @@ function App() {
             <Route path="/companies" element={<Companies />} />
             <Route path="/stock-prices/:code" element={<StockPrices />} />
             <Route path="/upload" element={<PdfUpload />} />
+            <Route path="/market-data" element={<MarketData />} />
             <Route path="/upload-summary" element={isAdmin ? <TradeSummaryUpload /> : <Navigate to="/" />} />
             <Route path="/scrape-dividends" element={isAdmin ? <DividendScraper /> : <Navigate to="/" />} />
             <Route path="/scrape-market-data" element={isAdmin ? <MarketDataScraper /> : <Navigate to="/" />} />

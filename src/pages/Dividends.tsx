@@ -226,7 +226,7 @@ export default function Dividends() {
             <label>
               XD Date
               {companyPayouts.length > 0 ? (() => {
-                const usedXdDates = new Set(dividends.filter(d => d.companyCode === companyCode).map(d => d.xdDate));
+                const usedXdDates = new Set(dividends.filter(d => d.companyCode === companyCode && d.type === type).map(d => d.xdDate));
                 const available = companyPayouts.filter(p => !usedXdDates.has(p.exDividendDate));
                 return (
                   <select value={xdDate} onChange={e => handleXdDateChange(e.target.value)}>
@@ -235,7 +235,7 @@ export default function Dividends() {
                       const used = usedXdDates.has(p.exDividendDate);
                       return (
                         <option key={p.exDividendDate} value={p.exDividendDate} disabled={used}>
-                          {p.exDividendDate} — {p.amountPerShare != null ? Number(p.amountPerShare).toFixed(2) + ' LKR' : ''}{used ? ' (already added)' : ''}
+                          {p.exDividendDate}{type === 'CASH' && p.amountPerShare != null ? ' — ' + Number(p.amountPerShare).toFixed(2) + ' LKR' : ''}{used ? ' (already added)' : ''}
                         </option>
                       );
                     })}
@@ -521,7 +521,7 @@ export default function Dividends() {
                     <option value="">— Select XD Date —</option>
                     {editPayouts.map(p => (
                       <option key={p.exDividendDate} value={p.exDividendDate}>
-                        {p.exDividendDate} — {p.amountPerShare != null ? Number(p.amountPerShare).toFixed(2) + ' LKR' : ''}
+                        {p.exDividendDate}{editType === 'CASH' && p.amountPerShare != null ? ' — ' + Number(p.amountPerShare).toFixed(2) + ' LKR' : ''}
                       </option>
                     ))}
                   </select>
@@ -546,13 +546,8 @@ export default function Dividends() {
               </label>
               <label>
                 Type
-                <div className="radio-group">
-                  <label className="radio-label">
-                    <input type="radio" checked={editType === 'CASH'} onChange={() => setEditType('CASH')} /> Cash
-                  </label>
-                  <label className="radio-label">
-                    <input type="radio" checked={editType === 'SCRIP'} onChange={() => setEditType('SCRIP')} /> Scrip
-                  </label>
+                <div style={{ padding: '0.5rem 0', fontWeight: 600 }}>
+                  {editType === 'CASH' ? 'Cash' : 'Scrip'}
                 </div>
               </label>
             </div>

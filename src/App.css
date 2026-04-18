@@ -1183,6 +1183,13 @@ button:active {
   overflow: hidden;
 }
 
+.action-menu-dropdown-up {
+  top: auto;
+  bottom: 100%;
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
 .action-menu-item {
   display: block;
   width: 100%;

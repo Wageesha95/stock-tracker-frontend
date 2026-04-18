@@ -204,18 +204,22 @@ export const getYearLow = () => cached('year-low', () => api.get<Record<string, 
 export const getMarketDataHistory = (code: string) =>
   cached(`market-history:${code}`, () => api.get<MarketData[]>(`/market-data/${code}/history`).then(res => res.data));
 export const getAvailableDates = () => cached('market-dates', () => api.get<string[]>('/market-data/dates').then(res => res.data));
-export const getMarketDataByDate = (date: string) => api.get<MarketData[]>(`/market-data/by-date/${date}`).then(res => res.data);
+export const getMarketDataByDate = (date: string) =>
+  cached(`market-by-date:${date}`, () => api.get<MarketData[]>(`/market-data/by-date/${date}`).then(res => res.data));
+export interface MarketDataDateSummary { date: string; count: number; }
+export const getMarketDataDateSummary = () =>
+  cached('market-date-summary', () => api.get<MarketDataDateSummary[]>('/market-data/date-summary').then(res => res.data));
 export const getDashboardSummary = () => cached('summary', () => api.get<{
   bankInterestRate: number;
   opportunityCost: number;
   breakdown: { companyCode: string; companyName: string; date: string; amount: number; days: number; interest: number }[];
 }>('/dashboard/summary').then(res => res.data));
 // Admin
-export const getSystemStats = () => api.get<{
+export const getSystemStats = () => cached('system-stats', () => api.get<{
   companies: number; transactions: number; dividends: number; dividendPayouts: number;
   marketData: number; stockPrices: number; industryGroups: number; watchlists: number;
   loginHistory: number; latestMarketDate: string | null; marketDataDates: number;
-}>('/admin/system-stats').then(res => res.data);
+}>('/admin/system-stats').then(res => res.data));
 
 export const getAdminStats = () => cached('admin-stats', () => api.get<{
   totalUsers: number;

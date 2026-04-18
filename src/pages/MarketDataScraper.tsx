@@ -31,6 +31,7 @@ export default function MarketDataScraper() {
   // Common date range filter
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [autoSave, setAutoSave] = useState(false);
 
   // All companies
   const [results, setResults] = useState<CompanyScrapeResult[]>([]);
@@ -113,12 +114,37 @@ export default function MarketDataScraper() {
         setResults(prev => prev.map(r =>
           r.code === c.code ? { ...r, scrapeStatus: 'done' as const, bars, existing: exMap } : r
         ));
+
+        if (autoSave && bars.length > 0) {
+          const filtered = bars.filter(b => {
+            if (b.volume === 0) return false;
+            if (dateFrom && b.date < dateFrom) return false;
+            if (dateTo && b.date > dateTo) return false;
+            return true;
+          });
+          if (filtered.length > 0) {
+            setResults(prev => prev.map(r =>
+              r.code === c.code ? { ...r, saveStatus: 'saving' as const } : r
+            ));
+            try {
+              const res = await scrapeMarketDataSaveBars(c.code, filtered);
+              setResults(prev => prev.map(r =>
+                r.code === c.code ? { ...r, saveStatus: 'saved' as const, savedCount: res.newRecords } : r
+              ));
+            } catch {
+              setResults(prev => prev.map(r =>
+                r.code === c.code ? { ...r, saveStatus: 'error' as const } : r
+              ));
+            }
+          }
+        }
       } catch (err: any) {
         setResults(prev => prev.map(r =>
-          r.code === c.code ? { ...r, scrapeStatus: 'error' as const, error: err?.message || 'Failed' } : r
+          r.code === c.code ? { ...r, scrapeStatus: 'error' as const, error: err?.response?.data?.error || err?.message || 'Failed' } : r
         ));
       }
     }
+
     setMode('all-preview');
   };
 
@@ -214,13 +240,19 @@ export default function MarketDataScraper() {
 
           <div style={{ margin: '1.5rem 0', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
             <label style={{ fontWeight: 600 }}>All Companies ({companies.length})</label>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                <input type="checkbox" checked={autoSave} onChange={e => setAutoSave(e.target.checked)} />
+                Auto-save after scrape
+              </label>
+            </div>
             <div className="upload-actions" style={{ marginTop: '0.75rem' }}>
               <button className="btn-upload" onClick={handleScrapeAll} disabled={companies.length === 0}>
                 Scrape All Companies
               </button>
             </div>
             <div style={{ marginTop: '0.5rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-              Scrapes historical OHLC data from TradingView for each company (~15s each).
+              Scrapes historical OHLC data from TradingView for each company (~15s each). Higher parallelism = faster but more server RAM.
             </div>
           </div>
           {scraping && (
