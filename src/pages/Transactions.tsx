@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 import CompanySearchSelect from '../components/CompanySearchSelect';
+import { compareTxDateBuysFirst, txDateTieBreaker } from '../utils/transactionSort';
 
 export default function Transactions() {
   const navigate = useNavigate();
@@ -105,7 +106,9 @@ export default function Transactions() {
       else if (sortKey === 'price') cmp = a.price - b.price;
       else if (sortKey === 'commission') cmp = a.commission - b.commission;
       else if (sortKey === 'total') cmp = (a.count * a.price + a.commission) - (b.count * b.price + b.commission);
-      return sortDir === 'asc' ? cmp : -cmp;
+      if (cmp !== 0) return sortDir === 'asc' ? cmp : -cmp;
+      const tb = txDateTieBreaker(a, b, sortKey);
+      return sortDir === 'asc' ? tb : -tb;
     });
 
   if (loading) return <p>Loading...</p>;
@@ -285,7 +288,7 @@ export default function Transactions() {
           }, {});
           return Object.entries(grouped).map(([code, txns]) => {
             // FIFO avg price calculation
-            const chronological = [...txns].sort((a, b) => a.date.localeCompare(b.date));
+            const chronological = [...txns].sort(compareTxDateBuysFirst);
             let fifoShares = 0;
             let fifoCost = 0;
             for (const t of chronological) {

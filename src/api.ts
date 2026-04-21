@@ -209,6 +209,26 @@ export const getMarketDataByDate = (date: string) =>
 export interface MarketDataDateSummary { date: string; count: number; }
 export const getMarketDataDateSummary = () =>
   cached('market-date-summary', () => api.get<MarketDataDateSummary[]>('/market-data/date-summary').then(res => res.data));
+// Notes
+export interface Note {
+  id: string;
+  userId: string;
+  companyCode: string;
+  key: string;
+  value: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export const getNotes = () => cached('notes', () => api.get<Note[]>('/notes').then(res => res.data));
+export const getNotesByCompany = (code: string) =>
+  cached(`notes:${code}`, () => api.get<Note[]>(`/notes/company/${code}`).then(res => res.data));
+export const createNote = (data: { companyCode: string; key?: string; value: string }) =>
+  api.post<Note>('/notes', data).then(res => { invalidate('notes'); return res.data; });
+export const updateNote = (id: string, data: { key?: string; value?: string }) =>
+  api.put<Note>(`/notes/${id}`, data).then(res => { invalidate('notes'); return res.data; });
+export const deleteNote = (id: string) =>
+  api.delete(`/notes/${id}`).then(res => { invalidate('notes'); return res; });
+
 export const getDashboardSummary = () => cached('summary', () => api.get<{
   bankInterestRate: number;
   opportunityCost: number;

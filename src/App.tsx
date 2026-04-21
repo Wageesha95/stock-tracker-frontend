@@ -23,6 +23,7 @@ import UpcomingDividends from './pages/UpcomingDividends';
 import MarketDataScraper from './pages/MarketDataScraper';
 import MarketData from './pages/MarketData';
 import SettingsPanel from './components/SettingsPanel';
+import NotesPanel from './components/NotesPanel';
 import './App.css';
 
 const PING_URL = 'https://stock-tracker-backend-2.onrender.com/api/auth/me';
@@ -32,6 +33,7 @@ function App() {
   const { user, loading, isAdmin, isReadMode, logout } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('theme') as 'light' | 'dark') || 'light';
   });
@@ -101,14 +103,24 @@ function App() {
           <div className="nav-right">
             <span className="nav-username">{user.username}<span style={{ marginLeft: '0.4rem', fontSize: '0.85rem' }} title={isReadMode ? 'Read Only' : 'Privileged'}>{isReadMode ? '\uD83D\uDC41' : '\u270F\uFE0F'}</span></span>
             {!isAdmin && (
-              <button
-                className="btn-settings-gear"
-                onClick={() => setSettingsOpen(true)}
-                aria-label="Settings"
-                title="Settings"
-              >
-                &#9881;
-              </button>
+              <>
+                <button
+                  className="btn-settings-gear"
+                  onClick={() => setNotesOpen(true)}
+                  aria-label="Notes"
+                  title="Notes"
+                >
+                  &#128221;
+                </button>
+                <button
+                  className="btn-settings-gear"
+                  onClick={() => setSettingsOpen(true)}
+                  aria-label="Settings"
+                  title="Settings"
+                >
+                  &#9881;
+                </button>
+              </>
             )}
             <button
               className="theme-toggle"
@@ -153,6 +165,7 @@ function App() {
           </Routes>
         </main>
         <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        <NotesPanel open={notesOpen} onClose={() => setNotesOpen(false)} />
       </div>
     </BrowserRouter>
   );

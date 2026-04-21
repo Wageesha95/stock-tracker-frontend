@@ -6,20 +6,63 @@ import { useAuth } from '../context/AuthContext';
 import CompanyAvatar from '../components/CompanyAvatar';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 import ActionMenu from '../components/ActionMenu';
+import NotesPanel from '../components/NotesPanel';
+import NotesView from '../components/NotesView';
 import { deleteTransaction, deleteDividend, getUserSettings, updateCompanyTtmWeeks, invalidate } from '../api';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
+import { LineChart, Line, Bar, ComposedChart, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
 import { SELL_COMMISSION_RATE } from '../constants';
 import { ttmWindow, resolveTtmWeeks } from '../utils/ttm';
+import { compareTxDateBuysFirst, compareEventDateBuysFirst, txDateTieBreaker } from '../utils/transactionSort';
 import { useTableSort } from '../hooks/useTableSort';
 
-type Tab = 'transactions' | 'dividends' | 'realized' | 'payouts';
+type Tab = 'transactions' | 'dividends' | 'realized' | 'payouts' | 'notes';
 type Period = '1d' | '2d' | '5d' | '2w' | '1m' | '3m' | '6m' | 'custom';
+
+// Hollow shapes at buy/sell points. Circle = buy, square = sell.
+// Hollow so the underlying price line stays visible. Area scales with share count.
+const renderBuyDot = ({ cx, cy, payload, index }: any) => {
+  if (!payload?.buyCount) return <g key={`bd-${index}`} />;
+  const r = Math.max(3, Math.min(14, Math.sqrt(payload.buyCount) * 2));
+  return <circle key={`bd-${index}`} cx={cx} cy={cy} r={r} fill="none" stroke="var(--text-primary, #333)" strokeWidth={1.5} />;
+};
+const renderSellDot = ({ cx, cy, payload, index }: any) => {
+  if (!payload?.sellCount) return <g key={`sd-${index}`} />;
+  const r = Math.max(3, Math.min(14, Math.sqrt(payload.sellCount) * 2));
+  return <rect key={`sd-${index}`} x={cx - r} y={cy - r} width={r * 2} height={r * 2} fill="none" stroke="var(--text-primary, #333)" strokeWidth={1.5} />;
+};
+
+// Compact tooltip for the Price/Avg chart — only renders rows we actually have,
+// so non-buy days don't show an empty "Your Buy Price" row (Recharts' default
+// tooltip leaves blank space for each Line in the chart).
+const priceChartTooltip = (fmtLkr: (n: number) => string) => ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload as { sharePrice?: number; avgPrice?: number | null; buyPrice?: number | null; buyCount?: number; sellPrice?: number | null; sellCount?: number };
+  const row = (color: string, name: string, value: string) => (
+    <div key={name} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+      <span style={{ color }}>{name}</span>
+      <span>{value}</span>
+    </div>
+  );
+  return (
+    <div style={{
+      background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px',
+      padding: '0.5rem 0.6rem', fontSize: '0.75rem', lineHeight: 1.35, minWidth: '140px',
+    }}>
+      <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{label}</div>
+      {d.sharePrice != null && row('#e53e3e', 'Price', `LKR ${fmtLkr(d.sharePrice)}`)}
+      {d.avgPrice != null && row('#3182ce', 'Avg Cost', `LKR ${fmtLkr(d.avgPrice)}`)}
+      {d.buyCount ? row('var(--text-primary, #333)', 'Buy', `${d.buyCount} @ LKR ${fmtLkr(d.buyPrice ?? 0)}`) : null}
+      {d.sellCount ? row('#dd6b20', 'Sell', `${d.sellCount} @ LKR ${fmtLkr(d.sellPrice ?? 0)}`) : null}
+    </div>
+  );
+};
 
 export default function CompanyView() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const { isReadMode, dividendPayoutsEnabled } = useAuth();
   const [tab, setTab] = useState<Tab>('transactions');
+  const [notesOpen, setNotesOpen] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [realizedItems, setRealizedItems] = useState<RealizedGainItem[]>([]);
@@ -35,6 +78,8 @@ export default function CompanyView() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [expandedChart, setExpandedChart] = useState<'shares' | 'value' | 'priceAvg' | 'pnl' | 'yearly' | 'yearlyChart' | null>(null);
+  const [showBuyDots, setShowBuyDots] = useState(true);
+  const [showBuyBars, setShowBuyBars] = useState(true);
   const chartScrollRef = useRef<HTMLDivElement>(null);
   const [ttmWeeksInput, setTtmWeeksInput] = useState<string>('');
   const [savedTtmWeeks, setSavedTtmWeeks] = useState<number | undefined>(undefined);
@@ -155,7 +200,7 @@ export default function CompanyView() {
     scripSharesCount: d.type === 'SCRIP' ? d.scripShares : 0,
     totalValue: d.type === 'CASH' ? d.totalAmount : d.scripShares,
   })), [dividends]);
-  const { sorted: sortedTx, handleSort: sortTx, sortIcon: txIcon } = useTableSort(txRows, 'date');
+  const { sorted: sortedTx, handleSort: sortTx, sortIcon: txIcon } = useTableSort(txRows, 'date', 'desc', txDateTieBreaker);
   const { sorted: sortedDivs, handleSort: sortDiv, sortIcon: divIcon } = useTableSort(divRows, 'date');
   const { sorted: sortedRealized, handleSort: sortRealized, sortIcon: realizedIcon } = useTableSort(realizedItems, 'sellDate');
 
@@ -199,7 +244,7 @@ export default function CompanyView() {
   }, [marketHistory, lowPeriod, customFrom, customTo, shareSplits]);
 
   const { valueChartData, sharesChartData, priceVsAvgChartData, adjPnlChartData } = useMemo(() => {
-    const sortedTx = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
+    const sortedTx = [...transactions].sort(compareTxDateBuysFirst);
 
     // Build cumulative invested + shares over time (FIFO)
     let cumInvested = 0;
@@ -268,7 +313,7 @@ export default function CompanyView() {
     sortedTx.forEach(t => events.push({ date: t.date, type: 'tx', data: t }));
     dividends.filter(d => d.type === 'CASH').forEach(d => events.push({ date: d.date, type: 'div', data: d }));
     realizedItems.forEach(r => events.push({ date: r.sellDate, type: 'realized', data: r }));
-    events.sort((a, b) => a.date.localeCompare(b.date));
+    events.sort(compareEventDateBuysFirst);
 
     let cumShares2 = 0;
     let cumCost = 0;
@@ -320,22 +365,55 @@ export default function CompanyView() {
     // Build share price vs avg buy price chart data
     const investedByDate: Record<string, { invested: number; shares: number }> = {};
     mergedTx.forEach(t => { investedByDate[t.date] = { invested: t.invested, shares: t.shares }; });
+    // For each transaction date, aggregate shares (for bar height / dot size)
+    // and weighted-avg price (for dot Y-position). Zero-price types like
+    // SCRIP_DIVIDEND are counted in shares but excluded from the price calc.
+    const buyCountByDate: Record<string, number> = {};
+    const paidBuyCountByDate: Record<string, number> = {};
+    const paidBuyCostByDate: Record<string, number> = {};
+    const sellCountByDate: Record<string, number> = {};
+    const sellCountPricedByDate: Record<string, number> = {};
+    const sellProceedsByDate: Record<string, number> = {};
+    for (const t of sortedTx) {
+      if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+        buyCountByDate[t.date] = (buyCountByDate[t.date] || 0) + t.count;
+        if (t.price > 0) {
+          paidBuyCountByDate[t.date] = (paidBuyCountByDate[t.date] || 0) + t.count;
+          paidBuyCostByDate[t.date] = (paidBuyCostByDate[t.date] || 0) + t.count * t.price;
+        }
+      } else if (t.type === 'SELL') {
+        sellCountByDate[t.date] = (sellCountByDate[t.date] || 0) + t.count;
+        if (t.price > 0) {
+          sellCountPricedByDate[t.date] = (sellCountPricedByDate[t.date] || 0) + t.count;
+          sellProceedsByDate[t.date] = (sellProceedsByDate[t.date] || 0) + t.count * t.price;
+        }
+      }
+    }
     let lastAvgShares = 0;
     let lastAvgInvested = 0;
     let lastMktPrice = 0;
-    const priceVsAvgData: { date: string; sharePrice: number; avgPrice: number }[] = [];
+    const priceVsAvgData: { date: string; sharePrice: number; avgPrice: number | null; buyCount: number; buyPrice: number | null; sellCount: number; sellPrice: number | null }[] = [];
     for (const date of allDates) {
       if (investedByDate[date]) {
         lastAvgShares = investedByDate[date].shares;
         lastAvgInvested = investedByDate[date].invested;
       }
       if (priceByDate[date]) lastMktPrice = priceByDate[date];
-      if (lastAvgShares > 0 && lastMktPrice > 0) {
-        const avgPrice = lastAvgInvested / lastAvgShares;
+      const isTxDate = !!investedByDate[date];
+      if (lastMktPrice > 0 && (lastAvgShares > 0 || isTxDate)) {
+        const avgPrice = lastAvgShares > 0 ? lastAvgInvested / lastAvgShares : null;
+        const paidBuyCount = paidBuyCountByDate[date];
+        const buyPrice = paidBuyCount ? paidBuyCostByDate[date] / paidBuyCount : null;
+        const pricedSellCount = sellCountPricedByDate[date];
+        const sellPrice = pricedSellCount ? sellProceedsByDate[date] / pricedSellCount : null;
         priceVsAvgData.push({
           date,
           sharePrice: Math.round(lastMktPrice * 100) / 100,
-          avgPrice: Math.round(avgPrice * 100) / 100,
+          avgPrice: avgPrice !== null ? Math.round(avgPrice * 100) / 100 : null,
+          buyCount: buyCountByDate[date] || 0,
+          buyPrice: buyPrice !== null ? Math.round(buyPrice * 100) / 100 : null,
+          sellCount: sellCountByDate[date] || 0,
+          sellPrice: sellPrice !== null ? Math.round(sellPrice * 100) / 100 : null,
         });
       }
     }
@@ -372,6 +450,14 @@ export default function CompanyView() {
           </div>
         </div>
         <div className="company-view-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <button
+            className="btn-settings-gear"
+            onClick={() => setNotesOpen(true)}
+            aria-label="Notes"
+            title="Notes"
+          >
+            &#128221;
+          </button>
           <div className="company-view-header-search" style={{ width: '220px' }}>
             <CompanySearchSelect
               companies={companies}
@@ -737,13 +823,19 @@ export default function CompanyView() {
                 <span style={{ color: '#e53e3e' }}>Price</span> / <span style={{ color: '#3182ce' }}>Avg Cost</span>
               </h3>
               <ResponsiveContainer width="100%" height={180}>
-                <LineChart data={priceVsAvgChartData}>
+                <ComposedChart data={priceVsAvgChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
-                  <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={v => v.toFixed(0)} />
-                  <Line type="monotone" dataKey="sharePrice" stroke="#e53e3e" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="avgPrice" stroke="#3182ce" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                </LineChart>
+                  <YAxis yAxisId="price" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={v => v.toFixed(0)} />
+                  <YAxis yAxisId="count" orientation="right" hide tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={v => v.toFixed(0)} />
+                  <Tooltip content={priceChartTooltip(fmt)} />
+                  <Bar yAxisId="count" dataKey="buyCount" fill="#805ad5" opacity={0.5} barSize={6} isAnimationActive={false} />
+                  <Bar yAxisId="count" dataKey="sellCount" fill="#dd6b20" opacity={0.5} barSize={6} isAnimationActive={false} />
+                  <Line yAxisId="price" type="monotone" dataKey="sharePrice" stroke="#e53e3e" strokeWidth={2} dot={false} />
+                  <Line yAxisId="price" type="monotone" dataKey="avgPrice" stroke="#3182ce" strokeWidth={2} dot={false} strokeDasharray="4 2" connectNulls={false} />
+                  <Line yAxisId="price" type="monotone" dataKey="buyPrice" stroke="transparent" dot={renderBuyDot} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />
+                  <Line yAxisId="price" type="monotone" dataKey="sellPrice" stroke="transparent" dot={renderSellDot} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           )}
@@ -787,10 +879,24 @@ export default function CompanyView() {
                 {expandedChart === 'yearly' && 'Yearly Summary — All Years'}
                 {expandedChart === 'yearlyChart' && 'Dividend History Chart'}
               </h3>
-              <button onClick={() => setExpandedChart(null)} style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--text-muted)', fontSize: '1.5rem', lineHeight: 1,
-              }}>&times;</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                {expandedChart === 'priceAvg' && (
+                  <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={showBuyDots} onChange={e => setShowBuyDots(e.target.checked)} />
+                      Dots
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer' }}>
+                      <input type="checkbox" checked={showBuyBars} onChange={e => setShowBuyBars(e.target.checked)} />
+                      Bars
+                    </label>
+                  </div>
+                )}
+                <button onClick={() => setExpandedChart(null)} style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--text-muted)', fontSize: '1.5rem', lineHeight: 1,
+                }}>&times;</button>
+              </div>
             </div>
             {expandedChart === 'yearlyChart' ? (() => {
               const finByYear: Record<number, DividendFinancialData> = {};
@@ -910,14 +1016,19 @@ export default function CompanyView() {
                   <Line type="monotone" dataKey="portfolio" stroke="#38a169" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                 </LineChart>
               ) : expandedChart === 'priceAvg' ? (
-                <LineChart data={priceVsAvgChartData}>
+                <ComposedChart data={priceVsAvgChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
-                  <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => v.toFixed(0)} />
-                  <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px' }} formatter={(v: any, n: any) => [`LKR ${fmt(v)}`, n === 'sharePrice' ? 'Share Price' : 'Avg Buy Price']} labelFormatter={l => l} />
-                  <Line type="monotone" dataKey="sharePrice" stroke="#e53e3e" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                  <Line type="monotone" dataKey="avgPrice" stroke="#3182ce" strokeWidth={2} dot={false} activeDot={{ r: 4 }} strokeDasharray="4 2" />
-                </LineChart>
+                  <YAxis yAxisId="price" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => v.toFixed(0)} />
+                  <YAxis yAxisId="count" orientation="right" hide tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => v.toFixed(0)} />
+                  <Tooltip content={priceChartTooltip(fmt)} />
+                  {showBuyBars && <Bar yAxisId="count" dataKey="buyCount" fill="#805ad5" opacity={0.5} barSize={10} isAnimationActive={false} />}
+                  {showBuyBars && <Bar yAxisId="count" dataKey="sellCount" fill="#dd6b20" opacity={0.5} barSize={10} isAnimationActive={false} />}
+                  <Line yAxisId="price" type="monotone" dataKey="sharePrice" stroke="#e53e3e" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                  <Line yAxisId="price" type="monotone" dataKey="avgPrice" stroke="#3182ce" strokeWidth={2} dot={false} activeDot={{ r: 4 }} strokeDasharray="4 2" connectNulls={false} />
+                  {showBuyDots && <Line yAxisId="price" type="monotone" dataKey="buyPrice" stroke="transparent" dot={renderBuyDot} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />}
+                  {showBuyDots && <Line yAxisId="price" type="monotone" dataKey="sellPrice" stroke="transparent" dot={renderSellDot} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />}
+                </ComposedChart>
               ) : (
                 <LineChart data={adjPnlChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
@@ -950,8 +1061,15 @@ export default function CompanyView() {
               Payouts ({payouts.length})
             </button>
           )}
+          <button className={tab === 'notes' ? 'active' : ''} onClick={() => setTab('notes')}>
+            Notes
+          </button>
         </div>
       </div>
+
+      {tab === 'notes' && code && (
+        <NotesView companyCode={code} />
+      )}
 
       {tab === 'transactions' && (
         transactions.length === 0 ? (
@@ -1200,6 +1318,7 @@ export default function CompanyView() {
           </div>
         )
       )}
+      <NotesPanel open={notesOpen} onClose={() => setNotesOpen(false)} companyCode={code} />
     </div>
   );
 }

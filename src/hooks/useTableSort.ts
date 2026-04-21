@@ -5,7 +5,8 @@ type SortDir = 'asc' | 'desc';
 export function useTableSort<T extends Record<string, any>>(
   items: T[],
   defaultKey: keyof T & string,
-  defaultDir: SortDir = 'desc'
+  defaultDir: SortDir = 'desc',
+  tieBreaker?: (a: T, b: T, sortKey: keyof T & string) => number,
 ) {
   const [sortKey, setSortKey] = useState<keyof T & string>(defaultKey);
   const [sortDir, setSortDir] = useState<SortDir>(defaultDir);
@@ -15,9 +16,11 @@ export function useTableSort<T extends Record<string, any>>(
       const av = a[sortKey];
       const bv = b[sortKey];
       const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
-      return sortDir === 'asc' ? cmp : -cmp;
+      if (cmp !== 0) return sortDir === 'asc' ? cmp : -cmp;
+      const tb = tieBreaker ? tieBreaker(a, b, sortKey) : 0;
+      return sortDir === 'asc' ? tb : -tb;
     });
-  }, [items, sortKey, sortDir]);
+  }, [items, sortKey, sortDir, tieBreaker]);
 
   const handleSort = (key: keyof T & string) => {
     if (sortKey === key) {

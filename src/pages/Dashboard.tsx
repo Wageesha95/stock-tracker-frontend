@@ -7,6 +7,7 @@ import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
 import MarketDatePicker from '../components/MarketDatePicker';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, PieChart, Pie, Cell } from 'recharts';
+import { compareTxDateBuysFirst, compareEventDateBuysFirst } from '../utils/transactionSort';
 
 interface InterestBreakdown {
   companyCode: string;
@@ -263,7 +264,7 @@ export default function Dashboard() {
                 txUpToDate.forEach(t => { (grouped[t.companyCode] = grouped[t.companyCode] || []).push(t); });
                 const histPortfolio: PortfolioItem[] = [];
                 for (const [code, txns] of Object.entries(grouped)) {
-                  const sorted = [...txns].sort((a, b) => a.date.localeCompare(b.date));
+                  const sorted = [...txns].sort(compareTxDateBuysFirst);
                   let shares = 0, cost = 0, realized = 0;
                   for (const t of sorted) {
                     if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
@@ -309,7 +310,7 @@ export default function Dashboard() {
 
                 // Recalculate opportunity cost up to selected date
                 const annualRate = 0.065;
-                const sortedAllTx = [...txUpToDate].sort((a, b) => a.date.localeCompare(b.date));
+                const sortedAllTx = [...txUpToDate].sort(compareTxDateBuysFirst);
                 let runningCost = 0;
                 let lastTxDate: string | null = null;
                 let totalInterest = 0;
@@ -519,7 +520,7 @@ export default function Dashboard() {
         transactions.forEach(t => events.push({ date: t.date, type: 'tx', data: t }));
         dividends.filter(d => d.type === 'CASH').forEach(d => events.push({ date: d.date, type: 'div', data: d }));
         realizedItems.forEach(r => events.push({ date: r.sellDate, type: 'realized', data: r }));
-        events.sort((a, b) => a.date.localeCompare(b.date));
+        events.sort(compareEventDateBuysFirst);
 
         const latestPriceMap: Record<string, number> = {};
         filtered.forEach(p => { latestPriceMap[p.companyCode] = p.lastTrade; });
@@ -620,7 +621,7 @@ export default function Dashboard() {
         transactions.forEach(t => events.push({ date: t.date, type: 'tx', data: t }));
         dividends.filter(d => d.type === 'CASH').forEach(d => events.push({ date: d.date, type: 'div', data: d }));
         realizedItems.forEach(r => events.push({ date: r.sellDate, type: 'realized', data: r }));
-        events.sort((a, b) => a.date.localeCompare(b.date));
+        events.sort(compareEventDateBuysFirst);
 
         const latestPriceMap: Record<string, number> = {};
         filtered.forEach(p => { latestPriceMap[p.companyCode] = p.lastTrade; });

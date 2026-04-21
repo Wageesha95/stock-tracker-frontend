@@ -4,6 +4,7 @@ import { getMarketData, getMarketDataHistory, getTransactions, getDividends, get
 import { MarketData, Transaction, Dividend, PortfolioItem, RealizedGainItem } from '../types';
 import CompanyAvatar from '../components/CompanyAvatar';
 import { useTableSort } from '../hooks/useTableSort';
+import { txDateTieBreaker } from '../utils/transactionSort';
 
 export default function StockPrices() {
   const { code } = useParams<{ code: string }>();
@@ -34,7 +35,7 @@ export default function StockPrices() {
   }, [code]);
 
   const priceSort = useTableSort(priceHistory, 'tradeDate');
-  const txnSort = useTableSort(transactions, 'date');
+  const txnSort = useTableSort(transactions, 'date', 'desc', txDateTieBreaker);
   const realizedSort = useTableSort(realizedItems, 'sellDate');
   const divSort = useTableSort(dividends, 'date');
 
