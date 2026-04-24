@@ -1869,12 +1869,19 @@ button:active {
     font-size: 0.75rem !important;
   }
   .company-view-actions {
-    flex-direction: column !important;
-    align-items: stretch !important;
+    flex-direction: row !important;
+    align-items: center !important;
     width: 100%;
     gap: 0.5rem !important;
-    /* Add top margin so search bar appears below the absolute-positioned price */
     margin-top: 0;
+  }
+  .company-view-actions > .btn-settings-gear {
+    flex: 0 0 auto;
+  }
+  .company-view-header-search {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0;
   }
   /* Hide price from actions container by reserving space at top with avatar row */
   .company-view-header > div:first-child {
@@ -1996,5 +2003,37 @@ button:active {
   }
   h3 {
     font-size: 0.85rem !important;
+  }
+}
+
+/* Expanded chart modal — desktop default */
+.cv-chart-modal-chart {
+  width: 100%;
+  height: 450px;
+}
+
+@media (max-width: 700px) {
+  .cv-chart-modal-overlay {
+    padding: 0.5rem !important;
+    align-items: flex-start !important;
+    padding-top: 1rem !important;
+  }
+  .cv-chart-modal-card {
+    padding: 0.75rem !important;
+    border-radius: 10px !important;
+  }
+  .cv-chart-modal-head {
+    flex-wrap: wrap !important;
+    row-gap: 0.5rem !important;
+  }
+  .cv-chart-modal-head > h3 {
+    flex: 1 1 100%;
+  }
+  .cv-chart-modal-head > div:last-child {
+    flex-wrap: wrap;
+    gap: 0.5rem !important;
+  }
+  .cv-chart-modal-chart {
+    height: 300px;
   }
 }

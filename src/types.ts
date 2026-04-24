@@ -76,6 +76,7 @@ export interface MarketData {
   low: number;
   change: number;
   changePercent: number;
+  volume?: number;
   tradeDate: string;
   updatedAt: string;
 }

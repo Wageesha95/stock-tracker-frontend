@@ -17,6 +17,10 @@ import { useTableSort } from '../hooks/useTableSort';
 
 type Tab = 'transactions' | 'dividends' | 'realized' | 'payouts' | 'notes';
 type Period = '1d' | '2d' | '5d' | '2w' | '1m' | '3m' | '6m' | 'custom';
+type VolumeRange = '1m' | '3m' | '6m' | '1y' | '2y' | 'all';
+const VOLUME_RANGE_DAYS: Record<Exclude<VolumeRange, 'all'>, number> = {
+  '1m': 30, '3m': 90, '6m': 180, '1y': 365, '2y': 730,
+};
 
 // Hollow shapes at buy/sell points. Circle = buy, square = sell.
 // Hollow so the underlying price line stays visible. Area scales with share count.
@@ -29,6 +33,36 @@ const renderSellDot = ({ cx, cy, payload, index }: any) => {
   if (!payload?.sellCount) return <g key={`sd-${index}`} />;
   const r = Math.max(3, Math.min(14, Math.sqrt(payload.sellCount) * 2));
   return <rect key={`sd-${index}`} x={cx - r} y={cy - r} width={r * 2} height={r * 2} fill="none" stroke="var(--text-primary, #333)" strokeWidth={1.5} />;
+};
+
+const fmtVolumeAxis = (v: number) => {
+  if (v >= 1_000_000_000) return `${(v / 1_000_000_000).toFixed(1)}B`;
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(0)}K`;
+  return String(v);
+};
+
+const volumeChartTooltip = (fmtLkr: (n: number) => string) => ({ active, payload, label }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload as { volume?: number; high?: number; low?: number; close?: number };
+  const row = (color: string, name: string, value: string) => (
+    <div key={name} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+      <span style={{ color }}>{name}</span>
+      <span>{value}</span>
+    </div>
+  );
+  return (
+    <div style={{
+      background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px',
+      padding: '0.5rem 0.6rem', fontSize: '0.75rem', lineHeight: 1.35, minWidth: '160px',
+    }}>
+      <div style={{ fontWeight: 600, marginBottom: '0.25rem' }}>{label}</div>
+      {d.volume != null && row('#4299e1', 'Volume', d.volume.toLocaleString('en-US'))}
+      {d.high != null && row('#38a169', 'High', `LKR ${fmtLkr(d.high)}`)}
+      {d.low != null && row('#e53e3e', 'Low', `LKR ${fmtLkr(d.low)}`)}
+      {d.close != null && row('var(--text-primary, #333)', 'Close', `LKR ${fmtLkr(d.close)}`)}
+    </div>
+  );
 };
 
 // Compact tooltip for the Price/Avg chart — only renders rows we actually have,
@@ -77,9 +111,11 @@ export default function CompanyView() {
   const [lowPeriod, setLowPeriod] = useState<Period>('1d');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
-  const [expandedChart, setExpandedChart] = useState<'shares' | 'value' | 'priceAvg' | 'pnl' | 'yearly' | 'yearlyChart' | null>(null);
+  const [expandedChart, setExpandedChart] = useState<'shares' | 'value' | 'priceAvg' | 'pnl' | 'volume' | 'yearly' | 'yearlyChart' | null>(null);
   const [showBuyDots, setShowBuyDots] = useState(true);
   const [showBuyBars, setShowBuyBars] = useState(true);
+  const [volumeRange, setVolumeRange] = useState<VolumeRange>('3m');
+  const [priceFromFirstBuy, setPriceFromFirstBuy] = useState(true);
   const chartScrollRef = useRef<HTMLDivElement>(null);
   const [ttmWeeksInput, setTtmWeeksInput] = useState<string>('');
   const [savedTtmWeeks, setSavedTtmWeeks] = useState<number | undefined>(undefined);
@@ -243,7 +279,7 @@ export default function CompanyView() {
     };
   }, [marketHistory, lowPeriod, customFrom, customTo, shareSplits]);
 
-  const { valueChartData, sharesChartData, priceVsAvgChartData, adjPnlChartData } = useMemo(() => {
+  const { valueChartData, sharesChartData, priceVsAvgChartData, adjPnlChartData, volumeChartData } = useMemo(() => {
     const sortedTx = [...transactions].sort(compareTxDateBuysFirst);
 
     // Build cumulative invested + shares over time (FIFO)
@@ -399,8 +435,7 @@ export default function CompanyView() {
         lastAvgInvested = investedByDate[date].invested;
       }
       if (priceByDate[date]) lastMktPrice = priceByDate[date];
-      const isTxDate = !!investedByDate[date];
-      if (lastMktPrice > 0 && (lastAvgShares > 0 || isTxDate)) {
+      if (lastMktPrice > 0) {
         const avgPrice = lastAvgShares > 0 ? lastAvgInvested / lastAvgShares : null;
         const paidBuyCount = paidBuyCountByDate[date];
         const buyPrice = paidBuyCount ? paidBuyCostByDate[date] / paidBuyCount : null;
@@ -418,8 +453,42 @@ export default function CompanyView() {
       }
     }
 
-    return { valueChartData: valueData, sharesChartData: mergedTx, priceVsAvgChartData: priceVsAvgData, adjPnlChartData: mergedAdjPnl };
+    const volumeData = [...marketHistory]
+      .filter(m => m.volume != null && m.volume > 0)
+      .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate))
+      .map(m => ({
+        date: m.tradeDate,
+        volume: m.volume as number,
+        high: m.high,
+        low: m.low,
+        close: m.lastTrade,
+      }));
+
+    return { valueChartData: valueData, sharesChartData: mergedTx, priceVsAvgChartData: priceVsAvgData, adjPnlChartData: mergedAdjPnl, volumeChartData: volumeData };
   }, [transactions, marketHistory, dividends, realizedItems]);
+
+  const firstBuyDate = useMemo(() => {
+    const buys = transactions.filter(t => t.type !== 'SELL');
+    if (buys.length === 0) return null;
+    return buys.reduce((min, t) => t.date < min ? t.date : min, buys[0].date);
+  }, [transactions]);
+
+  const priceVsAvgChartDataFiltered = useMemo(() => {
+    if (!priceFromFirstBuy || !firstBuyDate) return priceVsAvgChartData;
+    return priceVsAvgChartData.filter(d => d.date >= firstBuyDate);
+  }, [priceVsAvgChartData, priceFromFirstBuy, firstBuyDate]);
+
+  const volumeChartDataRanged = useMemo(() => {
+    if (volumeRange === 'all' || volumeChartData.length === 0) return volumeChartData;
+    const days = VOLUME_RANGE_DAYS[volumeRange];
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - (days - 1));
+    const y = cutoff.getFullYear();
+    const m = String(cutoff.getMonth() + 1).padStart(2, '0');
+    const d = String(cutoff.getDate()).padStart(2, '0');
+    const cutoffStr = `${y}-${m}-${d}`;
+    return volumeChartData.filter(b => b.date >= cutoffStr);
+  }, [volumeChartData, volumeRange]);
 
   const [navCode, setNavCode] = useState('');
 
@@ -785,7 +854,7 @@ export default function CompanyView() {
         })()}
       </div>
 
-      {(valueChartData.length > 1 || sharesChartData.length > 1 || priceVsAvgChartData.length > 1 || adjPnlChartData.length > 1) && (
+      {(valueChartData.length > 1 || sharesChartData.length > 1 || priceVsAvgChartData.length > 1 || adjPnlChartData.length > 1 || volumeChartData.length > 1) && (
         <div style={{ position: 'relative', marginBottom: '1.5rem' }}>
           <div className="chart-scroll-container" ref={chartScrollRef}>
           {sharesChartData.length > 1 && (
@@ -853,6 +922,24 @@ export default function CompanyView() {
               </ResponsiveContainer>
             </div>
           )}
+          {volumeChartData.length > 1 && (
+            <div className="chart-scroll-item" onClick={() => setExpandedChart('volume')} style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '0.75rem', boxShadow: 'var(--shadow-card)', cursor: 'pointer' }}>
+              <h3 style={{ margin: '0 0 0.5rem', fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>
+                <span style={{ color: '#4299e1' }}>Volume</span> / <span style={{ color: '#e53e3e' }}>Price</span>
+              </h3>
+              <ResponsiveContainer width="100%" height={180}>
+                <ComposedChart data={volumeChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={d => d.substring(5)} />
+                  <YAxis yAxisId="vol" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} tickFormatter={fmtVolumeAxis} />
+                  <YAxis yAxisId="price" orientation="right" hide domain={['auto', 'auto']} />
+                  <Tooltip content={volumeChartTooltip(fmt)} />
+                  <Bar yAxisId="vol" dataKey="volume" fill="#4299e1" isAnimationActive={false} />
+                  <Line yAxisId="price" type="monotone" dataKey="close" stroke="#e53e3e" strokeWidth={1.5} dot={false} isAnimationActive={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
           </div>
           <button className="chart-scroll-arrow chart-scroll-left" onClick={() => chartScrollRef.current?.scrollBy({ left: -300, behavior: 'smooth' })} aria-label="Scroll left">&lsaquo;</button>
           <button className="chart-scroll-arrow chart-scroll-right" onClick={() => chartScrollRef.current?.scrollBy({ left: 300, behavior: 'smooth' })} aria-label="Scroll right">&rsaquo;</button>
@@ -861,21 +948,22 @@ export default function CompanyView() {
 
       {/* Expanded chart modal */}
       {expandedChart && (
-        <div onClick={() => setExpandedChart(null)} style={{
+        <div className="cv-chart-modal-overlay" onClick={() => setExpandedChart(null)} style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
           background: 'rgba(0,0,0,0.6)', zIndex: 1000,
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1.5rem',
         }}>
-          <div onClick={e => e.stopPropagation()} style={{
+          <div className="cv-chart-modal-card" onClick={e => e.stopPropagation()} style={{
             background: 'var(--bg-card)', borderRadius: '12px', padding: '1.5rem',
             width: '100%', maxWidth: '900px', boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <div className="cv-chart-modal-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', gap: '0.5rem' }}>
               <h3 style={{ margin: 0, fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>
                 {expandedChart === 'shares' && 'Shares Held'}
                 {expandedChart === 'value' && <><span style={{ color: '#3182ce' }}>Invested</span> / <span style={{ color: '#38a169' }}>Portfolio Value</span></>}
                 {expandedChart === 'priceAvg' && <><span style={{ color: '#e53e3e' }}>Share Price</span> / <span style={{ color: '#3182ce' }}>Avg Buy Price</span></>}
                 {expandedChart === 'pnl' && 'Adjusted P&L'}
+                {expandedChart === 'volume' && 'Volume'}
                 {expandedChart === 'yearly' && 'Yearly Summary — All Years'}
                 {expandedChart === 'yearlyChart' && 'Dividend History Chart'}
               </h3>
@@ -890,6 +978,21 @@ export default function CompanyView() {
                       <input type="checkbox" checked={showBuyBars} onChange={e => setShowBuyBars(e.target.checked)} />
                       Bars
                     </label>
+                    {firstBuyDate && (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={priceFromFirstBuy} onChange={e => setPriceFromFirstBuy(e.target.checked)} />
+                        From 1st buy
+                      </label>
+                    )}
+                  </div>
+                )}
+                {expandedChart === 'volume' && (
+                  <div className="segmented-control" style={{ fontSize: '0.75rem' }}>
+                    {(['1m', '3m', '6m', '1y', '2y', 'all'] as VolumeRange[]).map(r => (
+                      <button key={r} className={volumeRange === r ? 'active' : ''} onClick={() => setVolumeRange(r)}>
+                        {r === 'all' ? 'ALL' : r.toUpperCase()}
+                      </button>
+                    ))}
                   </div>
                 )}
                 <button onClick={() => setExpandedChart(null)} style={{
@@ -916,24 +1019,26 @@ export default function CompanyView() {
                 return { year: String(y), dps, eps, yield: yld, payout };
               });
               return (
-                <ResponsiveContainer width="100%" height={450}>
-                  <LineChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                    <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
-                    <YAxis yAxisId="val" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
-                    <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => v + '%'} />
-                    <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px' }}
-                      formatter={(v: any, name: any) => {
-                        if (name === 'yield' || name === 'payout') return [v.toFixed(2) + '%', name === 'yield' ? 'Yield' : 'Payout'];
-                        return ['LKR ' + fmt(v), name === 'dps' ? 'DPS' : 'EPS'];
-                      }}
-                    />
-                    <Line yAxisId="val" type="monotone" dataKey="dps" stroke="#3182ce" strokeWidth={2} dot={{ r: 3 }} name="dps" />
-                    <Line yAxisId="val" type="monotone" dataKey="eps" stroke="#38a169" strokeWidth={2} dot={{ r: 3 }} name="eps" />
-                    <Line yAxisId="pct" type="monotone" dataKey="yield" stroke="#e53e3e" strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="yield" />
-                    <Line yAxisId="pct" type="monotone" dataKey="payout" stroke="#dd6b20" strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="payout" />
-                  </LineChart>
-                </ResponsiveContainer>
+                <div className="cv-chart-modal-chart">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                      <XAxis dataKey="year" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                      <YAxis yAxisId="val" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                      <YAxis yAxisId="pct" orientation="right" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => v + '%'} />
+                      <Tooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '8px' }}
+                        formatter={(v: any, name: any) => {
+                          if (name === 'yield' || name === 'payout') return [v.toFixed(2) + '%', name === 'yield' ? 'Yield' : 'Payout'];
+                          return ['LKR ' + fmt(v), name === 'dps' ? 'DPS' : 'EPS'];
+                        }}
+                      />
+                      <Line yAxisId="val" type="monotone" dataKey="dps" stroke="#3182ce" strokeWidth={2} dot={{ r: 3 }} name="dps" />
+                      <Line yAxisId="val" type="monotone" dataKey="eps" stroke="#38a169" strokeWidth={2} dot={{ r: 3 }} name="eps" />
+                      <Line yAxisId="pct" type="monotone" dataKey="yield" stroke="#e53e3e" strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="yield" />
+                      <Line yAxisId="pct" type="monotone" dataKey="payout" stroke="#dd6b20" strokeWidth={1.5} dot={{ r: 3 }} strokeDasharray="4 2" name="payout" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               );
             })() : expandedChart === 'yearly' ? (() => {
               const finByYear: Record<number, DividendFinancialData> = {};
@@ -997,7 +1102,8 @@ export default function CompanyView() {
                 </div>
               );
             })() : (
-            <ResponsiveContainer width="100%" height={450}>
+            <div className="cv-chart-modal-chart">
+            <ResponsiveContainer width="100%" height="100%">
               {expandedChart === 'shares' ? (
                 <LineChart data={sharesChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
@@ -1016,7 +1122,7 @@ export default function CompanyView() {
                   <Line type="monotone" dataKey="portfolio" stroke="#38a169" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                 </LineChart>
               ) : expandedChart === 'priceAvg' ? (
-                <ComposedChart data={priceVsAvgChartData}>
+                <ComposedChart data={priceVsAvgChartDataFiltered}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
                   <YAxis yAxisId="price" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={v => v.toFixed(0)} />
@@ -1029,6 +1135,16 @@ export default function CompanyView() {
                   {showBuyDots && <Line yAxisId="price" type="monotone" dataKey="buyPrice" stroke="transparent" dot={renderBuyDot} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />}
                   {showBuyDots && <Line yAxisId="price" type="monotone" dataKey="sellPrice" stroke="transparent" dot={renderSellDot} activeDot={false} isAnimationActive={false} connectNulls={false} legendType="none" />}
                 </ComposedChart>
+              ) : expandedChart === 'volume' ? (
+                <ComposedChart data={volumeChartDataRanged}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                  <YAxis yAxisId="vol" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={fmtVolumeAxis} />
+                  <YAxis yAxisId="price" orientation="right" hide domain={['auto', 'auto']} />
+                  <Tooltip content={volumeChartTooltip(fmt)} />
+                  <Bar yAxisId="vol" dataKey="volume" fill="#4299e1" isAnimationActive={false} />
+                  <Line yAxisId="price" type="monotone" dataKey="close" stroke="#e53e3e" strokeWidth={2} dot={false} isAnimationActive={false} />
+                </ComposedChart>
               ) : (
                 <LineChart data={adjPnlChartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
@@ -1040,6 +1156,7 @@ export default function CompanyView() {
                 </LineChart>
               )}
             </ResponsiveContainer>
+            </div>
             )}
           </div>
         </div>
