@@ -229,10 +229,31 @@ export const updateNote = (id: string, data: { key?: string; value?: string }) =
 export const deleteNote = (id: string) =>
   api.delete(`/notes/${id}`).then(res => { invalidate('notes'); return res; });
 
+export interface InterestLot {
+  buyDate: string;
+  shares: number;
+  remaining: number;
+  costPerShare: number;
+  lotCost: number;
+  status: 'held' | 'sold' | 'partial';
+  endDate: string | null;
+  days: number;
+  interest: number;
+}
+export interface InterestBreakdownItem {
+  companyCode: string;
+  companyName: string;
+  date: string;
+  amount: number;
+  days: number;
+  interest: number;
+  lots?: InterestLot[];
+}
+
 export const getDashboardSummary = () => cached('summary', () => api.get<{
   bankInterestRate: number;
   opportunityCost: number;
-  breakdown: { companyCode: string; companyName: string; date: string; amount: number; days: number; interest: number }[];
+  breakdown: InterestBreakdownItem[];
 }>('/dashboard/summary').then(res => res.data));
 // Admin
 export const getSystemStats = () => cached('system-stats', () => api.get<{
@@ -362,7 +383,7 @@ export const getDashboardAll = () => cached('dashboard-all', () => api.get<{
   portfolio: PortfolioItem[];
   realizedItems: RealizedGainItem[];
   opportunityCost: number;
-  interestBreakdown: { companyCode: string; companyName: string; date: string; amount: number; days: number; interest: number }[];
+  interestBreakdown: InterestBreakdownItem[];
   bankInterestRate: number;
   sectors: { sector: string; companies: { companyCode: string; companyName: string; sharesHeld: number; currentValue: number; totalInvested: number; unrealizedGain: number; unrealizedGainPercent: number; unrealizedDayGain: number; changePercent: number }[]; currentValue: number; totalInvested: number; unrealizedGain: number; unrealizedDayGain: number; companyCount: number }[];
 }>('/dashboard/all').then(res => res.data));

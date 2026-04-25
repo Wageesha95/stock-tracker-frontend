@@ -9,14 +9,7 @@ import MarketDatePicker from '../components/MarketDatePicker';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, PieChart, Pie, Cell } from 'recharts';
 import { compareTxDateBuysFirst, compareEventDateBuysFirst } from '../utils/transactionSort';
 
-interface InterestBreakdown {
-  companyCode: string;
-  companyName: string;
-  date: string;
-  amount: number;
-  days: number;
-  interest: number;
-}
+import type { InterestBreakdownItem } from '../api';
 
 type SortKey = 'companyCode' | 'sharesHeld' | 'avgBuyPrice' | 'lastTrade' | 'currentValue' | 'totalInvested' | 'unrealizedGain' | 'unrealizedGainPercent' | 'unrealizedDayGain' | 'changePercent' | 'realizedGain';
 type SortDir = 'asc' | 'desc';
@@ -29,7 +22,7 @@ export default function Dashboard() {
   const [origDividends, setOrigDividends] = useState<Dividend[]>([]);
   const [origRealizedItems, setOrigRealizedItems] = useState<RealizedGainItem[]>([]);
   const [opportunityCost, setOpportunityCost] = useState(0);
-  const [interestBreakdown, setInterestBreakdown] = useState<InterestBreakdown[]>([]);
+  const [interestBreakdown, setInterestBreakdown] = useState<InterestBreakdownItem[]>([]);
   const sectionRef = useRef<HTMLDivElement>(null);
   const [activeSection, setActiveSection] = useState<'none' | 'holdings' | 'invested' | 'realized' | 'realizedProfit' | 'realizedLoss' | 'netRealized' | 'interest' | 'profit' | 'loss' | 'netUnrealized' | 'dayProfit' | 'dayLoss' | 'netDay' | 'cashDiv' | 'scripDiv' | 'adjustedPnl' | 'totalPnl'>('none');
   const [expandedInterest, setExpandedInterest] = useState<Set<string>>(new Set());
@@ -82,10 +75,192 @@ export default function Dashboard() {
     loadData().finally(() => setLoading(false));
   }, [loadData]);
 
+  const loadHistoricalData = useCallback(async (finalDate: string) => {
+    const md = await getMarketDataByDate(finalDate);
+    const priceMap: Record<string, number> = {};
+    md.forEach(m => { priceMap[m.companyCode] = m.lastTrade; });
+    const txUpToDate = transactions.filter(t => t.date <= finalDate);
+    const grouped: Record<string, typeof txUpToDate> = {};
+    txUpToDate.forEach(t => { (grouped[t.companyCode] = grouped[t.companyCode] || []).push(t); });
+    const histPortfolio: PortfolioItem[] = [];
+    for (const [code, txns] of Object.entries(grouped)) {
+      const sorted = [...txns].sort(compareTxDateBuysFirst);
+      let shares = 0, cost = 0, realized = 0;
+      for (const t of sorted) {
+        if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+          cost += t.count * t.price + t.commission;
+          shares += t.count;
+        } else if (t.type === 'SELL') {
+          const avg = shares > 0 ? cost / shares : 0;
+          const sellRev = t.count * t.price - t.commission;
+          realized += sellRev - avg * t.count;
+          cost -= avg * t.count;
+          shares -= t.count;
+        }
+      }
+      if (shares <= 0) continue;
+      const avgBuy = shares > 0 ? cost / shares : 0;
+      const price = priceMap[code] || 0;
+      const currentValue = shares * price;
+      const totalInv = shares * avgBuy;
+      const unrealized = currentValue - totalInv;
+      const unrealizedPct = totalInv !== 0 ? (unrealized / totalInv) * 100 : 0;
+      const comp = allCompanies.find(c => c.code === code);
+      const mdItem = md.find(m => m.companyCode === code);
+      histPortfolio.push({
+        companyCode: code,
+        companyName: comp?.name || mdItem?.companyName || code,
+        sharesHeld: shares,
+        avgBuyPrice: avgBuy,
+        lastTrade: price,
+        change: mdItem?.change || 0,
+        changePercent: mdItem?.changePercent || 0,
+        currentValue,
+        totalInvested: totalInv,
+        unrealizedGain: unrealized,
+        unrealizedGainPercent: unrealizedPct,
+        unrealizedDayGain: currentValue * (mdItem?.changePercent || 0) / 100,
+        realizedGain: realized,
+      });
+    }
+    setPortfolio(histPortfolio);
+    setLatestTradeDate(finalDate);
+    setDividends(origDividends.filter(d => d.date <= finalDate));
+    setRealizedItems(origRealizedItems.filter(r => r.sellDate <= finalDate));
+
+    // Per-lot FIFO opportunity cost up to the selected date — produces both
+    // the total and the per-lot breakdown rendered in the Interest table, so
+    // historical mode and live mode stay consistent.
+    const annualRate = 0.065;
+    const sortedAllTx = [...txUpToDate].sort(compareTxDateBuysFirst);
+    type HistLot = {
+      buyDate: string;
+      shares: number;
+      remaining: number;
+      costPerShare: number;
+      lotCost: number;
+      status: 'held' | 'sold' | 'partial';
+      endDate: string | null;
+      accruedInterest: number;
+    };
+    const allLotsByCode: Record<string, HistLot[]> = {};
+    const activeLotsByCode: Record<string, HistLot[]> = {};
+    let totalInterest = 0;
+    let lastAccrualMs: number | null = null;
+    const accrueTo = (dateStr: string) => {
+      const ms = new Date(dateStr).getTime();
+      if (lastAccrualMs === null) { lastAccrualMs = ms; return; }
+      const days = (ms - lastAccrualMs) / 86400000;
+      if (days > 0) {
+        for (const code of Object.keys(activeLotsByCode)) {
+          for (const lot of activeLotsByCode[code]) {
+            const inc = lot.remaining * lot.costPerShare * annualRate * days / 365;
+            lot.accruedInterest += inc;
+            totalInterest += inc;
+          }
+        }
+      }
+      lastAccrualMs = ms;
+    };
+
+    for (const t of sortedAllTx) {
+      accrueTo(t.date);
+      const code = t.companyCode;
+      if (!allLotsByCode[code]) allLotsByCode[code] = [];
+      if (!activeLotsByCode[code]) activeLotsByCode[code] = [];
+      const open = activeLotsByCode[code];
+      if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+        if (t.count > 0) {
+          const lotCost = t.count * t.price + t.commission;
+          const lot: HistLot = {
+            buyDate: t.date,
+            shares: t.count,
+            remaining: t.count,
+            costPerShare: lotCost / t.count,
+            lotCost,
+            status: 'held',
+            endDate: null,
+            accruedInterest: 0,
+          };
+          allLotsByCode[code].push(lot);
+          open.push(lot);
+        }
+      } else if (t.type === 'SELL') {
+        let toSell = t.count;
+        while (toSell > 0 && open.length > 0) {
+          const lot = open[0];
+          if (lot.remaining <= toSell) {
+            toSell -= lot.remaining;
+            lot.remaining = 0;
+            lot.endDate = t.date;
+            lot.status = 'sold';
+            open.shift();
+          } else {
+            lot.remaining -= toSell;
+            lot.status = 'partial';
+            toSell = 0;
+          }
+        }
+      }
+    }
+    accrueTo(finalDate);
+    setOpportunityCost(totalInterest);
+
+    // Build the per-lot breakdown in the same shape as the backend response.
+    const finalMs = new Date(finalDate).getTime();
+    const histBreakdown: InterestBreakdownItem[] = [];
+    for (const code of Object.keys(allLotsByCode)) {
+      const lots = allLotsByCode[code];
+      if (lots.length === 0) continue;
+      let currentCost = 0;
+      let companyInterest = 0;
+      for (const lot of lots) {
+        currentCost += lot.remaining * lot.costPerShare;
+        companyInterest += lot.accruedInterest;
+      }
+      if (currentCost <= 0 && companyInterest < 0.005) continue;
+
+      const comp = allCompanies.find(c => c.code === code);
+      const firstDate = lots[0].buyDate;
+      const days = Math.max(0, Math.round((finalMs - new Date(firstDate).getTime()) / 86400000));
+
+      histBreakdown.push({
+        companyCode: code,
+        companyName: comp?.name || code,
+        date: firstDate,
+        amount: currentCost,
+        days,
+        interest: companyInterest,
+        lots: lots.map(l => {
+          const endMs = l.endDate ? new Date(l.endDate).getTime() : finalMs;
+          return {
+            buyDate: l.buyDate,
+            shares: l.shares,
+            remaining: l.remaining,
+            costPerShare: l.costPerShare,
+            lotCost: l.lotCost,
+            status: l.status,
+            endDate: l.endDate,
+            days: Math.max(0, Math.round((endMs - new Date(l.buyDate).getTime()) / 86400000)),
+            interest: l.accruedInterest,
+          };
+        }),
+      });
+    }
+    histBreakdown.sort((a, b) => b.interest - a.interest);
+    setInterestBreakdown(histBreakdown);
+  }, [transactions, allCompanies, origDividends, origRealizedItems]);
+
   const handleRefresh = () => {
     setRefreshing(true);
-    invalidate('dashboard', 'dividends');
-    loadData().finally(() => setRefreshing(false));
+    if (historicalMode && selectedDate) {
+      // Reload data for the selected historical date.
+      invalidate(`market-by-date:${selectedDate}`, 'transactions', 'companies', 'dividends', 'market', 'market-dates');
+      loadHistoricalData(selectedDate).catch(console.error).finally(() => setRefreshing(false));
+    } else {
+      invalidate('dashboard', 'dividends');
+      loadData().finally(() => setRefreshing(false));
+    }
   };
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -255,101 +430,9 @@ export default function Dashboard() {
               setHistoricalMode(true);
               setRefreshing(true);
               await new Promise(r => setTimeout(r, 0));
-              try {
-                const md = await getMarketDataByDate(finalDate);
-                const priceMap: Record<string, number> = {};
-                md.forEach(m => { priceMap[m.companyCode] = m.lastTrade; });
-                const txUpToDate = transactions.filter(t => t.date <= finalDate);
-                const grouped: Record<string, typeof txUpToDate> = {};
-                txUpToDate.forEach(t => { (grouped[t.companyCode] = grouped[t.companyCode] || []).push(t); });
-                const histPortfolio: PortfolioItem[] = [];
-                for (const [code, txns] of Object.entries(grouped)) {
-                  const sorted = [...txns].sort(compareTxDateBuysFirst);
-                  let shares = 0, cost = 0, realized = 0;
-                  for (const t of sorted) {
-                    if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
-                      cost += t.count * t.price + t.commission;
-                      shares += t.count;
-                    } else if (t.type === 'SELL') {
-                      const avg = shares > 0 ? cost / shares : 0;
-                      const sellRev = t.count * t.price - t.commission;
-                      realized += sellRev - avg * t.count;
-                      cost -= avg * t.count;
-                      shares -= t.count;
-                    }
-                  }
-                  if (shares <= 0) continue;
-                  const avgBuy = shares > 0 ? cost / shares : 0;
-                  const price = priceMap[code] || 0;
-                  const currentValue = shares * price;
-                  const totalInv = shares * avgBuy;
-                  const unrealized = currentValue - totalInv;
-                  const unrealizedPct = totalInv !== 0 ? (unrealized / totalInv) * 100 : 0;
-                  const comp = allCompanies.find(c => c.code === code);
-                  const mdItem = md.find(m => m.companyCode === code);
-                  histPortfolio.push({
-                    companyCode: code,
-                    companyName: comp?.name || mdItem?.companyName || code,
-                    sharesHeld: shares,
-                    avgBuyPrice: avgBuy,
-                    lastTrade: price,
-                    change: mdItem?.change || 0,
-                    changePercent: mdItem?.changePercent || 0,
-                    currentValue,
-                    totalInvested: totalInv,
-                    unrealizedGain: unrealized,
-                    unrealizedGainPercent: unrealizedPct,
-                    unrealizedDayGain: currentValue * (mdItem?.changePercent || 0) / 100,
-                    realizedGain: realized,
-                  });
-                }
-                setPortfolio(histPortfolio);
-                setLatestTradeDate(finalDate);
-                setDividends(origDividends.filter(d => d.date <= finalDate));
-                setRealizedItems(origRealizedItems.filter(r => r.sellDate <= finalDate));
-
-                // Recalculate opportunity cost up to selected date
-                const annualRate = 0.065;
-                const sortedAllTx = [...txUpToDate].sort(compareTxDateBuysFirst);
-                let runningCost = 0;
-                let lastTxDate: string | null = null;
-                let totalInterest = 0;
-                const sharesMap: Record<string, number> = {};
-                const costMap: Record<string, number> = {};
-
-                for (const t of sortedAllTx) {
-                  if (lastTxDate && runningCost > 0) {
-                    const days = (new Date(t.date).getTime() - new Date(lastTxDate).getTime()) / 86400000;
-                    if (days > 0) totalInterest += runningCost * annualRate * days / 365;
-                  }
-                  const code = t.companyCode;
-                  const cb = costMap[code] || 0;
-                  const sh = sharesMap[code] || 0;
-                  if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
-                    const amt = t.count * t.price + t.commission;
-                    costMap[code] = cb + amt;
-                    sharesMap[code] = sh + t.count;
-                    runningCost += amt;
-                  } else if (t.type === 'SELL') {
-                    const avg = sh > 0 ? cb / sh : 0;
-                    const removed = avg * t.count;
-                    costMap[code] = cb - removed;
-                    sharesMap[code] = sh - t.count;
-                    runningCost -= removed;
-                  }
-                  lastTxDate = t.date;
-                }
-                // Interest from last tx to selected date
-                if (lastTxDate && runningCost > 0) {
-                  const days = (new Date(finalDate).getTime() - new Date(lastTxDate).getTime()) / 86400000;
-                  if (days > 0) totalInterest += runningCost * annualRate * days / 365;
-                }
-                setOpportunityCost(totalInterest);
-              } catch (err) {
-                console.error(err);
-              } finally {
-                setRefreshing(false);
-              }
+              loadHistoricalData(finalDate)
+                .catch(console.error)
+                .finally(() => setRefreshing(false));
             }}
           />
           <div style={{ position: 'relative' }}>
@@ -515,9 +598,11 @@ export default function Dashboard() {
 
       {activeSection === 'adjustedPnl' && !loading && filtered.length > 0 && (() => {
         // Build adjusted P&L timeline: unrealized + realized + dividends - opportunity cost
-        // Collect all events with dates
+        // In historical mode, cap events at the selected date so future-dated
+        // transactions don't appear on the timeline.
+        const cutoff = historicalMode && selectedDate ? selectedDate : null;
         const events: { date: string; type: 'tx' | 'div' | 'realized'; data: any }[] = [];
-        transactions.forEach(t => events.push({ date: t.date, type: 'tx', data: t }));
+        transactions.filter(t => !cutoff || t.date <= cutoff).forEach(t => events.push({ date: t.date, type: 'tx', data: t }));
         dividends.filter(d => d.type === 'CASH').forEach(d => events.push({ date: d.date, type: 'div', data: d }));
         realizedItems.forEach(r => events.push({ date: r.sellDate, type: 'realized', data: r }));
         events.sort(compareEventDateBuysFirst);
@@ -525,38 +610,51 @@ export default function Dashboard() {
         const latestPriceMap: Record<string, number> = {};
         filtered.forEach(p => { latestPriceMap[p.companyCode] = p.lastTrade; });
 
-        const companyState: Record<string, { shares: number; cost: number }> = {};
+        // Per-company FIFO lot queues. Opportunity-cost interest accrues on
+        // each individual lot for exactly the time it remains in the queue.
+        const companyLots: Record<string, { count: number; costPerShare: number }[]> = {};
         let cumRealizedGain = 0;
         let cumDividends = 0;
         const annualRate = 0.065;
         let cumInterest = 0;
-        let lastDate: string | null = null;
+        let lastAccrualMs: number | null = null;
 
         const pnlPoints: { date: string; pnl: number }[] = [];
 
-        for (const ev of events) {
-          // Accumulate opportunity cost between dates
-          if (lastDate && lastDate < ev.date) {
-            let totalCost = 0;
-            for (const c of Object.keys(companyState)) totalCost += companyState[c].cost;
-            if (totalCost > 0) {
-              const days = (new Date(ev.date).getTime() - new Date(lastDate).getTime()) / 86400000;
-              cumInterest += totalCost * annualRate * days / 365;
+        const accrueTo = (dateStr: string) => {
+          const ms = new Date(dateStr).getTime();
+          if (lastAccrualMs === null) { lastAccrualMs = ms; return; }
+          const days = (ms - lastAccrualMs) / 86400000;
+          if (days > 0) {
+            for (const code of Object.keys(companyLots)) {
+              for (const lot of companyLots[code]) {
+                cumInterest += lot.count * lot.costPerShare * annualRate * days / 365;
+              }
             }
           }
+          lastAccrualMs = ms;
+        };
+
+        for (const ev of events) {
+          accrueTo(ev.date);
 
           if (ev.type === 'tx') {
             const t = ev.data;
             const code = t.companyCode;
-            if (!companyState[code]) companyState[code] = { shares: 0, cost: 0 };
-            const st = companyState[code];
+            if (!companyLots[code]) companyLots[code] = [];
+            const lots = companyLots[code];
             if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
-              st.cost += t.count * t.price + t.commission;
-              st.shares += t.count;
+              if (t.count > 0) {
+                const lotCost = t.count * t.price + t.commission;
+                lots.push({ count: t.count, costPerShare: lotCost / t.count });
+              }
             } else if (t.type === 'SELL') {
-              const avg = st.shares > 0 ? st.cost / st.shares : 0;
-              st.cost -= avg * t.count;
-              st.shares -= t.count;
+              let toSell = t.count;
+              while (toSell > 0 && lots.length > 0) {
+                const lot = lots[0];
+                if (lot.count <= toSell) { toSell -= lot.count; lots.shift(); }
+                else { lot.count -= toSell; toSell = 0; }
+              }
             }
           } else if (ev.type === 'div') {
             cumDividends += ev.data.totalAmount;
@@ -564,13 +662,15 @@ export default function Dashboard() {
             cumRealizedGain += ev.data.realizedGain;
           }
 
-          // Compute unrealized gain at this point
+          // Compute unrealized gain at this point (sum across all lots)
           let totalValue = 0;
           let totalInvested = 0;
-          for (const c of Object.keys(companyState)) {
-            const s = companyState[c];
-            totalValue += s.shares * (latestPriceMap[c] || 0);
-            totalInvested += s.cost;
+          for (const c of Object.keys(companyLots)) {
+            let shares = 0;
+            let cost = 0;
+            for (const lot of companyLots[c]) { shares += lot.count; cost += lot.count * lot.costPerShare; }
+            totalValue += shares * (latestPriceMap[c] || 0);
+            totalInvested += cost;
           }
           const unrealized = totalValue - totalValue * SELL_COMMISSION_RATE - totalInvested;
           const adjPnl = unrealized + cumRealizedGain + cumDividends - cumInterest;
@@ -579,7 +679,6 @@ export default function Dashboard() {
             date: ev.date,
             pnl: Math.round(adjPnl * 10000) / 10000,
           });
-          lastDate = ev.date;
         }
 
         // Merge same-date (keep last)
@@ -617,8 +716,9 @@ export default function Dashboard() {
 
       {activeSection === 'totalPnl' && !loading && filtered.length > 0 && (() => {
         // Total P&L timeline: unrealized + realized + dividends (no opportunity cost)
+        const cutoff = historicalMode && selectedDate ? selectedDate : null;
         const events: { date: string; type: 'tx' | 'div' | 'realized'; data: any }[] = [];
-        transactions.forEach(t => events.push({ date: t.date, type: 'tx', data: t }));
+        transactions.filter(t => !cutoff || t.date <= cutoff).forEach(t => events.push({ date: t.date, type: 'tx', data: t }));
         dividends.filter(d => d.type === 'CASH').forEach(d => events.push({ date: d.date, type: 'div', data: d }));
         realizedItems.forEach(r => events.push({ date: r.sellDate, type: 'realized', data: r }));
         events.sort(compareEventDateBuysFirst);
@@ -699,7 +799,10 @@ export default function Dashboard() {
 
       <div ref={sectionRef} />
       {activeSection === 'invested' && (() => {
-        const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date));
+        const cutoff = historicalMode && selectedDate ? selectedDate : null;
+        const sorted = [...transactions]
+          .filter(t => !cutoff || t.date <= cutoff)
+          .sort((a, b) => a.date.localeCompare(b.date));
         let netCashOut = 0;
         const chartData = sorted.map(t => {
           if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
@@ -757,10 +860,9 @@ export default function Dashboard() {
       })()}
 
       {activeSection === 'interest' && (() => {
-        const grouped = interestBreakdown.reduce<Record<string, InterestBreakdown[]>>((acc, b) => {
-          (acc[b.companyCode] = acc[b.companyCode] || []).push(b);
-          return acc;
-        }, {});
+        // Backend now returns one row per company with `lots[]` for detail.
+        const byCode: Record<string, InterestBreakdownItem> = {};
+        for (const b of interestBreakdown) byCode[b.companyCode] = b;
         const toggleExpand = (code: string) => {
           setExpandedInterest(prev => {
             const next = new Set(prev);
@@ -769,9 +871,9 @@ export default function Dashboard() {
           });
         };
         // Pie chart data: group interest by company, merge <2% into "Others"
-        const rawPieData = Object.entries(grouped).map(([code, items]) => ({
+        const rawPieData = Object.entries(byCode).map(([code, item]) => ({
           name: code,
-          value: Math.round(items.reduce((s, b) => s + b.interest, 0) * 100) / 100,
+          value: Math.round(item.interest * 100) / 100,
         })).filter(d => d.value > 0).sort((a, b) => b.value - a.value);
         const rawTotal = rawPieData.reduce((s, d) => s + d.value, 0);
         const major = rawPieData.filter(d => rawTotal > 0 && (d.value / rawTotal) * 100 >= 2);
@@ -787,7 +889,7 @@ export default function Dashboard() {
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
               <h2 style={{ margin: 0 }}>Opportunity Cost Breakdown (6.5% Annual)</h2>
-              {tableSearchBar(Object.keys(grouped).length)}
+              {tableSearchBar(Object.keys(byCode).length)}
             </div>
             {pieData.length > 0 && (
               <div style={{ background: 'var(--bg-card)', borderRadius: '10px', padding: '1rem', boxShadow: 'var(--shadow-card)', marginBottom: '1.25rem' }}>
@@ -838,21 +940,24 @@ export default function Dashboard() {
                 <thead>
                   <tr>
                     <th className="sort-header" onClick={() => handleSubSort('code')}>Company{subSortIcon('code')}</th>
-                    <th>Buy Date</th>
-                    <th className="sort-header text-right" onClick={() => handleSubSort('totalAmount')}>Amount Invested{subSortIcon('totalAmount')}</th>
-                    <th className="text-right">Days</th>
-                    <th className="sort-header text-right" onClick={() => handleSubSort('totalInterest')}>Interest Earned (FD){subSortIcon('totalInterest')}</th>
+                    <th>First Buy / Lot</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('totalAmount')}>Cost Basis{subSortIcon('totalAmount')}</th>
+                    <th className="text-right">Days Held</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('totalInterest')}>Interest @ 6.5%{subSortIcon('totalInterest')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {applySubSort(Object.entries(grouped).filter(([code]) => ms(code)).map(([code, txns]) => ({
-                    code,
-                    companyName: txns[0].companyName,
-                    txns,
-                    totalAmount: txns.reduce((s, t) => s + t.amount, 0),
-                    totalInterest: txns.reduce((s, t) => s + t.interest, 0),
-                  })), 'totalInterest').map(({ code, companyName, txns, totalAmount, totalInterest }) => {
+                  {applySubSort(Object.values(byCode).filter(item => ms(item.companyCode)).map(item => ({
+                    code: item.companyCode,
+                    companyName: item.companyName,
+                    item,
+                    totalAmount: item.amount,
+                    totalInterest: item.interest,
+                  })), 'totalInterest').map(({ code, companyName, item, totalAmount, totalInterest }) => {
                     const isExpanded = expandedInterest.has(code);
+                    const lots = item.lots || [];
+                    const lotCount = lots.length;
+                    const heldLots = lots.filter(l => l.status !== 'sold').length;
                     return (
                       <>{/* Fragment needed for adjacent rows */}
                         <tr
@@ -872,26 +977,44 @@ export default function Dashboard() {
                               </div>
                             </div>
                           </td>
-                          <td className="text-muted">{txns.length} transaction{txns.length > 1 ? 's' : ''}</td>
+                          <td className="text-muted">
+                            {item.date}
+                            {lotCount > 0 && (
+                              <span style={{ fontSize: '0.7rem', marginLeft: '0.5rem' }}>
+                                ({lotCount} lot{lotCount > 1 ? 's' : ''}{heldLots !== lotCount ? `, ${heldLots} open` : ''})
+                              </span>
+                            )}
+                          </td>
                           <td className="text-right mono" style={{ fontWeight: 600 }}>{fmt(totalAmount)}</td>
-                          <td className="text-right mono">—</td>
+                          <td className="text-right mono">{item.days}</td>
                           <td className="text-right mono" style={{ color: '#d69e2e', fontWeight: 600 }}>
                             {fmt(totalInterest)}
                           </td>
                         </tr>
-                        {isExpanded && txns.map((b, i) => (
-                          <tr key={`${code}-${i}`} style={{ background: 'var(--bg-row-zebra)' }}>
-                            <td style={{ paddingLeft: '3.5rem' }}>
-                              <span className="company-name">↳</span>
-                            </td>
-                            <td>{b.date}</td>
-                            <td className="text-right mono">{fmt(b.amount)}</td>
-                            <td className="text-right mono">{b.days}</td>
-                            <td className="text-right mono" style={{ color: '#d69e2e' }}>
-                              {fmt(b.interest)}
-                            </td>
-                          </tr>
-                        ))}
+                        {isExpanded && lots.map((l, i) => {
+                          const sold = l.status === 'sold';
+                          const partial = l.status === 'partial';
+                          return (
+                            <tr key={`${code}-${i}`} style={{ background: 'var(--bg-row-zebra)' }}>
+                              <td style={{ paddingLeft: '3.5rem' }}>
+                                <span className="company-name">
+                                  ↳ {l.shares}{partial ? ` (${l.remaining} held)` : ''} @ {fmt(l.costPerShare)}
+                                </span>
+                              </td>
+                              <td>
+                                {l.buyDate}
+                                {sold && <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: '0.4rem' }}>→ sold {l.endDate}</span>}
+                                {partial && <span style={{ fontSize: '0.7rem', color: '#d69e2e', marginLeft: '0.4rem' }}>partial</span>}
+                                {!sold && !partial && <span style={{ fontSize: '0.7rem', color: '#38a169', marginLeft: '0.4rem' }}>held</span>}
+                              </td>
+                              <td className="text-right mono">{fmt(l.lotCost)}</td>
+                              <td className="text-right mono">{l.days}</td>
+                              <td className="text-right mono" style={{ color: '#d69e2e' }}>
+                                {fmt(l.interest)}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </>
                     );
                   })}

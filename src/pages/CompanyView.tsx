@@ -351,29 +351,45 @@ export default function CompanyView() {
     realizedItems.forEach(r => events.push({ date: r.sellDate, type: 'realized', data: r }));
     events.sort(compareEventDateBuysFirst);
 
-    let cumShares2 = 0;
-    let cumCost = 0;
+    // Per-lot FIFO opportunity cost: each buy-lot accrues interest on its own
+    // purchase cost for exactly the time it was held (until consumed by a SELL,
+    // or until "now" while still held).
+    const lots: { count: number; costPerShare: number }[] = [];
     let cumRealized = 0;
     let cumDividends = 0;
     let cumInterest = 0;
-    let prevDate: string | null = null;
+    let lastAccrualMs: number | null = null;
     const adjPnlPoints: { date: string; pnl: number }[] = [];
 
-    for (const ev of events) {
-      if (prevDate && prevDate < ev.date && cumCost > 0) {
-        const days = (new Date(ev.date).getTime() - new Date(prevDate).getTime()) / 86400000;
-        cumInterest += cumCost * annualRate * days / 365;
+    const accrueTo = (dateStr: string) => {
+      const ms = new Date(dateStr).getTime();
+      if (lastAccrualMs === null) { lastAccrualMs = ms; return; }
+      const days = (ms - lastAccrualMs) / 86400000;
+      if (days > 0 && lots.length > 0) {
+        for (const lot of lots) {
+          cumInterest += lot.count * lot.costPerShare * annualRate * days / 365;
+        }
       }
+      lastAccrualMs = ms;
+    };
+
+    for (const ev of events) {
+      accrueTo(ev.date);
 
       if (ev.type === 'tx') {
         const t = ev.data;
         if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
-          cumCost += t.count * t.price + t.commission;
-          cumShares2 += t.count;
+          if (t.count > 0) {
+            const lotCost = t.count * t.price + t.commission;
+            lots.push({ count: t.count, costPerShare: lotCost / t.count });
+          }
         } else if (t.type === 'SELL') {
-          const avg = cumShares2 > 0 ? cumCost / cumShares2 : 0;
-          cumCost -= avg * t.count;
-          cumShares2 -= t.count;
+          let toSell = t.count;
+          while (toSell > 0 && lots.length > 0) {
+            const lot = lots[0];
+            if (lot.count <= toSell) { toSell -= lot.count; lots.shift(); }
+            else { lot.count -= toSell; toSell = 0; }
+          }
         }
       } else if (ev.type === 'div') {
         cumDividends += ev.data.totalAmount;
@@ -381,12 +397,15 @@ export default function CompanyView() {
         cumRealized += ev.data.realizedGain;
       }
 
+      let cumShares2 = 0;
+      let cumCost = 0;
+      for (const lot of lots) { cumShares2 += lot.count; cumCost += lot.count * lot.costPerShare; }
+
       const price = priceByDate[ev.date] || lastPrice;
       const portfolioVal = cumShares2 * price;
       const unrealized = portfolioVal - portfolioVal * SELL_COMMISSION_RATE - cumCost;
       const adjPnl = unrealized + cumRealized + cumDividends - cumInterest;
       adjPnlPoints.push({ date: ev.date, pnl: Math.round(adjPnl * 10000) / 10000 });
-      prevDate = ev.date;
     }
 
     const mergedAdjPnl = adjPnlPoints.reduce<typeof adjPnlPoints>((acc, item) => {
