@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend, getDividendPayouts, DividendPayoutData } from '../api';
+import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend, getDividendPayouts, getAllDividendPayouts, DividendPayoutData } from '../api';
 import { Dividend, Company, Transaction } from '../types';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
@@ -13,6 +13,7 @@ export default function Dividends() {
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [allPayouts, setAllPayouts] = useState<DividendPayoutData[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [companyCode, setCompanyCode] = useState('');
@@ -83,11 +84,19 @@ export default function Dividends() {
   const editCalculatedTotal = editGross - editTax;
 
   const loadData = () => {
-    Promise.all([getDividends(), getCompanies(), getTransactions()])
-      .then(([divs, comps, txns]) => {
+    Promise.all([
+      getDividends(),
+      getCompanies(),
+      getTransactions(),
+      dividendPayoutsEnabled
+        ? getAllDividendPayouts().catch(() => [] as DividendPayoutData[])
+        : Promise.resolve([] as DividendPayoutData[]),
+    ])
+      .then(([divs, comps, txns, payouts]) => {
         setDividends(divs);
         setCompanies(comps);
         setTransactions(txns);
+        setAllPayouts(payouts);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -99,6 +108,22 @@ export default function Dividends() {
       .filter(t => t.companyCode === code && t.date < beforeDate)
       .reduce((total, t) => total + (t.type === 'BUY' ? t.count : -t.count), 0);
   };
+
+  // Pending dividends: payout XD has passed, user held shares before XD, and no user dividend recorded yet for that company+XD date.
+  const pendingDividends = useMemo(() => {
+    if (!dividendPayoutsEnabled || allPayouts.length === 0) return [];
+    const today = new Date().toLocaleDateString('en-CA');
+    const recordedKeys = new Set(
+      dividends.filter(d => d.xdDate).map(d => `${d.companyCode}|${d.xdDate}`)
+    );
+    return allPayouts
+      .filter(p => p.exDividendDate && p.exDividendDate <= today)
+      .filter(p => !recordedKeys.has(`${p.companyCode}|${p.exDividendDate}`))
+      .map(p => ({ payout: p, sharesHeld: getSharesHeldAtDate(p.companyCode, p.exDividendDate) }))
+      .filter(x => x.sharesHeld > 0)
+      .sort((a, b) => b.payout.exDividendDate.localeCompare(a.payout.exDividendDate));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allPayouts, dividends, transactions, dividendPayoutsEnabled]);
 
   // Auto-suggest shares when XD date or company changes
   const handleXdDateChange = (newXdDate: string) => {
@@ -211,6 +236,52 @@ export default function Dividends() {
   return (
     <div>
       <h1>Dividends</h1>
+
+      {pendingDividends.length > 0 && (
+        <div className="form-card">
+          <h2>Pending Dividends ({pendingDividends.length})</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
+            XD date has passed and you held shares — not yet recorded.
+          </p>
+          <div className="portfolio-table-wrap">
+            <table className="portfolio-table">
+              <thead>
+                <tr>
+                  <th>XD Date</th>
+                  <th>Company</th>
+                  <th>Type</th>
+                  <th className="text-right">Amount/Share</th>
+                  <th className="text-right">Shares Held</th>
+                  <th className="text-right">Est. Gross</th>
+                  <th>Payment Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingDividends.map(({ payout, sharesHeld }) => {
+                  const aps = payout.amountPerShare != null ? Number(payout.amountPerShare) : null;
+                  const estGross = aps != null ? aps * sharesHeld : null;
+                  return (
+                    <tr key={`${payout.companyCode}-${payout.exDividendDate}`}>
+                      <td className="mono">{payout.exDividendDate}</td>
+                      <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${payout.companyCode}`)}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <CompanyAvatar code={payout.companyCode} size={26} />
+                          {payout.companyCode}
+                        </div>
+                      </td>
+                      <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{payout.dividendType || '—'}</td>
+                      <td className="text-right mono">{aps != null ? aps.toFixed(2) : '—'}</td>
+                      <td className="text-right mono">{sharesHeld}</td>
+                      <td className="text-right mono">{estGross != null ? estGross.toFixed(2) : '—'}</td>
+                      <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{payout.paymentDate || '—'}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {!isReadMode && (
       <div className="form-card">
