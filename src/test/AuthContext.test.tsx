@@ -7,6 +7,7 @@ const mockGetMe = vi.fn();
 vi.mock('../api', () => ({
   getMe: (...args: any[]) => mockGetMe(...args),
   login: vi.fn(),
+  signup: vi.fn(),
   logout: vi.fn(),
 }));
 

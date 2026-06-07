@@ -31,6 +31,11 @@ export const login = (username: string, password: string) =>
     localStorage.setItem('token', res.data.token);
     return res.data;
   });
+export const signup = (username: string, password: string) =>
+  api.post<AuthUser & { token: string; readMode: boolean }>('/auth/signup', { username, password }).then(res => {
+    localStorage.setItem('token', res.data.token);
+    return res.data;
+  });
 export const logout = () => {
   return api.post('/auth/logout').finally(() => {
     localStorage.removeItem('token');

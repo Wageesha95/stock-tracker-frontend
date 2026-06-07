@@ -6,6 +6,7 @@ import { AuthProvider } from '../context/AuthContext';
 
 vi.mock('../api', () => ({
   login: vi.fn(),
+  signup: vi.fn(),
   logout: vi.fn(),
   getMe: vi.fn().mockRejectedValue(new Error('not logged in')),
 }));

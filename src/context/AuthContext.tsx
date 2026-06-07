@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { AuthUser } from '../types';
-import { login as apiLogin, logout as apiLogout, getMe, clearAllCache } from '../api';
+import { login as apiLogin, signup as apiSignup, logout as apiLogout, getMe, clearAllCache } from '../api';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -9,6 +9,7 @@ interface AuthContextType {
   isReadMode: boolean;
   dividendPayoutsEnabled: boolean;
   login: (username: string, password: string) => Promise<void>;
+  signup: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -53,6 +54,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(authUser);
   }, []);
 
+  const signup = useCallback(async (username: string, password: string) => {
+    clearAllCache();
+    const u = await apiSignup(username, password);
+    const authUser = { id: u.id, username: u.username, role: u.role, readMode: u.readMode, dividendPayoutsEnabled: (u as any).dividendPayoutsEnabled ?? false };
+    localStorage.setItem('user', JSON.stringify(authUser));
+    setUser(authUser);
+  }, []);
+
   const logout = useCallback(async () => {
     clearAllCache();
     await apiLogout().catch(() => {});
@@ -62,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin: user?.role === 'ADMIN', isReadMode: user?.readMode ?? false, dividendPayoutsEnabled: user?.dividendPayoutsEnabled ?? false, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, isAdmin: user?.role === 'ADMIN', isReadMode: user?.readMode ?? false, dividendPayoutsEnabled: user?.dividendPayoutsEnabled ?? false, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );
