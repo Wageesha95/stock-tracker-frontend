@@ -85,6 +85,51 @@ export default function MarketDataScraper() {
     }
   };
 
+  const scrapeOne = async (code: string) => {
+    setResults(prev => prev.map(r =>
+      r.code === code ? { ...r, scrapeStatus: 'scraping' as const, error: undefined } : r
+    ));
+    try {
+      const [bars, history] = await Promise.all([
+        scrapeMarketDataPreview(code),
+        getMarketDataHistory(code).catch(() => [] as MarketData[]),
+      ]);
+      const exMap = new Map<string, MarketData>();
+      history.forEach(md => exMap.set(md.tradeDate, md));
+      setResults(prev => prev.map(r =>
+        r.code === code ? { ...r, scrapeStatus: 'done' as const, bars, existing: exMap } : r
+      ));
+
+      if (autoSave && bars.length > 0) {
+        const filtered = bars.filter(b => {
+          if (b.volume === 0) return false;
+          if (dateFrom && b.date < dateFrom) return false;
+          if (dateTo && b.date > dateTo) return false;
+          return true;
+        });
+        if (filtered.length > 0) {
+          setResults(prev => prev.map(r =>
+            r.code === code ? { ...r, saveStatus: 'saving' as const } : r
+          ));
+          try {
+            const res = await scrapeMarketDataSaveBars(code, filtered);
+            setResults(prev => prev.map(r =>
+              r.code === code ? { ...r, saveStatus: 'saved' as const, savedCount: res.newRecords } : r
+            ));
+          } catch {
+            setResults(prev => prev.map(r =>
+              r.code === code ? { ...r, saveStatus: 'error' as const } : r
+            ));
+          }
+        }
+      }
+    } catch (err: any) {
+      setResults(prev => prev.map(r =>
+        r.code === code ? { ...r, scrapeStatus: 'error' as const, error: err?.response?.data?.error || err?.message || 'Failed' } : r
+      ));
+    }
+  };
+
   const handleScrapeAll = async () => {
     abortRef.current = false;
     setError('');
@@ -99,53 +144,15 @@ export default function MarketDataScraper() {
 
     for (let i = 0; i < sorted.length; i++) {
       if (abortRef.current) break;
-      const c = sorted[i];
-      setResults(prev => prev.map(r =>
-        r.code === c.code ? { ...r, scrapeStatus: 'scraping' as const } : r
-      ));
       setProgress({ current: i + 1, total: sorted.length });
-      try {
-        const [bars, history] = await Promise.all([
-          scrapeMarketDataPreview(c.code),
-          getMarketDataHistory(c.code).catch(() => [] as MarketData[]),
-        ]);
-        const exMap = new Map<string, MarketData>();
-        history.forEach(md => exMap.set(md.tradeDate, md));
-        setResults(prev => prev.map(r =>
-          r.code === c.code ? { ...r, scrapeStatus: 'done' as const, bars, existing: exMap } : r
-        ));
-
-        if (autoSave && bars.length > 0) {
-          const filtered = bars.filter(b => {
-            if (b.volume === 0) return false;
-            if (dateFrom && b.date < dateFrom) return false;
-            if (dateTo && b.date > dateTo) return false;
-            return true;
-          });
-          if (filtered.length > 0) {
-            setResults(prev => prev.map(r =>
-              r.code === c.code ? { ...r, saveStatus: 'saving' as const } : r
-            ));
-            try {
-              const res = await scrapeMarketDataSaveBars(c.code, filtered);
-              setResults(prev => prev.map(r =>
-                r.code === c.code ? { ...r, saveStatus: 'saved' as const, savedCount: res.newRecords } : r
-              ));
-            } catch {
-              setResults(prev => prev.map(r =>
-                r.code === c.code ? { ...r, saveStatus: 'error' as const } : r
-              ));
-            }
-          }
-        }
-      } catch (err: any) {
-        setResults(prev => prev.map(r =>
-          r.code === c.code ? { ...r, scrapeStatus: 'error' as const, error: err?.response?.data?.error || err?.message || 'Failed' } : r
-        ));
-      }
+      await scrapeOne(sorted[i].code);
     }
 
     setMode('all-preview');
+  };
+
+  const handleRetryScrape = (code: string) => {
+    void scrapeOne(code);
   };
 
   const handleSaveCompany = async (code: string) => {
@@ -311,7 +318,7 @@ export default function MarketDataScraper() {
             {(dateFrom || dateTo) && <span> (filtering: {dateFrom || '...'} to {dateTo || '...'})</span>}
           </div>
           <ProgressBar current={progress.current} total={progress.total} />
-          <ScrapeResultsTable results={results} onSave={handleSaveCompany} dateFrom={dateFrom} dateTo={dateTo} />
+          <ScrapeResultsTable results={results} onSave={handleSaveCompany} onRetry={handleRetryScrape} dateFrom={dateFrom} dateTo={dateTo} />
           <div className="upload-actions" style={{ marginTop: '1rem' }}>
             <button className="btn-reset" onClick={() => { abortRef.current = true; }}>Stop</button>
           </div>
@@ -325,7 +332,7 @@ export default function MarketDataScraper() {
             {savedCount > 0 && ` Saved: ${savedCount}.`}
             {unsavedWithData > 0 && ` Ready to save: ${unsavedWithData}.`}
           </div>
-          <ScrapeResultsTable results={results} onSave={handleSaveCompany} dateFrom={dateFrom} dateTo={dateTo} />
+          <ScrapeResultsTable results={results} onSave={handleSaveCompany} onRetry={handleRetryScrape} dateFrom={dateFrom} dateTo={dateTo} />
           <div className="upload-actions" style={{ marginTop: '1rem' }}>
             {unsavedWithData > 0 && (
               <button className="btn-upload" onClick={handleSaveAllRemaining}>
@@ -519,9 +526,10 @@ function BarTableWithDiff({ bars, existing, companyCode, dateFrom, dateTo }: {
   );
 }
 
-function ScrapeResultsTable({ results, onSave, dateFrom, dateTo }: {
+function ScrapeResultsTable({ results, onSave, onRetry, dateFrom, dateTo }: {
   results: CompanyScrapeResult[];
   onSave: (code: string) => void;
+  onRetry?: (code: string) => void;
   dateFrom: string;
   dateTo: string;
 }) {
@@ -596,7 +604,20 @@ function ScrapeResultsTable({ results, onSave, dateFrom, dateTo }: {
                     {r.scrapeStatus === 'pending' && <span style={{ color: 'var(--text-muted)' }}>Pending</span>}
                     {r.scrapeStatus === 'scraping' && <span style={{ color: 'var(--accent)' }}>Scraping...</span>}
                     {r.scrapeStatus === 'done' && <span className="gain-positive">Done</span>}
-                    {r.scrapeStatus === 'error' && <span className="gain-negative" title={r.error}>Failed</span>}
+                    {r.scrapeStatus === 'error' && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span className="gain-negative" title={r.error}>Failed</span>
+                        {onRetry && (
+                          <button
+                            className="btn-upload"
+                            style={{ padding: '0.15rem 0.5rem', fontSize: '0.7rem' }}
+                            onClick={e => { e.stopPropagation(); onRetry(r.code); }}
+                          >
+                            Retry
+                          </button>
+                        )}
+                      </span>
+                    )}
                   </td>
                   <td>
                     {fb.length > 0 && r.saveStatus === 'unsaved' && (
