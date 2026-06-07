@@ -110,7 +110,7 @@ export default function Login() {
         </div>
         {isSignup && (
           <p style={{ marginTop: '0.75rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-            Public signup is capped at 10 new accounts per day.
+            Only for personal usage. Sign up is not public.
           </p>
         )}
       </div>
