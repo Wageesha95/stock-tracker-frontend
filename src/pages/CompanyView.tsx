@@ -13,6 +13,7 @@ import { LineChart, Line, Bar, ComposedChart, XAxis, YAxis, Tooltip, ResponsiveC
 import { SELL_COMMISSION_RATE } from '../constants';
 import { ttmWindow, resolveTtmWeeks } from '../utils/ttm';
 import { compareTxDateBuysFirst, compareEventDateBuysFirst, txDateTieBreaker } from '../utils/transactionSort';
+import { adjustedCount, adjustedPrice, adjustedHistPrice } from '../utils/splits';
 import { useTableSort } from '../hooks/useTableSort';
 
 type Tab = 'transactions' | 'dividends' | 'realized' | 'payouts' | 'notes';
@@ -269,12 +270,15 @@ export default function CompanyView() {
     const filteredLow = filtered.filter(m => m.low > 0);
     const filteredHigh = filtered.filter(m => m.high > 0);
     const count = filtered.length;
-    const lowest = filteredLow.length > 0 ? filteredLow.reduce((min, m) => m.low < min.low ? m : min) : null;
-    const highest = filteredHigh.length > 0 ? filteredHigh.reduce((max, m) => m.high > max.high ? m : max) : null;
+    // Compare/return in current basis so a range spanning a split is apples-to-apples.
+    const adjLow = (m: MarketData) => adjustedHistPrice(m.low, m.tradeDate, shareSplits);
+    const adjHigh = (m: MarketData) => adjustedHistPrice(m.high, m.tradeDate, shareSplits);
+    const lowest = filteredLow.length > 0 ? filteredLow.reduce((min, m) => adjLow(m) < adjLow(min) ? m : min) : null;
+    const highest = filteredHigh.length > 0 ? filteredHigh.reduce((max, m) => adjHigh(m) > adjHigh(max) ? m : max) : null;
     const splits = shareSplits.filter(s => s.date >= cutoffStr);
     return {
-      lowestData: lowest ? { value: lowest.low, date: lowest.tradeDate, count } : null,
-      highestData: highest ? { value: highest.high, date: highest.tradeDate, count } : null,
+      lowestData: lowest ? { value: adjLow(lowest), date: lowest.tradeDate, count } : null,
+      highestData: highest ? { value: adjHigh(highest), date: highest.tradeDate, count } : null,
       splitsInPeriod: splits,
     };
   }, [marketHistory, lowPeriod, customFrom, customTo, shareSplits]);
@@ -287,13 +291,16 @@ export default function CompanyView() {
     let cumShares = 0;
     const txPoints: { date: string; invested: number; shares: number }[] = [];
     for (const t of sortedTx) {
+      // Post-split basis so share counts stay continuous across a split.
+      const adjCount = adjustedCount(t, shareSplits);
+      const adjPrice = adjustedPrice(t, shareSplits);
       if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
-        cumInvested += t.count * t.price + t.commission;
-        cumShares += t.count;
+        cumInvested += adjCount * adjPrice + t.commission;
+        cumShares += adjCount;
       } else if (t.type === 'SELL') {
         const avgAtSell = cumShares > 0 ? cumInvested / cumShares : 0;
-        cumInvested -= avgAtSell * t.count;
-        cumShares -= t.count;
+        cumInvested -= avgAtSell * adjCount;
+        cumShares -= adjCount;
       } else {
         throw new Error(`Unknown transaction type: ${t.type}`);
       }
@@ -309,9 +316,10 @@ export default function CompanyView() {
       return acc;
     }, []);
 
-    // Build market price map by date
+    // Build market price map by date, prices in current basis so shares×price is
+    // continuous and comparable to the (current-basis) average cost.
     const priceByDate: Record<string, number> = {};
-    marketHistory.forEach(m => { priceByDate[m.tradeDate] = m.lastTrade; });
+    marketHistory.forEach(m => { priceByDate[m.tradeDate] = adjustedHistPrice(m.lastTrade, m.tradeDate, shareSplits); });
 
     // Collect all dates (from transactions + market data), sorted
     const allDates = [...new Set([...mergedTx.map(t => t.date), ...marketHistory.map(m => m.tradeDate)])].sort();
@@ -378,13 +386,15 @@ export default function CompanyView() {
 
       if (ev.type === 'tx') {
         const t = ev.data;
+        const adjCount = adjustedCount(t, shareSplits);
+        const adjPrice = adjustedPrice(t, shareSplits);
         if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
-          if (t.count > 0) {
-            const lotCost = t.count * t.price + t.commission;
-            lots.push({ count: t.count, costPerShare: lotCost / t.count });
+          if (adjCount > 0) {
+            const lotCost = adjCount * adjPrice + t.commission;
+            lots.push({ count: adjCount, costPerShare: lotCost / adjCount });
           }
         } else if (t.type === 'SELL') {
-          let toSell = t.count;
+          let toSell = adjCount;
           while (toSell > 0 && lots.length > 0) {
             const lot = lots[0];
             if (lot.count <= toSell) { toSell -= lot.count; lots.shift(); }
@@ -430,17 +440,20 @@ export default function CompanyView() {
     const sellCountPricedByDate: Record<string, number> = {};
     const sellProceedsByDate: Record<string, number> = {};
     for (const t of sortedTx) {
+      // Markers in current basis so they sit on the (adjusted) price/avg lines.
+      const adjCount = adjustedCount(t, shareSplits);
+      const adjPrice = adjustedPrice(t, shareSplits);
       if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
-        buyCountByDate[t.date] = (buyCountByDate[t.date] || 0) + t.count;
+        buyCountByDate[t.date] = (buyCountByDate[t.date] || 0) + adjCount;
         if (t.price > 0) {
-          paidBuyCountByDate[t.date] = (paidBuyCountByDate[t.date] || 0) + t.count;
-          paidBuyCostByDate[t.date] = (paidBuyCostByDate[t.date] || 0) + t.count * t.price;
+          paidBuyCountByDate[t.date] = (paidBuyCountByDate[t.date] || 0) + adjCount;
+          paidBuyCostByDate[t.date] = (paidBuyCostByDate[t.date] || 0) + adjCount * adjPrice;
         }
       } else if (t.type === 'SELL') {
-        sellCountByDate[t.date] = (sellCountByDate[t.date] || 0) + t.count;
+        sellCountByDate[t.date] = (sellCountByDate[t.date] || 0) + adjCount;
         if (t.price > 0) {
-          sellCountPricedByDate[t.date] = (sellCountPricedByDate[t.date] || 0) + t.count;
-          sellProceedsByDate[t.date] = (sellProceedsByDate[t.date] || 0) + t.count * t.price;
+          sellCountPricedByDate[t.date] = (sellCountPricedByDate[t.date] || 0) + adjCount;
+          sellProceedsByDate[t.date] = (sellProceedsByDate[t.date] || 0) + adjCount * adjPrice;
         }
       }
     }
@@ -484,7 +497,7 @@ export default function CompanyView() {
       }));
 
     return { valueChartData: valueData, sharesChartData: mergedTx, priceVsAvgChartData: priceVsAvgData, adjPnlChartData: mergedAdjPnl, volumeChartData: volumeData };
-  }, [transactions, marketHistory, dividends, realizedItems]);
+  }, [transactions, marketHistory, dividends, realizedItems, shareSplits]);
 
   const firstBuyDate = useMemo(() => {
     const buys = transactions.filter(t => t.type !== 'SELL');
@@ -1251,7 +1264,7 @@ export default function CompanyView() {
                 <tr className="portfolio-total">
                   <td colSpan={2}>Summary</td>
                   <td className="text-right mono">
-                    {transactions.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO' ? t.count : t.type === 'SELL' ? -t.count : (() => { throw new Error(`Unknown type: ${t.type}`); })()), 0)} net
+                    {transactions.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO' ? adjustedCount(t, shareSplits) : t.type === 'SELL' ? -adjustedCount(t, shareSplits) : (() => { throw new Error(`Unknown type: ${t.type}`); })()), 0)} net
                   </td>
                   <td></td>
                   <td className="text-right mono">
