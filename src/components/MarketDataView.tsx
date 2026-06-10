@@ -12,7 +12,6 @@ export default function MarketDataView() {
   const [loadingDates, setLoadingDates] = useState<Set<string>>(new Set());
   const [mdSortKey, setMdSortKey] = useState<string>('');
   const [mdSortDir, setMdSortDir] = useState<SortDir>('desc');
-  const [search, setSearch] = useState('');
 
   const refreshDateSummary = async () => {
     invalidate('market');
@@ -91,14 +90,6 @@ export default function MarketDataView() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '1.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         <h2 style={{ margin: 0 }}>Market Data ({totalRecords} records, {dateSummary.length} dates)</h2>
         <button className="btn-reset" onClick={refreshDateSummary} title="Reload market data">Refresh</button>
-        <input
-          type="search"
-          className="search-bar"
-          placeholder="Search symbol or company..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{ marginLeft: 'auto', minWidth: '220px' }}
-        />
       </div>
       <div className="portfolio-table-wrap">
         <table className="portfolio-table">
@@ -118,14 +109,7 @@ export default function MarketDataView() {
               const isExpanded = expandedDates.has(date);
               const items = dateData[date];
               const isLoading = loadingDates.has(date);
-              const q = search.trim().toLowerCase();
-              const filtered = items && q
-                ? items.filter(md =>
-                    md.companyCode.toLowerCase().includes(q) ||
-                    md.companyName.toLowerCase().includes(q)
-                  )
-                : items || [];
-              const sortedItems = sortMdItems(filtered);
+              const sortedItems = sortMdItems(items || []);
               return (
                 <>
                   <tr
