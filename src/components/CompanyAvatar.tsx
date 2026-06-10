@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 
 const COLORS = [
   '#e53e3e', '#dd6b20', '#d69e2e', '#38a169', '#319795',
@@ -18,9 +20,11 @@ function getColor(code: string) {
 const logoCache: Record<string, 'ok' | 'fail'> = {};
 
 export default function CompanyAvatar({ code, size = 32 }: { code: string; size?: number }) {
+  const navigate = useNavigate();
   const [status, setStatus] = useState<'loading' | 'ok' | 'fail'>(
     logoCache[code] || 'loading'
   );
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const letters = code.replace(/\..+/, '').slice(0, 2).toUpperCase();
   const bg = getColor(code);
   const fontSize = size * 0.4;
@@ -37,27 +41,62 @@ export default function CompanyAvatar({ code, size = 32 }: { code: string; size?
     img.src = logoSrc;
   }, [code, logoSrc]);
 
-  if (status === 'ok') {
-    return (
-      <img
-        className="company-avatar"
-        src={logoSrc}
-        alt={code}
-        style={{
-          width: size,
-          height: size,
-          minWidth: size,
-          borderRadius: '8px',
-          objectFit: 'contain',
-          background: 'white',
-        }}
-      />
-    );
-  }
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    window.addEventListener('click', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [menu]);
 
-  return (
+  const openMenu = (e: React.MouseEvent) => {
+    if (!code) return;
+    e.preventDefault();
+    setMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  const contextMenu = menu && createPortal(
+    <div
+      style={{
+        position: 'fixed', top: menu.y, left: menu.x, zIndex: 2000,
+        background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+        borderRadius: '8px', boxShadow: 'var(--shadow-dropdown)', padding: '0.25rem',
+        minWidth: '180px',
+      }}
+      onClick={e => e.stopPropagation()}
+    >
+      <button
+        className="action-menu-item"
+        onClick={() => { setMenu(null); navigate(`/market-data?tab=byCompany&code=${code}`); }}
+      >
+        📈 Daily price movement
+      </button>
+    </div>,
+    document.body
+  );
+
+  const avatar = status === 'ok' ? (
+    <img
+      className="company-avatar"
+      src={logoSrc}
+      alt={code}
+      onContextMenu={openMenu}
+      style={{
+        width: size,
+        height: size,
+        minWidth: size,
+        borderRadius: '8px',
+        objectFit: 'contain',
+        background: 'white',
+      }}
+    />
+  ) : (
     <div
       className="company-avatar"
+      onContextMenu={openMenu}
       style={{
         width: size,
         height: size,
@@ -75,5 +114,12 @@ export default function CompanyAvatar({ code, size = 32 }: { code: string; size?
     >
       {status === 'loading' ? '' : letters}
     </div>
+  );
+
+  return (
+    <>
+      {avatar}
+      {contextMenu}
+    </>
   );
 }

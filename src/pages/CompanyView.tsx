@@ -553,6 +553,14 @@ export default function CompanyView() {
         <div className="company-view-actions" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <button
             className="btn-settings-gear"
+            onClick={() => navigate(`/market-data?tab=byCompany&code=${code}`)}
+            aria-label="Daily price movement"
+            title="Daily price movement"
+          >
+            &#128200;
+          </button>
+          <button
+            className="btn-settings-gear"
             onClick={() => setNotesOpen(true)}
             aria-label="Notes"
             title="Notes"

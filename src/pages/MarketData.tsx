@@ -1,9 +1,14 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import MarketDataView from '../components/MarketDataView';
 import CompanyPriceMovement from '../components/CompanyPriceMovement';
 
 export default function MarketData() {
-  const [tab, setTab] = useState<'byDate' | 'byCompany'>('byDate');
+  const [searchParams] = useSearchParams();
+  const initialCode = searchParams.get('code') || '';
+  const [tab, setTab] = useState<'byDate' | 'byCompany'>(
+    searchParams.get('tab') === 'byCompany' || initialCode ? 'byCompany' : 'byDate'
+  );
 
   return (
     <div>
@@ -15,7 +20,7 @@ export default function MarketData() {
         </div>
       </div>
       {tab === 'byDate' && <MarketDataView />}
-      {tab === 'byCompany' && <CompanyPriceMovement />}
+      {tab === 'byCompany' && <CompanyPriceMovement initialCode={initialCode} />}
     </div>
   );
 }

@@ -5,16 +5,30 @@ import { Company, MarketData } from '../types';
 import CompanySearchSelect from './CompanySearchSelect';
 
 type SortDir = 'asc' | 'desc';
+type Period = number | 'all';
+
+const PERIODS: { value: Period; label: string }[] = [
+  { value: 5, label: '5D' },
+  { value: 14, label: '14D' },
+  { value: 30, label: '30D' },
+  { value: 60, label: '60D' },
+  { value: 90, label: '90D' },
+  { value: 120, label: '120D' },
+  { value: 180, label: '180D' },
+  { value: 365, label: '365D' },
+  { value: 'all', label: 'All' },
+];
 
 const gainClass = (n: number) => (n >= 0 ? 'gain-positive' : 'gain-negative');
 const gainSign = (n: number) => (n >= 0 ? '+' : '');
 
-export default function CompanyPriceMovement() {
+export default function CompanyPriceMovement({ initialCode = '' }: { initialCode?: string }) {
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(initialCode);
   const [history, setHistory] = useState<MarketData[]>([]);
   const [loading, setLoading] = useState(false);
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [period, setPeriod] = useState<Period>(30);
 
   useEffect(() => {
     getCompanies().then(setCompanies).catch(() => {});
@@ -32,10 +46,20 @@ export default function CompanyPriceMovement() {
       .finally(() => setLoading(false));
   }, [code]);
 
+  // Keep only records within the selected window, anchored on the latest data date.
+  const filteredHistory = useMemo(() => {
+    if (period === 'all' || history.length === 0) return history;
+    const latest = history.reduce((max, m) => (m.tradeDate > max ? m.tradeDate : max), '');
+    const cutoff = new Date(latest);
+    cutoff.setDate(cutoff.getDate() - (period - 1));
+    const cutoffStr = cutoff.toISOString().split('T')[0];
+    return history.filter(m => m.tradeDate >= cutoffStr);
+  }, [history, period]);
+
   // Chart wants chronological order (oldest -> newest) regardless of table sort.
   const chartData = useMemo(
     () =>
-      [...history]
+      [...filteredHistory]
         .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate))
         .map(md => ({
           date: md.tradeDate,
@@ -43,15 +67,15 @@ export default function CompanyPriceMovement() {
           close: md.lastTrade,
           low: md.low,
         })),
-    [history]
+    [filteredHistory]
   );
 
-  const tableRows = useMemo(
+  const tableCols = useMemo(
     () =>
-      [...history].sort((a, b) =>
+      [...filteredHistory].sort((a, b) =>
         sortDir === 'asc' ? a.tradeDate.localeCompare(b.tradeDate) : b.tradeDate.localeCompare(a.tradeDate)
       ),
-    [history, sortDir]
+    [filteredHistory, sortDir]
   );
 
   const selected = companies.find(c => c.code === code);
@@ -64,6 +88,20 @@ export default function CompanyPriceMovement() {
           <CompanySearchSelect companies={companies} value={code} onChange={setCode} />
         </div>
       </div>
+
+      {code && !loading && history.length > 0 && (
+        <div className="segmented-control" style={{ marginBottom: '1rem', flexWrap: 'wrap' }}>
+          {PERIODS.map(p => (
+            <button
+              key={String(p.value)}
+              className={period === p.value ? 'active' : ''}
+              onClick={() => setPeriod(p.value)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {!code && (
         <p style={{ color: 'var(--text-muted)' }}>Select a company to view its daily high, closing and low price movement.</p>
@@ -99,33 +137,55 @@ export default function CompanyPriceMovement() {
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th className="sort-header" onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}>
-                    Date{sortDir === 'asc' ? ' ↑' : ' ↓'}
+                  <th
+                    className="sort-header"
+                    style={{ position: 'sticky', left: 0, background: 'var(--bg-thead)', zIndex: 1 }}
+                    onClick={() => setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
+                  >
+                    Date{sortDir === 'asc' ? ' →' : ' ←'}
                   </th>
-                  <th className="text-right">High</th>
-                  <th className="text-right">Close</th>
-                  <th className="text-right">Low</th>
-                  <th className="text-right">Change</th>
-                  <th className="text-right">Change%</th>
+                  {tableCols.map(md => (
+                    <th key={md.id} className="text-right">{md.tradeDate}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {tableRows.map(md => (
-                  <tr key={md.id}>
-                    <td>{md.tradeDate}</td>
-                    <td className="text-right mono">{md.high != null ? md.high.toFixed(2) : '—'}</td>
-                    <td className="text-right mono">{md.lastTrade.toFixed(2)}</td>
-                    <td className="text-right mono">{md.low != null ? md.low.toFixed(2) : '—'}</td>
-                    <td className={`text-right mono ${gainClass(md.change)}`}>
+                <tr>
+                  <td style={{ fontWeight: 600, position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 1 }}>High</td>
+                  {tableCols.map(md => (
+                    <td key={md.id} className="text-right mono">{md.high != null ? md.high.toFixed(2) : '—'}</td>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 600, position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 1 }}>Close</td>
+                  {tableCols.map(md => (
+                    <td key={md.id} className="text-right mono">{md.lastTrade.toFixed(2)}</td>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 600, position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 1 }}>Low</td>
+                  {tableCols.map(md => (
+                    <td key={md.id} className="text-right mono">{md.low != null ? md.low.toFixed(2) : '—'}</td>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 600, position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 1 }}>Change</td>
+                  {tableCols.map(md => (
+                    <td key={md.id} className={`text-right mono ${gainClass(md.change)}`}>
                       {gainSign(md.change)}{md.change.toFixed(2)}
                     </td>
-                    <td className="text-right mono">
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ fontWeight: 600, position: 'sticky', left: 0, background: 'var(--bg-card)', zIndex: 1 }}>Change%</td>
+                  {tableCols.map(md => (
+                    <td key={md.id} className="text-right mono">
                       <span className={`gain-pill ${md.changePercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
                         {gainSign(md.changePercent)}{md.changePercent.toFixed(2)}%
                       </span>
                     </td>
-                  </tr>
-                ))}
+                  ))}
+                </tr>
               </tbody>
             </table>
           </div>
