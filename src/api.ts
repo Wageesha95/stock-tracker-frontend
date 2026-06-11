@@ -167,12 +167,19 @@ export const updateTableColumns = (tableColumns: Record<string, string[]>) =>
 export const updateCompanyTtmWeeks = (companyCode: string, weeks: number | null) =>
   api.put<UserSettingsData>(`/settings/company-ttm-weeks/${companyCode}`, { weeks }).then(res => { invalidate('settings'); return res.data; });
 
-// Messages (user → admin)
+// Messages (user → admin, with admin replies)
+export interface MessageReply {
+  fromUsername: string;
+  content: string;
+  createdAt: string;
+}
 export interface Message {
   id: string;
   fromUsername: string;
   content: string;
   read: boolean;
+  userRead: boolean;
+  replies: MessageReply[] | null;
   createdAt: string;
   readAt: string | null;
 }
@@ -180,12 +187,18 @@ export const sendMessage = (content: string) =>
   api.post<Message>('/messages', { content }).then(res => { invalidate('my-messages'); return res.data; });
 export const getMyMessages = () =>
   cached('my-messages', () => api.get<Message[]>('/messages/mine').then(res => res.data));
+export const getUnreadReplyCount = () =>
+  api.get<{ count: number }>('/messages/unread-reply-count').then(res => res.data.count);
+export const markRepliesRead = () =>
+  api.put('/messages/read-replies').then(res => { invalidate('my-messages'); return res; });
 export const getAdminMessages = () =>
   api.get<Message[]>('/admin/messages').then(res => res.data);
 export const getUnreadMessageCount = () =>
   api.get<{ count: number }>('/admin/messages/unread-count').then(res => res.data.count);
 export const markMessageRead = (id: string) =>
   api.put<Message>(`/admin/messages/${id}/read`).then(res => res.data);
+export const replyToMessage = (id: string, content: string) =>
+  api.post<Message>(`/admin/messages/${id}/reply`, { content }).then(res => res.data);
 export const deleteMessage = (id: string) =>
   api.delete(`/admin/messages/${id}`);
 

@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
-import { sendMessage, getMyMessages, invalidate, Message } from '../api';
+import { sendMessage, getMyMessages, markRepliesRead, invalidate, Message } from '../api';
 
 interface MessagePanelProps {
   open: boolean;
   onClose: () => void;
 }
+
+// Tell the navbar envelope badge that replies have been read.
+const notifyRepliesRead = () => window.dispatchEvent(new Event('user-replies-read'));
 
 export default function MessagePanel({ open, onClose }: MessagePanelProps) {
   const [content, setContent] = useState('');
@@ -21,6 +24,8 @@ export default function MessagePanel({ open, onClose }: MessagePanelProps) {
     if (!open) return;
     invalidate('my-messages');
     load();
+    // Opening the panel counts as reading any admin replies.
+    markRepliesRead().then(notifyRepliesRead).catch(() => {});
   }, [open]);
 
   const handleSend = async () => {
@@ -94,6 +99,23 @@ export default function MessagePanel({ open, onClose }: MessagePanelProps) {
                       {m.read ? 'Read' : 'Sent'}
                     </span>
                   </div>
+                  {m.replies && m.replies.length > 0 && (
+                    <div style={{ marginTop: '0.6rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {m.replies.map((r, i) => (
+                        <div key={i} style={{ background: 'var(--bg-input)', borderRadius: '6px', padding: '0.45rem 0.6rem' }}>
+                          <div style={{ fontSize: '0.7rem', color: '#3182ce', fontWeight: 700, marginBottom: '0.2rem' }}>
+                            {'↳'} {r.fromUsername} (admin)
+                          </div>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                            {r.content}
+                          </div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                            {new Date(r.createdAt).toLocaleString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

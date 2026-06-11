@@ -26,7 +26,7 @@ import AdminMessages from './pages/AdminMessages';
 import SettingsPanel from './components/SettingsPanel';
 import NotesPanel from './components/NotesPanel';
 import MessagePanel from './components/MessagePanel';
-import { getUnreadMessageCount } from './api';
+import { getUnreadMessageCount, getUnreadReplyCount } from './api';
 import './App.css';
 
 const PING_URL = 'https://stock-tracker-backend-2.onrender.com/api/auth/me';
@@ -39,6 +39,7 @@ function App() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [messageOpen, setMessageOpen] = useState(false);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const [unreadReplies, setUnreadReplies] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
   });
@@ -58,6 +59,19 @@ function App() {
     return () => {
       clearInterval(id);
       window.removeEventListener('admin-messages-updated', refresh);
+    };
+  }, [isAdmin]);
+
+  // Non-admin: badge the envelope when the admin has replied.
+  useEffect(() => {
+    if (isAdmin) return;
+    const refresh = () => getUnreadReplyCount().then(setUnreadReplies).catch(() => {});
+    refresh();
+    const id = setInterval(refresh, 60_000);
+    window.addEventListener('user-replies-read', refresh);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('user-replies-read', refresh);
     };
   }, [isAdmin]);
 
@@ -125,14 +139,17 @@ function App() {
             <span className="nav-username">{user.username}<span style={{ marginLeft: '0.4rem', fontSize: '0.85rem' }} title={isReadMode ? 'Read Only' : 'Privileged'}>{isReadMode ? '\uD83D\uDC41' : '\u270F\uFE0F'}</span></span>
             {!isAdmin && (
               <>
-                <button
-                  className="btn-settings-gear"
-                  onClick={() => setMessageOpen(true)}
-                  aria-label="Message Admin"
-                  title="Message Admin"
-                >
-                  &#9993;
-                </button>
+                <span style={{ position: 'relative', display: 'inline-flex' }}>
+                  <button
+                    className="btn-settings-gear"
+                    onClick={() => setMessageOpen(true)}
+                    aria-label="Message Admin"
+                    title="Message Admin"
+                  >
+                    &#9993;
+                  </button>
+                  {unreadReplies > 0 && <span className="icon-badge">{unreadReplies}</span>}
+                </span>
                 <button
                   className="btn-settings-gear"
                   onClick={() => setNotesOpen(true)}

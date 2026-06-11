@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAdminMessages, markMessageRead, deleteMessage, Message } from '../api';
+import { getAdminMessages, markMessageRead, deleteMessage, replyToMessage, Message } from '../api';
 
 // Notify the navbar badge that unread counts may have changed.
 const notifyUpdated = () => window.dispatchEvent(new Event('admin-messages-updated'));
@@ -8,6 +8,8 @@ export default function AdminMessages() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [replyText, setReplyText] = useState<Record<string, string>>({});
+  const [replying, setReplying] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -24,6 +26,22 @@ export default function AdminMessages() {
       notifyUpdated();
     } catch (err) {
       console.error('Failed to mark message read', err);
+    }
+  };
+
+  const handleReply = async (id: string) => {
+    const text = (replyText[id] || '').trim();
+    if (text === '' || replying) return;
+    setReplying(id);
+    try {
+      const updated = await replyToMessage(id, text);
+      setMessages(prev => prev.map(x => x.id === id ? updated : x));
+      setReplyText(prev => ({ ...prev, [id]: '' }));
+      notifyUpdated();
+    } catch (err) {
+      console.error('Failed to send reply', err);
+    } finally {
+      setReplying(null);
     }
   };
 
@@ -99,6 +117,44 @@ export default function AdminMessages() {
               </div>
               <div style={{ fontSize: '0.9rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                 {m.content}
+              </div>
+
+              {m.replies && m.replies.length > 0 && (
+                <div style={{ marginTop: '0.7rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {m.replies.map((r, i) => (
+                    <div key={i} style={{ background: 'var(--bg-input)', borderRadius: '6px', padding: '0.45rem 0.6rem', marginLeft: '1rem' }}>
+                      <div style={{ fontSize: '0.7rem', color: '#3182ce', fontWeight: 700, marginBottom: '0.2rem' }}>
+                        {'↳'} {r.fromUsername} (you)
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        {r.content}
+                      </div>
+                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        {new Date(r.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ marginTop: '0.7rem', display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }} onClick={e => e.stopPropagation()}>
+                <textarea
+                  value={replyText[m.id] || ''}
+                  onChange={e => setReplyText(prev => ({ ...prev, [m.id]: e.target.value }))}
+                  placeholder="Write a reply..."
+                  rows={1}
+                  maxLength={2000}
+                  style={{
+                    flex: 1, boxSizing: 'border-box', padding: '0.45rem 0.6rem', borderRadius: '6px',
+                    border: '1px solid var(--border-input)', background: 'var(--bg-input)',
+                    color: 'var(--text-primary)', fontSize: '0.85rem', resize: 'vertical', fontFamily: 'inherit',
+                  }}
+                />
+                <button
+                  onClick={() => handleReply(m.id)}
+                  disabled={(replyText[m.id] || '').trim() === '' || replying === m.id}
+                  style={{ padding: '0.45rem 0.9rem', fontSize: '0.8rem' }}
+                >{replying === m.id ? 'Sending...' : 'Reply'}</button>
               </div>
             </div>
           ))}
