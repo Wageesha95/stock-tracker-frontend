@@ -1581,12 +1581,12 @@ export default function Dashboard() {
             <table className="portfolio-table">
               <thead>
                 <tr>
-                  <th>XD Date</th>
+                  <th><span className="udiv-date-full">XD Date</span><span className="udiv-date-short">XD</span></th>
                   <th>Company</th>
                   <th className="udiv-hide-mobile">Type</th>
-                  <th className="text-right">Amount/Share</th>
-                  <th className="text-right">Shares Held</th>
-                  <th className="text-right">Est. Amount</th>
+                  <th className="text-right"><span className="udiv-date-full">Amount/Share</span><span className="udiv-date-short">Amt/Sh</span></th>
+                  <th className="text-right"><span className="udiv-date-full">Shares Held</span><span className="udiv-date-short">Shares</span></th>
+                  <th className="text-right"><span className="udiv-date-full">Est. Amount</span><span className="udiv-date-short">Est.</span></th>
                   <th className="udiv-hide-mobile">Payment Date</th>
                 </tr>
               </thead>
