@@ -1569,7 +1569,7 @@ export default function Dashboard() {
       )}
 
       {/* Upcoming announced dividends the user could still receive, by XD date */}
-      {!loading && upcomingPayouts.length > 0 && (
+      {activeSection === 'none' && !loading && upcomingPayouts.length > 0 && (
         <>
           <h2 style={{ marginTop: '2.5rem', marginBottom: '1rem' }}>
             {'📅'} Upcoming Announced Dividends
