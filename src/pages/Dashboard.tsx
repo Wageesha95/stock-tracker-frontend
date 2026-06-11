@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, getUserSettings, getAvailableDates, getMarketDataByDate, invalidate } from '../api';
+import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, getUserSettings, getAvailableDates, getMarketDataByDate, getAllDividendPayouts, invalidate } from '../api';
+import type { DividendPayoutData } from '../api';
 import { PortfolioItem, Dividend, RealizedGainItem, Transaction, Company } from '../types';
 import { SELL_COMMISSION_RATE } from '../constants';
 import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const [expandedInterest, setExpandedInterest] = useState<Set<string>>(new Set());
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
+  const [dividendPayouts, setDividendPayouts] = useState<DividendPayoutData[]>([]);
   const [loading, setLoading] = useState(true);
   const [latestTradeDate, setLatestTradeDate] = useState('');
   const [originalLatestDate, setOriginalLatestDate] = useState('');
@@ -49,8 +51,8 @@ export default function Dashboard() {
   };
 
   const loadData = useCallback(() => {
-    return Promise.all([getDashboardAll(), getDividends(), getMarketData(), getTransactions(), getCompanies(), getUserSettings(), getAvailableDates()])
-      .then(([dash, d, md, txns, comps, settings, dates]) => {
+    return Promise.all([getDashboardAll(), getDividends(), getMarketData(), getTransactions(), getCompanies(), getUserSettings(), getAvailableDates(), getAllDividendPayouts().catch(() => [] as DividendPayoutData[])])
+      .then(([dash, d, md, txns, comps, settings, dates, payouts]) => {
         setPortfolio(dash.portfolio);
         setDividends(d);
         setOrigDividends(d);
@@ -60,6 +62,7 @@ export default function Dashboard() {
         setInterestBreakdown(dash.interestBreakdown);
         setTransactions(txns);
         setAllCompanies(comps);
+        setDividendPayouts(payouts);
         setTableColumns(settings.tableColumns || {});
         setAvailableDates(dates);
         if (md.length > 0) {
@@ -268,6 +271,22 @@ export default function Dashboard() {
   const gainSign = (n: number) => (n >= 0 ? '+' : '');
 
   const filtered = portfolio.filter(p => p.sharesHeld > 0);
+
+  // Announced dividends with a future XD date for companies currently held —
+  // these are payouts the user could still receive, ordered by XD date.
+  const upcomingPayouts = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    const sharesByCode: Record<string, number> = {};
+    filtered.forEach(p => { sharesByCode[p.companyCode] = p.sharesHeld; });
+    return dividendPayouts
+      .filter(p => p.exDividendDate >= today && sharesByCode[p.companyCode] > 0)
+      .map(p => ({
+        ...p,
+        sharesHeld: sharesByCode[p.companyCode],
+        estimatedAmount: p.amountPerShare != null ? p.amountPerShare * sharesByCode[p.companyCode] : null,
+      }))
+      .sort((a, b) => a.exDividendDate.localeCompare(b.exDividendDate));
+  }, [dividendPayouts, filtered]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -1546,6 +1565,60 @@ export default function Dashboard() {
               </table>
             </div>
           )}
+        </>
+      )}
+
+      {/* Upcoming announced dividends the user could still receive, by XD date */}
+      {!loading && upcomingPayouts.length > 0 && (
+        <>
+          <h2 style={{ marginTop: '2.5rem', marginBottom: '1rem' }}>
+            {'📅'} Upcoming Announced Dividends
+          </h2>
+          <p style={{ color: 'var(--text-muted)', margin: '-0.5rem 0 1rem', fontSize: '0.85rem' }}>
+            Announced dividends with a future XD date for companies you currently hold.
+          </p>
+          <div className="portfolio-table-wrap">
+            <table className="portfolio-table">
+              <thead>
+                <tr>
+                  <th>XD Date</th>
+                  <th>Company</th>
+                  <th>Type</th>
+                  <th className="text-right">Amount/Share</th>
+                  <th className="text-right">Shares Held</th>
+                  <th className="text-right">Est. Amount</th>
+                  <th>Payment Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {upcomingPayouts.map((p, i) => (
+                  <tr key={`${p.companyCode}-${p.exDividendDate}-${i}`}>
+                    <td className="mono">{p.exDividendDate}</td>
+                    <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${p.companyCode}`)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <CompanyAvatar code={p.companyCode} size={26} />
+                        <span className="company-code">{p.companyCode}</span>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{p.dividendType || p.type || '—'}</td>
+                    <td className="text-right mono">{p.amountPerShare != null ? p.amountPerShare.toFixed(2) : '—'}</td>
+                    <td className="text-right mono">{p.sharesHeld}</td>
+                    <td className="text-right mono">{p.estimatedAmount != null ? fmt(p.estimatedAmount) : '—'}</td>
+                    <td style={{ fontSize: '0.85rem' }}>{p.paymentDate || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="portfolio-total">
+                  <td colSpan={5}>Total ({upcomingPayouts.length} payouts)</td>
+                  <td className="text-right mono">
+                    {fmt(upcomingPayouts.reduce((s, p) => s + (p.estimatedAmount || 0), 0))}
+                  </td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </>
       )}
     </div>
