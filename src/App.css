@@ -2037,3 +2037,12 @@ button:active {
     height: 300px;
   }
 }
+
+/* Upcoming Announced Dividends table — compact on mobile */
+.udiv-date-short { display: none; }
+.udiv-date-full { display: inline; }
+@media (max-width: 700px) {
+  .udiv-hide-mobile { display: none !important; }
+  .udiv-date-full { display: none; }
+  .udiv-date-short { display: inline; }
+}

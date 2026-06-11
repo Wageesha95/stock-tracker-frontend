@@ -1583,28 +1583,31 @@ export default function Dashboard() {
                 <tr>
                   <th>XD Date</th>
                   <th>Company</th>
-                  <th>Type</th>
+                  <th className="udiv-hide-mobile">Type</th>
                   <th className="text-right">Amount/Share</th>
                   <th className="text-right">Shares Held</th>
                   <th className="text-right">Est. Amount</th>
-                  <th>Payment Date</th>
+                  <th className="udiv-hide-mobile">Payment Date</th>
                 </tr>
               </thead>
               <tbody>
                 {upcomingPayouts.map((p, i) => (
                   <tr key={`${p.companyCode}-${p.exDividendDate}-${i}`}>
-                    <td className="mono">{p.exDividendDate}</td>
+                    <td className="mono">
+                      <span className="udiv-date-full">{p.exDividendDate}</span>
+                      <span className="udiv-date-short">{p.exDividendDate.substring(5)}</span>
+                    </td>
                     <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${p.companyCode}`)}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <CompanyAvatar code={p.companyCode} size={26} />
                         <span className="company-code">{p.companyCode}</span>
                       </div>
                     </td>
-                    <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{p.dividendType || p.type || '—'}</td>
+                    <td className="udiv-hide-mobile" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{p.dividendType || p.type || '—'}</td>
                     <td className="text-right mono">{p.amountPerShare != null ? p.amountPerShare.toFixed(2) : '—'}</td>
                     <td className="text-right mono">{p.sharesHeld}</td>
                     <td className="text-right mono">{p.estimatedAmount != null ? fmt(p.estimatedAmount) : '—'}</td>
-                    <td style={{ fontSize: '0.85rem' }}>{p.paymentDate || '—'}</td>
+                    <td className="udiv-hide-mobile" style={{ fontSize: '0.85rem' }}>{p.paymentDate || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1614,7 +1617,7 @@ export default function Dashboard() {
                   <td className="text-right mono">
                     {fmt(upcomingPayouts.reduce((s, p) => s + (p.estimatedAmount || 0), 0))}
                   </td>
-                  <td></td>
+                  <td className="udiv-hide-mobile"></td>
                 </tr>
               </tfoot>
             </table>
