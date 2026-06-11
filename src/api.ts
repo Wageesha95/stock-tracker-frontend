@@ -167,6 +167,28 @@ export const updateTableColumns = (tableColumns: Record<string, string[]>) =>
 export const updateCompanyTtmWeeks = (companyCode: string, weeks: number | null) =>
   api.put<UserSettingsData>(`/settings/company-ttm-weeks/${companyCode}`, { weeks }).then(res => { invalidate('settings'); return res.data; });
 
+// Messages (user → admin)
+export interface Message {
+  id: string;
+  fromUsername: string;
+  content: string;
+  read: boolean;
+  createdAt: string;
+  readAt: string | null;
+}
+export const sendMessage = (content: string) =>
+  api.post<Message>('/messages', { content }).then(res => { invalidate('my-messages'); return res.data; });
+export const getMyMessages = () =>
+  cached('my-messages', () => api.get<Message[]>('/messages/mine').then(res => res.data));
+export const getAdminMessages = () =>
+  api.get<Message[]>('/admin/messages').then(res => res.data);
+export const getUnreadMessageCount = () =>
+  api.get<{ count: number }>('/admin/messages/unread-count').then(res => res.data.count);
+export const markMessageRead = (id: string) =>
+  api.put<Message>(`/admin/messages/${id}/read`).then(res => res.data);
+export const deleteMessage = (id: string) =>
+  api.delete(`/admin/messages/${id}`);
+
 // Dividends
 export const getDividends = () => cached('dividends', () => api.get<Dividend[]>('/dividends').then(res => res.data));
 export const getDividendsByCompany = (code: string) =>

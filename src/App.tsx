@@ -22,8 +22,11 @@ import LoginHistory from './pages/LoginHistory';
 import UpcomingDividends from './pages/UpcomingDividends';
 import MarketDataScraper from './pages/MarketDataScraper';
 import MarketData from './pages/MarketData';
+import AdminMessages from './pages/AdminMessages';
 import SettingsPanel from './components/SettingsPanel';
 import NotesPanel from './components/NotesPanel';
+import MessagePanel from './components/MessagePanel';
+import { getUnreadMessageCount } from './api';
 import './App.css';
 
 const PING_URL = 'https://stock-tracker-backend-2.onrender.com/api/auth/me';
@@ -34,6 +37,8 @@ function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     return (localStorage.getItem('theme') as 'light' | 'dark') || 'dark';
   });
@@ -42,6 +47,19 @@ function App() {
     const id = setInterval(() => { fetch(PING_URL).catch(() => {}); }, PING_INTERVAL);
     return () => clearInterval(id);
   }, []);
+
+  // Admin: keep the unread-message badge fresh (poll + react to inbox actions).
+  useEffect(() => {
+    if (!isAdmin) return;
+    const refresh = () => getUnreadMessageCount().then(setUnreadMessages).catch(() => {});
+    refresh();
+    const id = setInterval(refresh, 60_000);
+    window.addEventListener('admin-messages-updated', refresh);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('admin-messages-updated', refresh);
+    };
+  }, [isAdmin]);
 
   useEffect(() => {
     localStorage.setItem('theme', theme);
@@ -83,6 +101,9 @@ function App() {
                 <NavLink to="/scrape-dividends" onClick={() => setMenuOpen(false)}>Scrape Dividends</NavLink>
                 <NavLink to="/scrape-market-data" onClick={() => setMenuOpen(false)}>Scrape Market Data</NavLink>
                 <NavLink to="/login-history" onClick={() => setMenuOpen(false)}>Login History</NavLink>
+                <NavLink to="/messages" onClick={() => setMenuOpen(false)}>
+                  Messages{unreadMessages > 0 && <span className="nav-badge">{unreadMessages}</span>}
+                </NavLink>
               </>
             ) : (
               <>
@@ -104,6 +125,14 @@ function App() {
             <span className="nav-username">{user.username}<span style={{ marginLeft: '0.4rem', fontSize: '0.85rem' }} title={isReadMode ? 'Read Only' : 'Privileged'}>{isReadMode ? '\uD83D\uDC41' : '\u270F\uFE0F'}</span></span>
             {!isAdmin && (
               <>
+                <button
+                  className="btn-settings-gear"
+                  onClick={() => setMessageOpen(true)}
+                  aria-label="Message Admin"
+                  title="Message Admin"
+                >
+                  &#9993;
+                </button>
                 <button
                   className="btn-settings-gear"
                   onClick={() => setNotesOpen(true)}
@@ -161,11 +190,13 @@ function App() {
             <Route path="/scrape-dividends" element={isAdmin ? <DividendScraper /> : <Navigate to="/" />} />
             <Route path="/scrape-market-data" element={isAdmin ? <MarketDataScraper /> : <Navigate to="/" />} />
             <Route path="/login-history" element={isAdmin ? <LoginHistory /> : <Navigate to="/" />} />
+            <Route path="/messages" element={isAdmin ? <AdminMessages /> : <Navigate to="/" />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
         <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
         <NotesPanel open={notesOpen} onClose={() => setNotesOpen(false)} />
+        <MessagePanel open={messageOpen} onClose={() => setMessageOpen(false)} />
       </div>
     </BrowserRouter>
   );
