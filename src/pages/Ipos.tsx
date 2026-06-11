@@ -81,6 +81,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
   };
 
   const totalCost = (Number(count) || 0) * (Number(price) || 0);
+  const canAdd = companyCode !== '' && date !== '' && count !== '' && price !== '';
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const [rSortKey, setRSortKey] = useState<'date' | 'companyCode' | 'count' | 'price' | 'total'>('date');
@@ -141,7 +142,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
           </div>
           <div className="form-row">
             <span className="total-cost">Total Cost: {totalCost.toFixed(2)}</span>
-            <button type="submit">Add IPO</button>
+            <button type="submit" disabled={!canAdd}>Add IPO</button>
           </div>
         </form>
       </div>

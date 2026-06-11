@@ -63,6 +63,8 @@ export default function ShareSplitsPage({ embedded }: { embedded?: boolean }) {
     loadData();
   };
 
+  const canAdd = companyCode !== '' && date !== '' && fromShares !== '' && toShares !== '';
+
   if (loading) return <p>Loading...</p>;
 
   return (
@@ -101,7 +103,7 @@ export default function ShareSplitsPage({ embedded }: { embedded?: boolean }) {
             </div>
           )}
           <div className="form-row">
-            <button type="submit">Add</button>
+            <button type="submit" disabled={!canAdd}>Add</button>
           </div>
         </form>
       </div>

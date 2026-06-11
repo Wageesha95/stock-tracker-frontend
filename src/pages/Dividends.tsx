@@ -202,6 +202,7 @@ export default function Dividends() {
   const taxAmount = taxable ? grossAmount * 0.15 : 0;
   const calculatedTotal = grossAmount - taxAmount;
   const totalAmount = customTotal !== '' ? Number(customTotal) : calculatedTotal;
+  const canAdd = companyCode !== '' && date !== '' && (type === 'CASH' ? amount !== '' && shares !== '' : scripShares !== '');
 
   const [divSortKey, setDivSortKey] = useState<'date' | 'companyCode' | 'type' | 'amount' | 'shares' | 'total'>('date');
   const [divSortDir, setDivSortDir] = useState<'asc' | 'desc'>('desc');
@@ -433,7 +434,7 @@ export default function Dividends() {
             </div>
           )}
           <div className="form-row">
-            <button type="submit">Add Dividend</button>
+            <button type="submit" disabled={!canAdd}>Add Dividend</button>
           </div>
         </form>
       </div>

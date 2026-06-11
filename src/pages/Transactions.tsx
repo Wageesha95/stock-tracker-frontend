@@ -79,6 +79,7 @@ export default function Transactions() {
   };
 
   const totalCost = (Number(count) || 0) * (Number(price) || 0) + (Number(commission) || 0);
+  const canAdd = companyCode !== '' && date !== '' && count !== '' && price !== '';
 
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<'date' | 'companyCode' | 'type' | 'count' | 'price' | 'commission' | 'total'>('date');
@@ -195,7 +196,7 @@ export default function Transactions() {
           </div>
           <div className="form-row">
             <span className="total-cost">Total Cost: {totalCost.toFixed(2)}</span>
-            <button type="submit">Add Transaction</button>
+            <button type="submit" disabled={!canAdd}>Add Transaction</button>
           </div>
         </form>
       </div>
