@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getAdminStats, getSystemStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser, toggleDividendPayouts, getAllDividendPayouts, createDividendPayout, updateDividendPayout, deleteDividendPayout, DividendPayoutData } from '../api';
+import { getAdminStats, getSystemStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser, toggleDividendPayouts, getAllDividendPayouts, createDividendPayout, updateDividendPayout, deleteDividendPayout, DividendPayoutData, getBrokers, createBroker, deleteBroker, BrokerData } from '../api';
 import ActionMenu from '../components/ActionMenu';
 import ShareSplitsPage from './ShareSplits';
 
@@ -51,11 +51,19 @@ export default function AdminDashboard() {
   const [editPayoutForm, setEditPayoutForm] = useState<PayoutForm>(emptyPayoutForm);
   const [payoutError, setPayoutError] = useState('');
 
+  // Brokers
+  const [brokers, setBrokers] = useState<BrokerData[]>([]);
+  const [newBrokerName, setNewBrokerName] = useState('');
+  const [brokerError, setBrokerError] = useState('');
+
+  const [tab, setTab] = useState<'users' | 'brokers' | 'dividends' | 'splits'>('users');
+
   const loadData = () => {
     Promise.all([
       getAdminStats().then(data => { setTotalUsers(data.totalUsers); setUsers(data.users); }),
       getSystemStats().then(setSysStats),
       getAllDividendPayouts().then(setPayouts).catch(() => setPayouts([])),
+      getBrokers().then(setBrokers).catch(() => setBrokers([])),
     ]).catch(console.error).finally(() => setLoading(false));
   };
 
@@ -199,6 +207,29 @@ export default function AdminDashboard() {
       .sort((a, b) => (b.exDividendDate || '').localeCompare(a.exDividendDate || ''));
   }, [payouts, payoutSearch]);
 
+  // ---- Broker CRUD ----
+  const handleAddBroker = async () => {
+    setBrokerError('');
+    if (!newBrokerName.trim()) { setBrokerError('Broker name is required'); return; }
+    try {
+      await createBroker(newBrokerName.trim());
+      setNewBrokerName('');
+      loadData();
+    } catch (err: any) {
+      setBrokerError(err?.response?.data?.error || 'Failed to add broker');
+    }
+  };
+
+  const handleDeleteBroker = async (b: BrokerData) => {
+    if (!confirm(`Delete broker "${b.name}"? Transactions already tagged with it keep their brokerId.`)) return;
+    try {
+      await deleteBroker(b.id);
+      loadData();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Failed to delete broker');
+    }
+  };
+
   if (loading) return <p>Loading...</p>;
 
   return (
@@ -221,6 +252,14 @@ export default function AdminDashboard() {
         <div className="stat-card"><h3>Latest Market</h3><p className="stat-value" style={{ fontSize: '1.1rem' }}>{sysStats?.latestMarketDate ?? '-'}</p></div>
       </div>
 
+      <div className="segmented-control" style={{ marginTop: '2rem' }}>
+        <button className={tab === 'users' ? 'active' : ''} onClick={() => setTab('users')}>Users</button>
+        <button className={tab === 'brokers' ? 'active' : ''} onClick={() => setTab('brokers')}>Brokers</button>
+        <button className={tab === 'dividends' ? 'active' : ''} onClick={() => setTab('dividends')}>Dividend Records</button>
+        <button className={tab === 'splits' ? 'active' : ''} onClick={() => setTab('splits')}>Share Splits</button>
+      </div>
+
+      {tab === 'users' && (<>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2rem', marginBottom: '1rem' }}>
         <h2 style={{ margin: 0 }}>Users</h2>
         <button onClick={() => setShowCreate(!showCreate)} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>
@@ -294,7 +333,49 @@ export default function AdminDashboard() {
           </tbody>
         </table>
       </div>
+      </>)}
 
+      {tab === 'brokers' && (
+        <div style={{ marginTop: '2rem' }}>
+          <h2 style={{ margin: '0 0 0.5rem' }}>Brokers</h2>
+          <p style={{ color: 'var(--text-muted)', margin: '0 0 1rem', fontSize: '0.85rem' }}>
+            Brokers are shared across all users and are available in PDF upload and the broker data filter.
+          </p>
+          <div className="form-card" style={{ marginBottom: '1.5rem' }}>
+            <div className="form-row" style={{ alignItems: 'flex-end' }}>
+              <label style={{ flex: 1 }}>
+                Broker Name
+                <input type="text" value={newBrokerName} onChange={e => setNewBrokerName(e.target.value)} placeholder="e.g. NDB Securities" onKeyDown={e => { if (e.key === 'Enter') handleAddBroker(); }} />
+              </label>
+              <button onClick={handleAddBroker}>+ Add Broker</button>
+            </div>
+            {brokerError && <div className="error-message" style={{ marginTop: '0.5rem' }}>{brokerError}</div>}
+          </div>
+          {brokers.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }}>No brokers yet.</p>
+          ) : (
+            <div className="portfolio-table-wrap">
+              <table className="portfolio-table">
+                <thead>
+                  <tr><th>Name</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {brokers.map(b => (
+                    <tr key={b.id}>
+                      <td style={{ fontWeight: 600 }}>{b.name}</td>
+                      <td>
+                        <ActionMenu actions={[{ label: 'Delete', onClick: () => handleDeleteBroker(b), danger: true }]} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'dividends' && (<>
       {/* Dividend Payouts (Calendar) */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2.5rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <h2 style={{ margin: 0 }}>Dividend Payouts (Calendar)</h2>
@@ -368,7 +449,9 @@ export default function AdminDashboard() {
       )}
 
 
-      {/* Share Splits / Merges */}
+      </>)}
+
+      {tab === 'splits' && (
       <div style={{ marginTop: '2.5rem' }}>
         <h2 style={{ margin: '0 0 0.5rem' }}>Share Splits / Merges</h2>
         <p style={{ color: 'var(--text-muted)', margin: '0 0 1rem', fontSize: '0.85rem' }}>
@@ -376,6 +459,7 @@ export default function AdminDashboard() {
         </p>
         <ShareSplitsPage embedded />
       </div>
+      )}
 
       {/* Edit Modal */}
       {editUser && (

@@ -213,12 +213,18 @@ export default function Dividends() {
         totalAmount,
         taxed: type === 'CASH' ? taxable : undefined,
       });
+      // Clear the whole Add Dividend card after a successful add.
+      setCompanyCode('');
       setXdDate('');
       setDate('');
+      setType('CASH');
       setAmount('');
       setShares('');
       setScripShares('');
+      setTaxable(true);
       setCustomTotal('');
+      setSelectedPayout(null);
+      setCompanyPayouts([]);
       loadData();
     } catch (err) {
       console.error('Failed to create dividend', err);

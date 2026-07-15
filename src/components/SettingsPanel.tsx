@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { getBrokers, getUserSettings, updateSelectedBrokers, updateTableColumns, clearAllCache, BrokerData } from '../api';
+import { getBrokers, getUserSettings, updateSelectedBrokers, updateSelectedDataBrokers, updateTableColumns, clearAllCache, BrokerData } from '../api';
+import { NO_BROKER } from '../utils/brokers';
 
 interface SettingsPanelProps {
   open: boolean;
@@ -156,6 +157,7 @@ function MultiSelectDropdown({ label, options, selected, onChange }: {
 export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [brokers, setBrokers] = useState<BrokerData[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [dataBrokerIds, setDataBrokerIds] = useState<string[]>([]);
   const [tableColumns, setTableColumns] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -169,6 +171,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       .then(([b, s]) => {
         setBrokers(b);
         setSelectedIds(s.selectedBrokerIds || []);
+        setDataBrokerIds(s.selectedDataBrokerIds || []);
         setTableColumns(s.tableColumns || {});
       })
       .catch(console.error)
@@ -185,6 +188,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     setSaving(true);
     try {
       await updateSelectedBrokers(selectedIds);
+      await updateSelectedDataBrokers(dataBrokerIds);
       await updateTableColumns(tableColumns);
       clearAllCache();
       onClose();
@@ -255,6 +259,37 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+
+            <div className="settings-section">
+              <h3>Filter Data by Broker</h3>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 0.75rem' }}>
+                Limit the Dashboard and Transactions to specific brokers. Leave all unchecked to show everything.
+              </p>
+              {brokers.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)' }}>No brokers configured yet.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                  {brokers.map(b => (
+                    <label key={b.id} className="multi-select-option" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={dataBrokerIds.includes(b.id)}
+                        onChange={() => setDataBrokerIds(prev => prev.includes(b.id) ? prev.filter(x => x !== b.id) : [...prev, b.id])}
+                      />
+                      <span>{b.name}</span>
+                    </label>
+                  ))}
+                  <label className="multi-select-option" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={dataBrokerIds.includes(NO_BROKER)}
+                      onChange={() => setDataBrokerIds(prev => prev.includes(NO_BROKER) ? prev.filter(x => x !== NO_BROKER) : [...prev, NO_BROKER])}
+                    />
+                    <span>No broker (manual entries)</span>
+                  </label>
                 </div>
               )}
             </div>

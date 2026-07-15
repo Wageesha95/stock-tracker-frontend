@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getTransactions, getCompanies, getMarketData, createTransaction, deleteTransaction } from '../api';
+import { getTransactions, getCompanies, getMarketData, getUserSettings, createTransaction, deleteTransaction } from '../api';
 import { Transaction, Company, MarketData } from '../types';
+import { filterTxByBroker } from '../utils/brokers';
 import { SELL_COMMISSION_PCT } from '../constants';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
@@ -26,9 +27,9 @@ export default function Transactions() {
   const [viewMode, setViewMode] = useState<'list' | 'group' | 'date'>('list');
 
   const loadData = () => {
-    Promise.all([getTransactions(), getCompanies(), getMarketData()])
-      .then(([txns, comps, md]) => {
-        setTransactions(txns);
+    Promise.all([getTransactions(), getCompanies(), getMarketData(), getUserSettings()])
+      .then(([txns, comps, md, settings]) => {
+        setTransactions(filterTxByBroker(txns, settings.selectedDataBrokerIds || []));
         setCompanies(comps);
         const map: Record<string, MarketData> = {};
         md.forEach(m => {

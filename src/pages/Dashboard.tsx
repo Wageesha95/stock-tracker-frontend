@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, getUserSettings, getAvailableDates, getMarketDataByDate, getAllDividendPayouts, getShareSplits, ShareSplitData, invalidate } from '../api';
 import { sharesHeldAtDate } from '../utils/splits';
+import { filterTxByBroker } from '../utils/brokers';
 import type { DividendPayoutData } from '../api';
 import { PortfolioItem, Dividend, RealizedGainItem, Transaction, Company } from '../types';
 import { SELL_COMMISSION_RATE } from '../constants';
@@ -53,28 +54,33 @@ export default function Dashboard() {
   };
 
   const loadData = useCallback(() => {
-    return Promise.all([getDashboardAll(), getDividends(), getMarketData(), getTransactions(), getCompanies(), getUserSettings(), getAvailableDates(), getAllDividendPayouts().catch(() => [] as DividendPayoutData[]), getShareSplits()])
-      .then(([dash, d, md, txns, comps, settings, dates, payouts, splits]) => {
-        setPortfolio(dash.portfolio);
-        setDividends(d);
-        setOrigDividends(d);
-        setRealizedItems(dash.realizedItems);
-        setOrigRealizedItems(dash.realizedItems);
-        setOpportunityCost(dash.opportunityCost);
-        setInterestBreakdown(dash.interestBreakdown);
-        setTransactions(txns);
-        setShareSplits(splits);
-        setAllCompanies(comps);
-        setDividendPayouts(payouts);
-        setTableColumns(settings.tableColumns || {});
-        setAvailableDates(dates);
-        if (md.length > 0) {
-          const latest = md.reduce((a, b) => a.tradeDate > b.tradeDate ? a : b);
-          setLatestTradeDate(latest.tradeDate);
-          setOriginalLatestDate(latest.tradeDate);
-        }
-      })
-      .catch(console.error);
+    // Settings first so we know the broker filter before requesting the dashboard.
+    return getUserSettings().then(settings => {
+      const dataBrokers = settings.selectedDataBrokerIds || [];
+      return Promise.all([getDashboardAll(dataBrokers), getDividends(), getMarketData(), getTransactions(), getCompanies(), getAvailableDates(), getAllDividendPayouts().catch(() => [] as DividendPayoutData[]), getShareSplits()])
+        .then(([dash, d, md, txns, comps, dates, payouts, splits]) => {
+          setPortfolio(dash.portfolio);
+          setDividends(d);
+          setOrigDividends(d);
+          setRealizedItems(dash.realizedItems);
+          setOrigRealizedItems(dash.realizedItems);
+          setOpportunityCost(dash.opportunityCost);
+          setInterestBreakdown(dash.interestBreakdown);
+          // Client-side timeline uses raw transactions — apply the same broker filter
+          // the backend applied to the computed dashboard so both stay consistent.
+          setTransactions(filterTxByBroker(txns, dataBrokers));
+          setShareSplits(splits);
+          setAllCompanies(comps);
+          setDividendPayouts(payouts);
+          setTableColumns(settings.tableColumns || {});
+          setAvailableDates(dates);
+          if (md.length > 0) {
+            const latest = md.reduce((a, b) => a.tradeDate > b.tradeDate ? a : b);
+            setLatestTradeDate(latest.tradeDate);
+            setOriginalLatestDate(latest.tradeDate);
+          }
+        });
+    }).catch(console.error);
   }, []);
 
   useEffect(() => {

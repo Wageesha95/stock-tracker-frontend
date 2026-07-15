@@ -156,12 +156,15 @@ export interface UserSettingsData {
   id?: string;
   userId?: string;
   selectedBrokerIds: string[];
+  selectedDataBrokerIds?: string[];
   tableColumns: Record<string, string[]>;
   companyTtmWeeks?: Record<string, number>;
 }
 export const getUserSettings = () => cached('settings', () => api.get<UserSettingsData>('/settings').then(res => res.data));
 export const updateSelectedBrokers = (selectedBrokerIds: string[]) =>
   api.put<UserSettingsData>('/settings/brokers', { selectedBrokerIds }).then(res => { invalidate('settings'); return res.data; });
+export const updateSelectedDataBrokers = (selectedDataBrokerIds: string[]) =>
+  api.put<UserSettingsData>('/settings/data-brokers', { selectedDataBrokerIds }).then(res => { invalidate('settings', 'dashboard-all'); return res.data; });
 export const updateTableColumns = (tableColumns: Record<string, string[]>) =>
   api.put<UserSettingsData>('/settings/table-columns', tableColumns).then(res => { invalidate('settings'); return res.data; });
 export const updateCompanyTtmWeeks = (companyCode: string, weeks: number | null) =>
@@ -436,14 +439,23 @@ export const deleteMarketDataRange = (from?: string, to?: string) => {
   return api.delete<{ deletedCount: number; range: string }>(`/market-data/range?${params}`).then(res => { invalidate('market'); return res.data; });
 };
 
-export const getDashboardAll = () => cached('dashboard-all', () => api.get<{
-  portfolio: PortfolioItem[];
-  realizedItems: RealizedGainItem[];
-  opportunityCost: number;
-  interestBreakdown: InterestBreakdownItem[];
-  bankInterestRate: number;
-  sectors: { sector: string; companies: { companyCode: string; companyName: string; sharesHeld: number; currentValue: number; totalInvested: number; unrealizedGain: number; unrealizedGainPercent: number; unrealizedDayGain: number; changePercent: number }[]; currentValue: number; totalInvested: number; unrealizedGain: number; unrealizedDayGain: number; companyCount: number }[];
-}>('/dashboard/all').then(res => res.data));
+// Optional broker data filter: pass the selected broker ids (may include "__none__"
+// for manual/no-broker trades). Empty/omitted returns the unfiltered dashboard.
+// Filtered results are cached under a broker-specific key so unfiltered callers
+// (e.g. CompanyView) keep the plain 'dashboard-all' entry.
+export const getDashboardAll = (brokers?: string[]) => {
+  const active = brokers && brokers.length > 0;
+  const query = active ? `?brokers=${brokers.map(encodeURIComponent).join(',')}` : '';
+  const key = active ? `dashboard-all:${[...brokers].sort().join(',')}` : 'dashboard-all';
+  return cached(key, () => api.get<{
+    portfolio: PortfolioItem[];
+    realizedItems: RealizedGainItem[];
+    opportunityCost: number;
+    interestBreakdown: InterestBreakdownItem[];
+    bankInterestRate: number;
+    sectors: { sector: string; companies: { companyCode: string; companyName: string; sharesHeld: number; currentValue: number; totalInvested: number; unrealizedGain: number; unrealizedGainPercent: number; unrealizedDayGain: number; changePercent: number }[]; currentValue: number; totalInvested: number; unrealizedGain: number; unrealizedDayGain: number; companyCount: number }[];
+  }>(`/dashboard/all${query}`).then(res => res.data));
+};
 
 // Rights
 export interface RightsData {

@@ -36,6 +36,7 @@ export interface Transaction {
   count: number;
   price: number;
   commission: number;
+  brokerId?: string | null;
   createdAt: string;
 }
 
