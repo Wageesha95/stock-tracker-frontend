@@ -295,12 +295,12 @@ export default function Dividends() {
                 <tr>
                   <th>XD Date</th>
                   <th>Company</th>
-                  <th>Type</th>
+                  <th className="hide-sm">Type</th>
                   <th className="text-right">Amount/Share</th>
                   <th className="text-right">Shares Held</th>
                   <th className="text-right">Est. Gross</th>
                   <th className="text-right">Est. Net (−15%)</th>
-                  <th>Payment Date</th>
+                  <th className="hide-sm">Payment Date</th>
                   {!isReadMode && <th></th>}
                 </tr>
               </thead>
@@ -318,12 +318,12 @@ export default function Dividends() {
                           {payout.companyCode}
                         </div>
                       </td>
-                      <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{payout.dividendType || '—'}</td>
+                      <td className="hide-sm" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{payout.dividendType || '—'}</td>
                       <td className="text-right mono">{aps != null ? aps.toFixed(2) : '—'}</td>
                       <td className="text-right mono">{sharesHeld}</td>
                       <td className="text-right mono">{estGross != null ? estGross.toFixed(2) : '—'}</td>
                       <td className="text-right mono">{estNet != null ? estNet.toFixed(2) : '—'}</td>
-                      <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{payout.paymentDate || '—'}</td>
+                      <td className="hide-sm" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{payout.paymentDate || '—'}</td>
                       {!isReadMode && (
                         <td>
                           <button

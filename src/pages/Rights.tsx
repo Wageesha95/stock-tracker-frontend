@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getRights, createRights, updateRights, deleteRights, getCompanies, RightsData } from '../api';
-import { Company } from '../types';
+import { getRights, createRights, updateRights, deleteRights, getCompanies, getDashboardAll, RightsData } from '../api';
+import { Company, PortfolioItem } from '../types';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -12,13 +12,18 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
   const { isReadMode } = useAuth();
   const [rights, setRights] = useState<RightsData[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [purchasedRights, setPurchasedRights] = useState<PortfolioItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [companyCode, setCompanyCode] = useState('');
   const [date, setDate] = useState('');
   const [count, setCount] = useState('');
   const [price, setPrice] = useState('');
+  // Per-share cost already paid to buy the right (from a ".R" holding); 0 for a
+  // plain manual rights entry. The recorded price/share = purchasedCost + premium.
+  const [purchasedCost, setPurchasedCost] = useState(0);
   const [search, setSearch] = useState('');
+  const formRef = useRef<HTMLDivElement>(null);
 
   // Edit modal
   const [editItem, setEditItem] = useState<RightsData | null>(null);
@@ -27,13 +32,30 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
   const [editPrice, setEditPrice] = useState('');
 
   const loadData = () => {
-    Promise.all([getRights(), getCompanies()])
-      .then(([r, comps]) => {
+    Promise.all([getRights(), getCompanies(), getDashboardAll()])
+      .then(([r, comps, dash]) => {
         setRights(r);
         setCompanies(comps);
+        // Purchased rights: holdings recorded under a ".R" code (vs the ".N" shares).
+        setPurchasedRights(
+          dash.portfolio
+            .filter((p: PortfolioItem) => p.companyCode.includes('.R') && p.sharesHeld > 0)
+            .sort((a: PortfolioItem, b: PortfolioItem) => a.companyCode.localeCompare(b.companyCode))
+        );
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+  };
+
+  // Load a purchased right into the Add Rights card: base company (.R -> .N),
+  // shares held, and the average price paid for the rights.
+  const fillFromPurchased = (p: PortfolioItem) => {
+    setCompanyCode(p.companyCode.replace('.R', '.N'));
+    setCount(String(p.sharesHeld));
+    setPurchasedCost(p.avgBuyPrice || 0);
+    setPrice(''); // user enters the rights-issue price (premium) to add on top
+    setDate(new Date().toLocaleDateString('en-CA'));
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   useEffect(() => { loadData(); }, []);
@@ -45,11 +67,14 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
         companyCode,
         date,
         count: Number(count),
-        price: Number(price),
+        // Total per-share cost = what was paid for the right + the rights-issue premium.
+        price: purchasedCost + (Number(price) || 0),
       });
+      setCompanyCode('');
       setDate('');
       setCount('');
       setPrice('');
+      setPurchasedCost(0);
       loadData();
     } catch (err) {
       console.error('Failed to create rights', err);
@@ -80,7 +105,8 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
     loadData();
   };
 
-  const totalCost = (Number(count) || 0) * (Number(price) || 0);
+  const perShareCost = purchasedCost + (Number(price) || 0);
+  const totalCost = (Number(count) || 0) * perShareCost;
   const canAdd = companyCode !== '' && date !== '' && count !== '' && price !== '';
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -114,14 +140,63 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
     <div>
       {!embedded && <h1>Rights Issues ({sorted.length})</h1>}
 
+      {purchasedRights.length > 0 && (
+        <div className="form-card">
+          <h2>Purchased Rights ({purchasedRights.length})</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
+            Holdings recorded under a ".R" code. Add them as a rights issue for the underlying ".N" shares.
+          </p>
+          <div className="portfolio-table-wrap">
+            <table className="portfolio-table">
+              <thead>
+                <tr>
+                  <th>Rights Code</th>
+                  <th className="hide-sm">For</th>
+                  <th className="text-right">Shares</th>
+                  <th className="text-right">Avg Price</th>
+                  <th className="text-right">Value</th>
+                  {!isReadMode && <th></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {purchasedRights.map(p => (
+                  <tr key={p.companyCode}>
+                    <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${p.companyCode}`)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <CompanyAvatar code={p.companyCode} size={26} />
+                        {p.companyCode}
+                      </div>
+                    </td>
+                    <td className="mono hide-sm" style={{ color: 'var(--text-muted)' }}>{p.companyCode.replace('.R', '.N')}</td>
+                    <td className="text-right mono">{p.sharesHeld}</td>
+                    <td className="text-right mono">{fmt(p.avgBuyPrice || 0)}</td>
+                    <td className="text-right mono">{fmt(p.sharesHeld * (p.avgBuyPrice || 0))}</td>
+                    {!isReadMode && (
+                      <td>
+                        <button
+                          onClick={() => fillFromPurchased(p)}
+                          style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: 'none', background: '#3182ce', color: 'white', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          + Add
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {!isReadMode && (
-      <div className="form-card">
+      <div className="form-card" ref={formRef}>
         <h2>Add Rights Issue</h2>
         <form onSubmit={handleSubmit}>
           <div className="form-row">
             <label>
               Company
-              <CompanySearchSelect companies={companies} value={companyCode} onChange={setCompanyCode} />
+              <CompanySearchSelect companies={companies} value={companyCode} onChange={c => { setCompanyCode(c); setPurchasedCost(0); }} />
             </label>
           </div>
           <div className="form-row">
@@ -136,10 +211,15 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
               <input type="number" min="1" value={count} onChange={e => setCount(e.target.value)} required />
             </label>
             <label>
-              Price per Share
+              {purchasedCost > 0 ? 'Rights Issue Price (premium)' : 'Price per Share'}
               <input type="number" step="0.01" min="0" value={price} onChange={e => setPrice(e.target.value)} required />
             </label>
           </div>
+          {purchasedCost > 0 && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+              Purchased cost/share {fmt(purchasedCost)} + premium {fmt(Number(price) || 0)} = <strong style={{ color: 'var(--text-primary)' }}>{fmt(perShareCost)}</strong> per share
+            </div>
+          )}
           <div className="form-row">
             <span className="total-cost">Total Cost: {totalCost.toFixed(2)}</span>
             <button type="submit" disabled={!canAdd}>Add Rights</button>

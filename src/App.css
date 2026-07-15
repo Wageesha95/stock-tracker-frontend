@@ -2089,4 +2089,23 @@ button:disabled {
   .udiv-hide-mobile { display: none !important; }
   .udiv-date-full { display: none; }
   .udiv-date-short { display: inline; }
+
+  /* Generic: hide low-priority table columns on small screens */
+  .hide-sm { display: none !important; }
+
+  /* Average Calculator: stack the holding summary and lay stats out in a grid */
+  .calc-holding {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+  }
+  .calc-holding-stats {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.5rem;
+    width: 100%;
+  }
+  .calc-holding-stats > div {
+    padding: 0.25rem !important;
+  }
 }

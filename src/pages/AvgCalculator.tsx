@@ -179,7 +179,7 @@ export default function AvgCalculator() {
         </div>
 
         {current && (
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem', padding: '0.75rem', background: 'var(--bg-thead)', borderRadius: '8px', alignItems: 'center' }}>
+          <div className="calc-holding" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem', padding: '0.75rem', background: 'var(--bg-thead)', borderRadius: '8px', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
               <CompanyAvatar code={selectedCode} size={36} />
               <div style={{ minWidth: 0 }}>
@@ -187,7 +187,7 @@ export default function AvgCalculator() {
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{companies.find(c => c.code === selectedCode)?.name}</div>
               </div>
             </div>
-            <div style={{ display: 'flex', flex: 1, justifyContent: 'space-evenly' }}>
+            <div className="calc-holding-stats" style={{ display: 'flex', flex: 1, justifyContent: 'space-evenly' }}>
               <div style={{ textAlign: 'center', padding: '0.25rem 0.75rem' }}>
                 <div style={{ fontSize: '0.6rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.15rem' }}>Shares</div>
                 <div style={{ fontWeight: 700, fontSize: '1rem' }}>{currentShares}</div>
