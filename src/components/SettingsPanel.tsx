@@ -163,6 +163,8 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [saving, setSaving] = useState(false);
   const [brokerDropdownOpen, setBrokerDropdownOpen] = useState(false);
   const brokerDropdownRef = useRef<HTMLDivElement>(null);
+  const [dataBrokerDropdownOpen, setDataBrokerDropdownOpen] = useState(false);
+  const dataBrokerDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -210,6 +212,17 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [brokerDropdownOpen]);
+
+  useEffect(() => {
+    if (!dataBrokerDropdownOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (dataBrokerDropdownRef.current && !dataBrokerDropdownRef.current.contains(e.target as Node)) {
+        setDataBrokerDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [dataBrokerDropdownOpen]);
 
   if (!open) return null;
 
@@ -271,25 +284,42 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
               {brokers.length === 0 ? (
                 <p style={{ color: 'var(--text-muted)' }}>No brokers configured yet.</p>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                  {brokers.map(b => (
-                    <label key={b.id} className="multi-select-option" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={dataBrokerIds.includes(b.id)}
-                        onChange={() => setDataBrokerIds(prev => prev.includes(b.id) ? prev.filter(x => x !== b.id) : [...prev, b.id])}
-                      />
-                      <span>{b.name}</span>
-                    </label>
-                  ))}
-                  <label className="multi-select-option" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={dataBrokerIds.includes(NO_BROKER)}
-                      onChange={() => setDataBrokerIds(prev => prev.includes(NO_BROKER) ? prev.filter(x => x !== NO_BROKER) : [...prev, NO_BROKER])}
-                    />
-                    <span>No broker (manual entries)</span>
-                  </label>
+                <div className="multi-select-dropdown" ref={dataBrokerDropdownRef}>
+                  <div
+                    className="multi-select-trigger"
+                    onClick={() => setDataBrokerDropdownOpen(o => !o)}
+                  >
+                    {dataBrokerIds.length === 0
+                      ? <span style={{ color: 'var(--text-muted)' }}>All brokers</span>
+                      : <span>{[
+                          ...brokers.filter(b => dataBrokerIds.includes(b.id)).map(b => b.name),
+                          ...(dataBrokerIds.includes(NO_BROKER) ? ['No broker'] : []),
+                        ].join(', ')}</span>
+                    }
+                    <span style={{ marginLeft: 'auto', fontSize: '0.7rem' }}>{dataBrokerDropdownOpen ? '▲' : '▼'}</span>
+                  </div>
+                  {dataBrokerDropdownOpen && (
+                    <div className="multi-select-options">
+                      {brokers.map(b => (
+                        <label key={b.id} className="multi-select-option">
+                          <input
+                            type="checkbox"
+                            checked={dataBrokerIds.includes(b.id)}
+                            onChange={() => setDataBrokerIds(prev => prev.includes(b.id) ? prev.filter(x => x !== b.id) : [...prev, b.id])}
+                          />
+                          <span>{b.name}</span>
+                        </label>
+                      ))}
+                      <label className="multi-select-option">
+                        <input
+                          type="checkbox"
+                          checked={dataBrokerIds.includes(NO_BROKER)}
+                          onChange={() => setDataBrokerIds(prev => prev.includes(NO_BROKER) ? prev.filter(x => x !== NO_BROKER) : [...prev, NO_BROKER])}
+                        />
+                        <span>No broker (manual entries)</span>
+                      </label>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
