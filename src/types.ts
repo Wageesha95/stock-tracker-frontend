@@ -37,6 +37,7 @@ export interface Transaction {
   price: number;
   commission: number;
   brokerId?: string | null;
+  disabled?: boolean;
   createdAt: string;
 }
 

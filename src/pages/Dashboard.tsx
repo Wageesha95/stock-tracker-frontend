@@ -67,8 +67,8 @@ export default function Dashboard() {
           setOpportunityCost(dash.opportunityCost);
           setInterestBreakdown(dash.interestBreakdown);
           // Client-side timeline uses raw transactions — apply the same broker filter
-          // the backend applied to the computed dashboard so both stay consistent.
-          setTransactions(filterTxByBroker(txns, dataBrokers));
+          // (and exclude disabled) the backend applied to the computed dashboard.
+          setTransactions(filterTxByBroker(txns.filter(t => !t.disabled), dataBrokers));
           setShareSplits(splits);
           setAllCompanies(comps);
           setDividendPayouts(payouts);

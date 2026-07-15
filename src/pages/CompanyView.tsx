@@ -141,7 +141,8 @@ export default function CompanyView() {
       setTtmWeeksInput(weeks ? String(weeks) : '');
     }).catch(console.error);
     const transactionsP = getTransactionsByCompany(code).then(txns => {
-      setTransactions(txns.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      // Disabled (e.g. converted ".R") transactions are excluded from all calculations.
+      setTransactions(txns.filter(t => !t.disabled).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     });
     const dividendsP = getDividendsByCompany(code).then(divs => {
       setDividends(divs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));

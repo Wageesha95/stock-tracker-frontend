@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getAdminStats, getSystemStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser, toggleDividendPayouts, getAllDividendPayouts, createDividendPayout, updateDividendPayout, deleteDividendPayout, DividendPayoutData, getBrokers, createBroker, deleteBroker, BrokerData } from '../api';
+import { getAdminStats, getSystemStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser, toggleDividendPayouts, getAllDividendPayouts, createDividendPayout, updateDividendPayout, deleteDividendPayout, DividendPayoutData, getBrokers, createBroker, deleteBroker, BrokerData, getRightsRecords, setRightsRecordDisabled, RightsRecord } from '../api';
 import ActionMenu from '../components/ActionMenu';
 import ShareSplitsPage from './ShareSplits';
 
@@ -56,7 +56,9 @@ export default function AdminDashboard() {
   const [newBrokerName, setNewBrokerName] = useState('');
   const [brokerError, setBrokerError] = useState('');
 
-  const [tab, setTab] = useState<'users' | 'brokers' | 'dividends' | 'splits'>('users');
+  const [rightsRecords, setRightsRecords] = useState<RightsRecord[]>([]);
+
+  const [tab, setTab] = useState<'users' | 'brokers' | 'dividends' | 'splits' | 'rights'>('users');
 
   const loadData = () => {
     Promise.all([
@@ -64,6 +66,7 @@ export default function AdminDashboard() {
       getSystemStats().then(setSysStats),
       getAllDividendPayouts().then(setPayouts).catch(() => setPayouts([])),
       getBrokers().then(setBrokers).catch(() => setBrokers([])),
+      getRightsRecords().then(setRightsRecords).catch(() => setRightsRecords([])),
     ]).catch(console.error).finally(() => setLoading(false));
   };
 
@@ -230,6 +233,15 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleToggleRights = async (r: RightsRecord, value: boolean) => {
+    try {
+      await setRightsRecordDisabled(r.userId, r.companyCode, value);
+      loadData();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Failed to update rights record');
+    }
+  };
+
   if (loading) return <p>Loading...</p>;
 
   return (
@@ -257,6 +269,7 @@ export default function AdminDashboard() {
         <button className={tab === 'brokers' ? 'active' : ''} onClick={() => setTab('brokers')}>Brokers</button>
         <button className={tab === 'dividends' ? 'active' : ''} onClick={() => setTab('dividends')}>Dividend Records</button>
         <button className={tab === 'splits' ? 'active' : ''} onClick={() => setTab('splits')}>Share Splits</button>
+        <button className={tab === 'rights' ? 'active' : ''} onClick={() => setTab('rights')}>Rights (.R)</button>
       </div>
 
       {tab === 'users' && (<>
@@ -459,6 +472,66 @@ export default function AdminDashboard() {
         </p>
         <ShareSplitsPage embedded />
       </div>
+      )}
+
+      {tab === 'rights' && (
+        <div style={{ marginTop: '2rem' }}>
+          <h2 style={{ margin: '0 0 0.5rem' }}>Rights (.R) Records</h2>
+          <p style={{ color: 'var(--text-muted)', margin: '0 0 1rem', fontSize: '0.85rem' }}>
+            Purchased rights holdings (".R" codes) per user. Disabled records are excluded from that user's calculations.
+          </p>
+          {rightsRecords.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }}>No .R records.</p>
+          ) : (
+            <div className="portfolio-table-wrap">
+              <table className="portfolio-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Rights Code</th>
+                    <th className="text-right">Shares</th>
+                    <th className="text-right hide-sm">Txns</th>
+                    <th>Status</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rightsRecords.map(r => (
+                    <tr key={`${r.userId}|${r.companyCode}`} style={r.disabled ? { opacity: 0.55 } : undefined}>
+                      <td style={{ fontWeight: 600 }}>{r.userId}</td>
+                      <td className="mono">{r.companyCode}</td>
+                      <td className="text-right mono">{r.shares}</td>
+                      <td className="text-right mono hide-sm">{r.txCount}</td>
+                      <td>
+                        <span className="gain-pill" style={r.disabled ? { fontSize: '0.65rem', background: '#e2e8f0', color: '#4a5568' } : { fontSize: '0.65rem', background: '#c6f6d5', color: '#22543d' }}>
+                          {r.disabled ? 'Disabled' : 'Active'}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => handleToggleRights(r, true)}
+                            disabled={r.disabled}
+                            style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: '1.5px solid var(--border-input)', background: 'transparent', color: 'var(--text-primary)', cursor: r.disabled ? 'default' : 'pointer', fontWeight: 600, opacity: r.disabled ? 0.5 : 1 }}
+                          >
+                            Disable
+                          </button>
+                          <button
+                            onClick={() => handleToggleRights(r, false)}
+                            disabled={!r.disabled}
+                            style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: 'none', background: '#3182ce', color: 'white', cursor: !r.disabled ? 'default' : 'pointer', fontWeight: 600, opacity: !r.disabled ? 0.5 : 1 }}
+                          >
+                            Enable
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Edit Modal */}

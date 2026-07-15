@@ -113,6 +113,13 @@ export const createTransaction = (data: Omit<Transaction, 'id' | 'createdAt'>) =
   api.post<Transaction>('/transactions', data).then(res => { invalidate('transactions', 'portfolio', 'realized', 'summary'); return res.data; });
 export const deleteTransaction = (id: string) =>
   api.delete(`/transactions/${id}`).then(res => { invalidate('transactions', 'portfolio', 'realized', 'summary'); return res; });
+// Enable/disable all of the current user's transactions under a company code
+// (e.g. retire a ".R" rights holding once converted to shares).
+export const setTransactionsDisabledByCompany = (code: string, value: boolean) =>
+  api.put(`/transactions/company/${code}/disabled?value=${value}`).then(res => {
+    invalidate('transactions', 'portfolio', 'realized', 'summary', 'dashboard-all');
+    return res.data;
+  });
 
 // PDF Upload
 export const previewPdf = (file: File) => {
@@ -319,6 +326,20 @@ export const unlockUser = (id: string) =>
   api.put(`/admin/users/${id}/unlock`).then(res => { invalidate('admin-stats'); return res.data; });
 export const toggleDividendPayouts = (id: string) =>
   api.put(`/admin/users/${id}/dividend-payouts`).then(res => { invalidate('admin-stats'); return res.data; });
+
+// Admin: per-user ".R" rights records with enable/disable
+export interface RightsRecord {
+  userId: string;
+  companyCode: string;
+  shares: number;
+  disabled: boolean;
+  txCount: number;
+}
+export const getRightsRecords = () =>
+  cached('rights-records', () => api.get<RightsRecord[]>('/admin/rights-records').then(res => res.data));
+export const setRightsRecordDisabled = (userId: string, code: string, value: boolean) =>
+  api.put(`/admin/rights-records/disabled?userId=${encodeURIComponent(userId)}&code=${encodeURIComponent(code)}&value=${value}`)
+    .then(res => { invalidate('rights-records', 'dashboard-all', 'transactions', 'portfolio'); return res.data; });
 
 export interface LoginHistoryItem {
   id: string;
