@@ -355,6 +355,23 @@ export const getAllDividendPayouts = () =>
 export const getDividendPayouts = (companyCode: string) =>
   api.get<DividendPayoutData[]>(`/dividend-payouts/company/${companyCode}`).then(res => res.data);
 
+export interface DividendPayoutInput {
+  companyCode: string;
+  exDividendDate: string;
+  amountPerShare: number | null;
+  paymentDate: string | null;
+  announcementDate: string | null;
+  dividendType: string | null;
+  priceOnXdDate?: number | null;
+  priceOnAnnouncementDate?: number | null;
+}
+export const createDividendPayout = (data: DividendPayoutInput) =>
+  api.post<DividendPayoutData>('/admin/dividend-payouts', data).then(res => { invalidate('dividend-payouts', 'upcoming-dividends'); return res.data; });
+export const updateDividendPayout = (id: string, data: DividendPayoutInput) =>
+  api.put<DividendPayoutData>(`/admin/dividend-payouts/${id}`, data).then(res => { invalidate('dividend-payouts', 'upcoming-dividends'); return res.data; });
+export const deleteDividendPayout = (id: string) =>
+  api.delete(`/admin/dividend-payouts/${id}`).then(res => { invalidate('dividend-payouts', 'upcoming-dividends'); return res.data; });
+
 export interface UpcomingDividendItem {
   companyCode: string;
   yearsAppeared: number;

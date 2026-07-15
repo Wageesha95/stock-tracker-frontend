@@ -44,3 +44,30 @@ export const adjustedPrice = (t: Transaction, splits: ShareSplitData[]): number 
 // shares(current)×price series does not jump at a split.
 export const adjustedHistPrice = (price: number, dateStr: string, splits: ShareSplitData[]): number =>
   price / splitFactorAfter(dateStr, splits);
+
+// Shares held strictly before `asOfDate`, expressed in the split basis in effect ON
+// that date (i.e. the historical count you actually held then — e.g. shares at a
+// dividend's XD date). For each transaction, splits dated strictly after it and
+// strictly before `asOfDate` are applied (they had already taken effect by then);
+// splits on/after `asOfDate` are not (they hadn't happened yet). Every type except
+// SELL adds shares (BUY/RIGHTS/SCRIP_DIVIDEND/IPO); SELL removes. Rounded per-split
+// to match adjustedCount and the backend.
+export const sharesHeldAtDate = (
+  transactions: Transaction[],
+  splits: ShareSplitData[],
+  asOfDate: string,
+): number => {
+  const ordered = [...splits].sort((a, b) => a.date.localeCompare(b.date));
+  let held = 0;
+  for (const t of transactions) {
+    if (t.date >= asOfDate) continue;
+    let count = t.count;
+    for (const s of ordered) {
+      if (s.date > t.date && s.date < asOfDate) {
+        count = Math.round((count * s.toShares) / s.fromShares);
+      }
+    }
+    held += t.type === 'SELL' ? -count : count;
+  }
+  return held;
+};

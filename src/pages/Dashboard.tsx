@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, getUserSettings, getAvailableDates, getMarketDataByDate, getAllDividendPayouts, invalidate } from '../api';
+import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, getUserSettings, getAvailableDates, getMarketDataByDate, getAllDividendPayouts, getShareSplits, ShareSplitData, invalidate } from '../api';
+import { sharesHeldAtDate } from '../utils/splits';
 import type { DividendPayoutData } from '../api';
 import { PortfolioItem, Dividend, RealizedGainItem, Transaction, Company } from '../types';
 import { SELL_COMMISSION_RATE } from '../constants';
@@ -28,6 +29,7 @@ export default function Dashboard() {
   const [activeSection, setActiveSection] = useState<'none' | 'holdings' | 'invested' | 'realized' | 'realizedProfit' | 'realizedLoss' | 'netRealized' | 'interest' | 'profit' | 'loss' | 'netUnrealized' | 'dayProfit' | 'dayLoss' | 'netDay' | 'cashDiv' | 'scripDiv' | 'adjustedPnl' | 'totalPnl'>('none');
   const [expandedInterest, setExpandedInterest] = useState<Set<string>>(new Set());
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [shareSplits, setShareSplits] = useState<ShareSplitData[]>([]);
   const [allCompanies, setAllCompanies] = useState<Company[]>([]);
   const [dividendPayouts, setDividendPayouts] = useState<DividendPayoutData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,8 +53,8 @@ export default function Dashboard() {
   };
 
   const loadData = useCallback(() => {
-    return Promise.all([getDashboardAll(), getDividends(), getMarketData(), getTransactions(), getCompanies(), getUserSettings(), getAvailableDates(), getAllDividendPayouts().catch(() => [] as DividendPayoutData[])])
-      .then(([dash, d, md, txns, comps, settings, dates, payouts]) => {
+    return Promise.all([getDashboardAll(), getDividends(), getMarketData(), getTransactions(), getCompanies(), getUserSettings(), getAvailableDates(), getAllDividendPayouts().catch(() => [] as DividendPayoutData[]), getShareSplits()])
+      .then(([dash, d, md, txns, comps, settings, dates, payouts, splits]) => {
         setPortfolio(dash.portfolio);
         setDividends(d);
         setOrigDividends(d);
@@ -61,6 +63,7 @@ export default function Dashboard() {
         setOpportunityCost(dash.opportunityCost);
         setInterestBreakdown(dash.interestBreakdown);
         setTransactions(txns);
+        setShareSplits(splits);
         setAllCompanies(comps);
         setDividendPayouts(payouts);
         setTableColumns(settings.tableColumns || {});
@@ -369,6 +372,25 @@ export default function Dashboard() {
   const totalRealized = realizedItems.reduce((s, r) => s + r.realizedGain, 0);
   const totalGainPct = totalInvested !== 0 ? (totalGain / totalInvested) * 100 : 0;
   const totalDayGainPct = totalValue !== 0 ? (totalDayGain / (totalValue - totalDayGain)) * 100 : 0;
+  // Re-express each cash dividend's shares in the split basis in effect on its XD
+  // date (split-aware, all transaction types), rebasing per-share gross so the net
+  // total stays invariant. Keeps dividend share counts consistent with every other
+  // split-adjusted view. Falls back to stored values when the XD holding isn't
+  // derivable (no XD date or no transaction history for the company).
+  const divShares = (d: Dividend): number => {
+    if (d.type !== 'CASH' || !d.xdDate) return d.shares;
+    const held = sharesHeldAtDate(
+      transactions.filter(t => t.companyCode === d.companyCode),
+      shareSplits.filter(s => s.companyCode === d.companyCode),
+      d.xdDate,
+    );
+    return held > 0 ? held : d.shares;
+  };
+  const divAmountPerShare = (d: Dividend): number => {
+    const shares = divShares(d);
+    return shares > 0 ? (d.amount * d.shares) / shares : d.amount;
+  };
+
   const cashDividends = dividends.filter(d => d.type === 'CASH');
   const scripDividends = dividends.filter(d => d.type === 'SCRIP');
   const totalDividends = cashDividends.reduce((s, d) => s + d.totalAmount, 0);
@@ -1506,8 +1528,8 @@ export default function Dashboard() {
                       <td style={{ fontSize: '0.8rem' }}>
                         {d.taxed !== false ? <span className="gain-pill gain-pill-taxed" style={{ fontSize: '0.65rem' }}>Taxed</span> : <span style={{ color: 'var(--text-muted)' }}>-</span>}
                       </td>
-                      <td className="text-right mono">{d.amount.toFixed(2)}</td>
-                      <td className="text-right mono">{d.shares}</td>
+                      <td className="text-right mono">{divAmountPerShare(d).toFixed(2)}</td>
+                      <td className="text-right mono">{divShares(d)}</td>
                       <td className="text-right mono">{d.totalAmount.toFixed(2)}</td>
                     </tr>
                   ))}
@@ -1515,7 +1537,7 @@ export default function Dashboard() {
                 <tfoot>
                   <tr className="portfolio-total">
                     <td colSpan={4}>Total ({cashDividends.length} payments)</td>
-                    <td className="text-right mono">{cashDividends.reduce((s, d) => s + d.shares, 0)}</td>
+                    <td className="text-right mono">{cashDividends.reduce((s, d) => s + divShares(d), 0)}</td>
                     <td className="text-right mono">{fmt(cashDividends.reduce((s, d) => s + d.totalAmount, 0))}</td>
                   </tr>
                 </tfoot>

@@ -1,6 +1,10 @@
-import { useEffect, useState } from 'react';
-import { getAdminStats, getSystemStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser, toggleDividendPayouts } from '../api';
+import { useEffect, useMemo, useState } from 'react';
+import { getAdminStats, getSystemStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser, toggleDividendPayouts, getAllDividendPayouts, createDividendPayout, updateDividendPayout, deleteDividendPayout, DividendPayoutData } from '../api';
 import ActionMenu from '../components/ActionMenu';
+import ShareSplitsPage from './ShareSplits';
+
+const emptyPayoutForm = { companyCode: '', exDividendDate: '', amountPerShare: '', paymentDate: '', announcementDate: '', dividendType: '' };
+type PayoutForm = typeof emptyPayoutForm;
 
 interface UserStat {
   id: string;
@@ -38,10 +42,20 @@ export default function AdminDashboard() {
   const [editRole, setEditRole] = useState('');
   const [editError, setEditError] = useState('');
 
+  // Dividend payouts (calendar) management
+  const [payouts, setPayouts] = useState<DividendPayoutData[]>([]);
+  const [payoutSearch, setPayoutSearch] = useState('');
+  const [showAddPayout, setShowAddPayout] = useState(false);
+  const [addPayout, setAddPayout] = useState<PayoutForm>(emptyPayoutForm);
+  const [editPayout, setEditPayout] = useState<DividendPayoutData | null>(null);
+  const [editPayoutForm, setEditPayoutForm] = useState<PayoutForm>(emptyPayoutForm);
+  const [payoutError, setPayoutError] = useState('');
+
   const loadData = () => {
     Promise.all([
       getAdminStats().then(data => { setTotalUsers(data.totalUsers); setUsers(data.users); }),
       getSystemStats().then(setSysStats),
+      getAllDividendPayouts().then(setPayouts).catch(() => setPayouts([])),
     ]).catch(console.error).finally(() => setLoading(false));
   };
 
@@ -109,6 +123,81 @@ export default function AdminDashboard() {
       alert(err?.response?.data?.error || 'Failed to delete user');
     }
   };
+
+  // ---- Dividend payout (calendar) CRUD ----
+  const formToInput = (f: PayoutForm, base?: DividendPayoutData) => ({
+    companyCode: f.companyCode.trim().toUpperCase(),
+    exDividendDate: f.exDividendDate,
+    amountPerShare: f.amountPerShare === '' ? null : Number(f.amountPerShare),
+    paymentDate: f.paymentDate || null,
+    announcementDate: f.announcementDate || null,
+    dividendType: f.dividendType.trim() || null,
+    // Preserve any scraped prices already on the record; manual entry doesn't set them.
+    priceOnXdDate: base?.priceOnXdDate ?? null,
+    priceOnAnnouncementDate: base?.priceOnAnnouncementDate ?? null,
+  });
+
+  const handleCreatePayout = async () => {
+    setPayoutError('');
+    if (!addPayout.companyCode.trim() || !addPayout.exDividendDate) {
+      setPayoutError('Company and XD date are required');
+      return;
+    }
+    try {
+      await createDividendPayout(formToInput(addPayout));
+      setAddPayout(emptyPayoutForm);
+      setShowAddPayout(false);
+      loadData();
+    } catch (err: any) {
+      setPayoutError(err?.response?.data?.error || 'Failed to create payout');
+    }
+  };
+
+  const openEditPayout = (p: DividendPayoutData) => {
+    setEditPayout(p);
+    setPayoutError('');
+    setEditPayoutForm({
+      companyCode: p.companyCode,
+      exDividendDate: p.exDividendDate || '',
+      amountPerShare: p.amountPerShare != null ? String(p.amountPerShare) : '',
+      paymentDate: p.paymentDate || '',
+      announcementDate: p.announcementDate || '',
+      dividendType: p.dividendType || '',
+    });
+  };
+
+  const handleUpdatePayout = async () => {
+    if (!editPayout?.id) return;
+    setPayoutError('');
+    if (!editPayoutForm.exDividendDate) {
+      setPayoutError('XD date is required');
+      return;
+    }
+    try {
+      await updateDividendPayout(editPayout.id, formToInput(editPayoutForm, editPayout));
+      setEditPayout(null);
+      loadData();
+    } catch (err: any) {
+      setPayoutError(err?.response?.data?.error || 'Failed to update payout');
+    }
+  };
+
+  const handleDeletePayout = async (p: DividendPayoutData) => {
+    if (!p.id || !confirm(`Delete ${p.companyCode} payout (XD ${p.exDividendDate})?`)) return;
+    try {
+      await deleteDividendPayout(p.id);
+      loadData();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || 'Failed to delete payout');
+    }
+  };
+
+  const filteredPayouts = useMemo(() => {
+    const s = payoutSearch.trim().toLowerCase();
+    return [...payouts]
+      .filter(p => s === '' || p.companyCode.toLowerCase().includes(s) || (p.exDividendDate || '').includes(s))
+      .sort((a, b) => (b.exDividendDate || '').localeCompare(a.exDividendDate || ''));
+  }, [payouts, payoutSearch]);
 
   if (loading) return <p>Loading...</p>;
 
@@ -206,6 +295,87 @@ export default function AdminDashboard() {
         </table>
       </div>
 
+      {/* Dividend Payouts (Calendar) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2.5rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+        <h2 style={{ margin: 0 }}>Dividend Payouts (Calendar)</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {payouts.length >= 5 && (
+            <input className="search-bar" value={payoutSearch} onChange={e => setPayoutSearch(e.target.value)} placeholder="Search company / date..." />
+          )}
+          <button onClick={() => { setShowAddPayout(!showAddPayout); setPayoutError(''); }} style={{ padding: '0.4rem 1rem', fontSize: '0.85rem' }}>
+            {showAddPayout ? 'Cancel' : '+ Add Payout'}
+          </button>
+        </div>
+      </div>
+      <p style={{ color: 'var(--text-muted)', margin: '0 0 1rem', fontSize: '0.85rem' }}>
+        Manually add or fix the "to be received" dividends (value / XD date / payment date) that drive the pending &amp; upcoming views. Showing records from the last 2 years.
+      </p>
+
+      {showAddPayout && (
+        <div className="form-card" style={{ marginBottom: '1.5rem' }}>
+          <h3 style={{ margin: '0 0 0.75rem' }}>Add Payout</h3>
+          <div className="form-row">
+            <label>Company<input type="text" value={addPayout.companyCode} onChange={e => setAddPayout(f => ({ ...f, companyCode: e.target.value }))} placeholder="e.g. CDB.X" /></label>
+            <label>XD Date<input type="date" value={addPayout.exDividendDate} onChange={e => setAddPayout(f => ({ ...f, exDividendDate: e.target.value }))} /></label>
+            <label>Amount/Share (LKR)<input type="number" step="0.01" min="0" value={addPayout.amountPerShare} onChange={e => setAddPayout(f => ({ ...f, amountPerShare: e.target.value }))} /></label>
+          </div>
+          <div className="form-row">
+            <label>Payment Date<input type="date" value={addPayout.paymentDate} onChange={e => setAddPayout(f => ({ ...f, paymentDate: e.target.value }))} /></label>
+            <label>Announced<input type="date" value={addPayout.announcementDate} onChange={e => setAddPayout(f => ({ ...f, announcementDate: e.target.value }))} /></label>
+            <label>Type<input type="text" value={addPayout.dividendType} onChange={e => setAddPayout(f => ({ ...f, dividendType: e.target.value }))} placeholder="Cash / Scrip" /></label>
+          </div>
+          {payoutError && <div className="error-message" style={{ marginBottom: '0.75rem' }}>{payoutError}</div>}
+          <button onClick={handleCreatePayout}>Add Payout</button>
+        </div>
+      )}
+
+      {payouts.length === 0 ? (
+        <p style={{ color: 'var(--text-muted)' }}>No dividend payout records.</p>
+      ) : (
+        <div className="portfolio-table-wrap">
+          <table className="portfolio-table">
+            <thead>
+              <tr>
+                <th>Company</th>
+                <th>XD Date</th>
+                <th className="text-right">Amount/Share</th>
+                <th>Payment Date</th>
+                <th>Announced</th>
+                <th>Type</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPayouts.map(p => (
+                <tr key={p.id}>
+                  <td style={{ fontWeight: 600 }}>{p.companyCode}</td>
+                  <td className="mono">{p.exDividendDate || '—'}</td>
+                  <td className="text-right mono">{p.amountPerShare != null ? Number(p.amountPerShare).toFixed(2) : '—'}</td>
+                  <td className="mono" style={{ fontSize: '0.85rem' }}>{p.paymentDate || '—'}</td>
+                  <td className="mono" style={{ fontSize: '0.85rem' }}>{p.announcementDate || '—'}</td>
+                  <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{p.dividendType || '—'}</td>
+                  <td>
+                    <ActionMenu actions={[
+                      { label: 'Edit', onClick: () => openEditPayout(p) },
+                      { label: 'Delete', onClick: () => handleDeletePayout(p), danger: true },
+                    ]} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+
+      {/* Share Splits / Merges */}
+      <div style={{ marginTop: '2.5rem' }}>
+        <h2 style={{ margin: '0 0 0.5rem' }}>Share Splits / Merges</h2>
+        <p style={{ color: 'var(--text-muted)', margin: '0 0 1rem', fontSize: '0.85rem' }}>
+          Subdivisions and merges adjust historical share counts and prices across all views from their date onward.
+        </p>
+        <ShareSplitsPage embedded />
+      </div>
 
       {/* Edit Modal */}
       {editUser && (
@@ -250,6 +420,44 @@ export default function AdminDashboard() {
                 background: 'transparent', cursor: 'pointer', fontSize: '0.85rem',
               }}>Cancel</button>
               <button onClick={handleEdit} style={{
+                padding: '0.5rem 1rem', borderRadius: '6px', border: 'none',
+                background: '#3182ce', color: 'white', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
+              }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Payout Modal */}
+      {editPayout && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }} onClick={() => setEditPayout(null)}>
+          <div style={{
+            background: 'var(--bg-card)', borderRadius: '12px', padding: '1.5rem',
+            width: '100%', maxWidth: '520px', margin: '1rem', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 1rem' }}>Edit Payout — {editPayout.companyCode}</h2>
+            <div className="form-row">
+              <label>Company<input type="text" value={editPayoutForm.companyCode} onChange={e => setEditPayoutForm(f => ({ ...f, companyCode: e.target.value }))} /></label>
+              <label>XD Date<input type="date" value={editPayoutForm.exDividendDate} onChange={e => setEditPayoutForm(f => ({ ...f, exDividendDate: e.target.value }))} /></label>
+            </div>
+            <div className="form-row">
+              <label>Amount/Share (LKR)<input type="number" step="0.01" min="0" value={editPayoutForm.amountPerShare} onChange={e => setEditPayoutForm(f => ({ ...f, amountPerShare: e.target.value }))} /></label>
+              <label>Type<input type="text" value={editPayoutForm.dividendType} onChange={e => setEditPayoutForm(f => ({ ...f, dividendType: e.target.value }))} placeholder="Cash / Scrip" /></label>
+            </div>
+            <div className="form-row">
+              <label>Payment Date<input type="date" value={editPayoutForm.paymentDate} onChange={e => setEditPayoutForm(f => ({ ...f, paymentDate: e.target.value }))} /></label>
+              <label>Announced<input type="date" value={editPayoutForm.announcementDate} onChange={e => setEditPayoutForm(f => ({ ...f, announcementDate: e.target.value }))} /></label>
+            </div>
+            {payoutError && <div className="error-message" style={{ marginBottom: '0.75rem' }}>{payoutError}</div>}
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <button onClick={() => setEditPayout(null)} style={{
+                padding: '0.5rem 1rem', borderRadius: '6px', border: '1.5px solid var(--border-input)',
+                background: 'transparent', cursor: 'pointer', fontSize: '0.85rem',
+              }}>Cancel</button>
+              <button onClick={handleUpdatePayout} style={{
                 padding: '0.5rem 1rem', borderRadius: '6px', border: 'none',
                 background: '#3182ce', color: 'white', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
               }}>Save</button>

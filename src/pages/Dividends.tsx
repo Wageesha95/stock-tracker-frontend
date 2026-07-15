@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend, getDividendPayouts, getAllDividendPayouts, DividendPayoutData } from '../api';
+import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend, getDividendPayouts, getAllDividendPayouts, DividendPayoutData, getShareSplits, ShareSplitData } from '../api';
 import { Dividend, Company, Transaction } from '../types';
+import { sharesHeldAtDate } from '../utils/splits';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -13,6 +14,8 @@ export default function Dividends() {
   const [dividends, setDividends] = useState<Dividend[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [shareSplits, setShareSplits] = useState<ShareSplitData[]>([]);
+  const formRef = useRef<HTMLDivElement>(null);
   const [allPayouts, setAllPayouts] = useState<DividendPayoutData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -88,25 +91,44 @@ export default function Dividends() {
       getDividends(),
       getCompanies(),
       getTransactions(),
+      getShareSplits(),
       dividendPayoutsEnabled
         ? getAllDividendPayouts().catch(() => [] as DividendPayoutData[])
         : Promise.resolve([] as DividendPayoutData[]),
     ])
-      .then(([divs, comps, txns, payouts]) => {
+      .then(([divs, comps, txns, splits, payouts]) => {
         setDividends(divs);
         setCompanies(comps);
         setTransactions(txns);
+        setShareSplits(splits);
         setAllPayouts(payouts);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   };
 
-  // Calculate shares held for a company just before a given date
-  const getSharesHeldAtDate = (code: string, beforeDate: string): number => {
-    return transactions
-      .filter(t => t.companyCode === code && t.date < beforeDate)
-      .reduce((total, t) => total + (t.type === 'BUY' ? t.count : -t.count), 0);
+  // Shares held for a company as of a given date, in that date's split basis and
+  // counting every share-adding type (buys, rights, IPO, scrip) — not just BUY.
+  const getSharesHeldAtDate = (code: string, beforeDate: string): number =>
+    sharesHeldAtDate(
+      transactions.filter(t => t.companyCode === code),
+      shareSplits.filter(s => s.companyCode === code),
+      beforeDate,
+    );
+
+  // A recorded cash dividend's shares/amount re-expressed in the split basis in
+  // effect on its XD date. When a split is entered after the dividend, the shares
+  // held at XD change; the net cash (totalAmount) is invariant, so the per-share
+  // gross is rebased to keep gross = amount/share × shares consistent. Falls back
+  // to the stored values when no XD date or no derivable holding.
+  const divShares = (d: Dividend): number => {
+    if (d.type !== 'CASH' || !d.xdDate) return d.shares;
+    const held = getSharesHeldAtDate(d.companyCode, d.xdDate);
+    return held > 0 ? held : d.shares;
+  };
+  const divAmountPerShare = (d: Dividend): number => {
+    const shares = divShares(d);
+    return shares > 0 ? (d.amount * d.shares) / shares : d.amount;
   };
 
   // Pending dividends: payout XD has passed, user held shares before XD, and no user dividend recorded yet for that company+XD date.
@@ -153,6 +175,23 @@ export default function Dividends() {
       const held = getSharesHeldAtDate(newCode, xdDate);
       setShares(held > 0 ? String(held) : '');
     }
+  };
+
+  // Prefill the Add Dividend card from a pending ("to be received") row and jump to it.
+  const fillFromPending = (payout: DividendPayoutData, sharesHeld: number) => {
+    setType('CASH');
+    setCompanyCode(payout.companyCode);
+    setXdDate(payout.exDividendDate);
+    setDate(payout.paymentDate || '');
+    setAmount(payout.amountPerShare != null ? String(payout.amountPerShare) : '');
+    setShares(sharesHeld > 0 ? String(sharesHeld) : '');
+    setTaxable(true);
+    setCustomTotal('');
+    setSelectedPayout(payout);
+    if (dividendPayoutsEnabled) {
+      getDividendPayouts(payout.companyCode).then(setCompanyPayouts).catch(() => setCompanyPayouts([]));
+    }
+    formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   useEffect(() => {
@@ -226,8 +265,8 @@ export default function Dividends() {
       if (divSortKey === 'date') cmp = a.date.localeCompare(b.date);
       else if (divSortKey === 'companyCode') cmp = a.companyCode.localeCompare(b.companyCode);
       else if (divSortKey === 'type') cmp = a.type.localeCompare(b.type);
-      else if (divSortKey === 'amount') cmp = a.amount - b.amount;
-      else if (divSortKey === 'shares') cmp = a.shares - b.shares;
+      else if (divSortKey === 'amount') cmp = divAmountPerShare(a) - divAmountPerShare(b);
+      else if (divSortKey === 'shares') cmp = divShares(a) - divShares(b);
       else if (divSortKey === 'total') cmp = a.totalAmount - b.totalAmount;
       return divSortDir === 'asc' ? cmp : -cmp;
     });
@@ -254,13 +293,16 @@ export default function Dividends() {
                   <th className="text-right">Amount/Share</th>
                   <th className="text-right">Shares Held</th>
                   <th className="text-right">Est. Gross</th>
+                  <th className="text-right">Est. Net (−15%)</th>
                   <th>Payment Date</th>
+                  {!isReadMode && <th></th>}
                 </tr>
               </thead>
               <tbody>
                 {pendingDividends.map(({ payout, sharesHeld }) => {
                   const aps = payout.amountPerShare != null ? Number(payout.amountPerShare) : null;
                   const estGross = aps != null ? aps * sharesHeld : null;
+                  const estNet = estGross != null ? estGross * 0.85 : null;
                   return (
                     <tr key={`${payout.companyCode}-${payout.exDividendDate}`}>
                       <td className="mono">{payout.exDividendDate}</td>
@@ -274,7 +316,18 @@ export default function Dividends() {
                       <td className="text-right mono">{aps != null ? aps.toFixed(2) : '—'}</td>
                       <td className="text-right mono">{sharesHeld}</td>
                       <td className="text-right mono">{estGross != null ? estGross.toFixed(2) : '—'}</td>
+                      <td className="text-right mono">{estNet != null ? estNet.toFixed(2) : '—'}</td>
                       <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{payout.paymentDate || '—'}</td>
+                      {!isReadMode && (
+                        <td>
+                          <button
+                            onClick={() => fillFromPending(payout, sharesHeld)}
+                            style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: 'none', background: '#3182ce', color: 'white', cursor: 'pointer', fontWeight: 600 }}
+                          >
+                            + Add
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -285,7 +338,7 @@ export default function Dividends() {
       )}
 
       {!isReadMode && (
-      <div className="form-card">
+      <div className="form-card" ref={formRef}>
         <h2>Add Dividend</h2>
         <form onSubmit={handleSubmit}>
           <div className="form-row">
@@ -485,8 +538,8 @@ export default function Dividends() {
                   <td style={{ fontSize: '0.8rem' }}>
                     {d.taxed !== false ? <span className="gain-pill gain-pill-taxed" style={{ fontSize: '0.65rem' }}>Taxed</span> : <span style={{ color: 'var(--text-muted)' }}>-</span>}
                   </td>
-                  <td className="text-right mono">{d.amount.toFixed(2)}</td>
-                  <td className="text-right mono">{d.shares}</td>
+                  <td className="text-right mono">{divAmountPerShare(d).toFixed(2)}</td>
+                  <td className="text-right mono">{divShares(d)}</td>
                   <td className="text-right mono">{d.totalAmount.toFixed(2)}</td>
                   {!isReadMode && (
                   <td>
@@ -503,7 +556,7 @@ export default function Dividends() {
               <tr className="portfolio-total">
                 <td colSpan={4}>Total</td>
                 <td></td>
-                <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.shares, 0)}</td>
+                <td className="text-right mono">{cashDivs.reduce((s, d) => s + divShares(d), 0)}</td>
                 <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.totalAmount, 0).toFixed(2)}</td>
                 {!isReadMode && <td></td>}
               </tr>

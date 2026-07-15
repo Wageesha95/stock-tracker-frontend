@@ -13,7 +13,7 @@ import { LineChart, Line, Bar, ComposedChart, XAxis, YAxis, Tooltip, ResponsiveC
 import { SELL_COMMISSION_RATE } from '../constants';
 import { ttmWindow, resolveTtmWeeks } from '../utils/ttm';
 import { compareTxDateBuysFirst, compareEventDateBuysFirst, txDateTieBreaker } from '../utils/transactionSort';
-import { adjustedCount, adjustedPrice, adjustedHistPrice } from '../utils/splits';
+import { adjustedCount, adjustedPrice, adjustedHistPrice, sharesHeldAtDate } from '../utils/splits';
 import { useTableSort } from '../hooks/useTableSort';
 
 type Tab = 'transactions' | 'dividends' | 'realized' | 'payouts' | 'notes';
@@ -230,13 +230,22 @@ export default function CompanyView() {
     ...t,
     total: t.count * t.price + t.commission,
   })), [transactions]);
-  const divRows = useMemo(() => dividends.map(d => ({
-    ...d,
-    amountPerShare: d.type === 'CASH' ? d.amount : 0,
-    sharesCount: d.type === 'CASH' ? d.shares : 0,
-    scripSharesCount: d.type === 'SCRIP' ? d.scripShares : 0,
-    totalValue: d.type === 'CASH' ? d.totalAmount : d.scripShares,
-  })), [dividends]);
+  // Re-express each cash dividend in the split basis in effect on its XD date:
+  // shares held at XD (split-aware) with the per-share gross rebased so net cash
+  // (totalAmount) stays invariant. Falls back to stored values when the XD holding
+  // isn't derivable. transactions/shareSplits here are already company-scoped.
+  const divRows = useMemo(() => dividends.map(d => {
+    const held = d.type === 'CASH' && d.xdDate ? sharesHeldAtDate(transactions, shareSplits, d.xdDate) : 0;
+    const shares = d.type === 'CASH' ? (held > 0 ? held : d.shares) : 0;
+    const amountPerShare = d.type === 'CASH' ? (shares > 0 ? (d.amount * d.shares) / shares : d.amount) : 0;
+    return {
+      ...d,
+      amountPerShare,
+      sharesCount: shares,
+      scripSharesCount: d.type === 'SCRIP' ? d.scripShares : 0,
+      totalValue: d.type === 'CASH' ? d.totalAmount : d.scripShares,
+    };
+  }), [dividends, transactions, shareSplits]);
   const { sorted: sortedTx, handleSort: sortTx, sortIcon: txIcon } = useTableSort(txRows, 'date', 'desc', txDateTieBreaker);
   const { sorted: sortedDivs, handleSort: sortDiv, sortIcon: divIcon } = useTableSort(divRows, 'date');
   const { sorted: sortedRealized, handleSort: sortRealized, sortIcon: realizedIcon } = useTableSort(realizedItems, 'sellDate');
@@ -1315,8 +1324,8 @@ export default function CompanyView() {
                         {d.type}
                       </span>
                     </td>
-                    <td className="text-right mono">{d.type === 'CASH' ? fmt(d.amount) : '\u2014'}</td>
-                    <td className="text-right mono">{d.type === 'CASH' ? d.shares : '\u2014'}</td>
+                    <td className="text-right mono">{d.type === 'CASH' ? fmt(d.amountPerShare) : '\u2014'}</td>
+                    <td className="text-right mono">{d.type === 'CASH' ? d.sharesCount : '\u2014'}</td>
                     <td className="text-right mono">{d.type === 'SCRIP' ? d.scripShares : '\u2014'}</td>
                     <td className="text-right mono">{d.type === 'CASH' ? fmt(d.totalAmount) : `${d.scripShares} shares`}</td>
                     {!isReadMode && (
