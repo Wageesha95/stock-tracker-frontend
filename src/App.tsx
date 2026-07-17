@@ -24,6 +24,7 @@ import MarketDataScraper from './pages/MarketDataScraper';
 import MarketData from './pages/MarketData';
 import AdminMessages from './pages/AdminMessages';
 import SettingsPanel from './components/SettingsPanel';
+import NavDropdown from './components/NavDropdown';
 import NotesPanel from './components/NotesPanel';
 import MessagePanel from './components/MessagePanel';
 import { getUnreadMessageCount, getUnreadReplyCount } from './api';
@@ -124,13 +125,19 @@ function App() {
                 <NavLink to="/" end onClick={() => setMenuOpen(false)}>Dashboard</NavLink>
                 <NavLink to="/transactions" onClick={() => setMenuOpen(false)}>Transactions</NavLink>
                 <NavLink to="/dividends" onClick={() => setMenuOpen(false)}>Dividends</NavLink>
-                <NavLink to="/upcoming-dividends" onClick={() => setMenuOpen(false)}>Upcoming Dividends</NavLink>
                 <NavLink to="/rights-ipo" onClick={() => setMenuOpen(false)}>Corporate Actions</NavLink>
-                <NavLink to="/watchlists" onClick={() => setMenuOpen(false)}>Watchlists</NavLink>
                 <NavLink to="/sectors" onClick={() => setMenuOpen(false)}>Sectors</NavLink>
                 <NavLink to="/companies" onClick={() => setMenuOpen(false)}>Companies</NavLink>
-                <NavLink to="/market-data" onClick={() => setMenuOpen(false)}>Market Data</NavLink>
                 <NavLink to="/calculator" onClick={() => setMenuOpen(false)}>Calculator</NavLink>
+                <NavDropdown
+                  label="Advanced"
+                  onNavigate={() => setMenuOpen(false)}
+                  items={[
+                    { to: '/upcoming-dividends', label: 'Upcoming Dividends' },
+                    { to: '/watchlists', label: 'Watchlists' },
+                    { to: '/market-data', label: 'Market Data' },
+                  ]}
+                />
                 {!isReadMode && <NavLink to="/upload" onClick={() => setMenuOpen(false)}>Upload</NavLink>}
               </>
             )}
