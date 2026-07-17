@@ -30,14 +30,16 @@ export default function AvgCalculator() {
   const [targetCommission, setTargetCommission] = useState(SELL_COMMISSION_PCT);
 
   useEffect(() => {
-    Promise.all([
-      getCompanies(),
-      getDashboardAll(),
-      getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
-      getMarketData().catch(() => [] as MarketData[]),
-      getUserSettings(),
-    ])
-      .then(([comps, dash, payouts, md, settings]) => {
+    // Settings first so the calculator's holdings honour the selected broker filter.
+    getUserSettings().then(settings => {
+      const dataBrokers = settings.selectedDataBrokerIds || [];
+      return Promise.all([
+        getCompanies(),
+        getDashboardAll(dataBrokers),
+        getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
+        getMarketData().catch(() => [] as MarketData[]),
+      ])
+      .then(([comps, dash, payouts, md]) => {
         setCompanies(comps);
         const map: Record<string, PortfolioItem> = {};
         dash.portfolio.forEach((p: PortfolioItem) => { map[p.companyCode] = p; });
@@ -61,7 +63,8 @@ export default function AvgCalculator() {
           if (total > 0) divMap[code] = total;
         }
         setTtmDivMap(divMap);
-      })
+      });
+    })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);

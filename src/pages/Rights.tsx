@@ -61,7 +61,8 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
       const disabled = txns.every(t => t.disabled === true);
       return { companyCode: code, shares, avg: bought > 0 ? cost / bought : 0, disabled };
     })
-      .filter(r => r.shares > 0)
+      // Converted/disabled ".R" holdings drop out of the list once the user acts on them.
+      .filter(r => r.shares > 0 && !r.disabled)
       .sort((a, b) => a.companyCode.localeCompare(b.companyCode));
   }, [transactions]);
 
@@ -194,12 +195,11 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
               </thead>
               <tbody>
                 {purchasedRights.map(r => (
-                  <tr key={r.companyCode} style={r.disabled ? { opacity: 0.55 } : undefined}>
+                  <tr key={r.companyCode}>
                     <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${r.companyCode}`)}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <CompanyAvatar code={r.companyCode} size={26} />
                         {r.companyCode}
-                        {r.disabled && <span className="gain-pill" style={{ fontSize: '0.6rem', background: '#e2e8f0', color: '#4a5568' }}>DISABLED</span>}
                       </div>
                     </td>
                     <td className="mono hide-sm" style={{ color: 'var(--text-muted)' }}>{r.companyCode.replace('.R', '.N')}</td>
@@ -209,29 +209,18 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
                     {!isReadMode && (
                       <td>
                         <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
-                          {r.disabled ? (
-                            <button
-                              onClick={() => toggleRightDisabled(r.companyCode, false)}
-                              style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: '1.5px solid var(--border-input)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}
-                            >
-                              Enable
-                            </button>
-                          ) : (
-                            <>
-                              <button
-                                onClick={() => fillFromPurchased(r.companyCode, r.shares, r.avg)}
-                                style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: 'none', background: '#3182ce', color: 'white', cursor: 'pointer', fontWeight: 600 }}
-                              >
-                                + Add
-                              </button>
-                              <button
-                                onClick={() => toggleRightDisabled(r.companyCode, true)}
-                                style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: '1.5px solid var(--border-input)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}
-                              >
-                                Disable
-                              </button>
-                            </>
-                          )}
+                          <button
+                            onClick={() => fillFromPurchased(r.companyCode, r.shares, r.avg)}
+                            style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: 'none', background: '#3182ce', color: 'white', cursor: 'pointer', fontWeight: 600 }}
+                          >
+                            + Add
+                          </button>
+                          <button
+                            onClick={() => toggleRightDisabled(r.companyCode, true)}
+                            style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: '1.5px solid var(--border-input)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}
+                          >
+                            Disable
+                          </button>
                         </div>
                       </td>
                     )}

@@ -173,7 +173,9 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
       .then(([b, s]) => {
         setBrokers(b);
         setSelectedIds(s.selectedBrokerIds || []);
-        setDataBrokerIds(s.selectedDataBrokerIds || []);
+        // No-broker (manual) trades are not an available filter target — drop any
+        // stale NO_BROKER token from previously-saved settings.
+        setDataBrokerIds((s.selectedDataBrokerIds || []).filter(id => id !== NO_BROKER));
         setTableColumns(s.tableColumns || {});
       })
       .catch(console.error)
@@ -291,10 +293,7 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                   >
                     {dataBrokerIds.length === 0
                       ? <span style={{ color: 'var(--text-muted)' }}>All brokers</span>
-                      : <span>{[
-                          ...brokers.filter(b => dataBrokerIds.includes(b.id)).map(b => b.name),
-                          ...(dataBrokerIds.includes(NO_BROKER) ? ['No broker'] : []),
-                        ].join(', ')}</span>
+                      : <span>{brokers.filter(b => dataBrokerIds.includes(b.id)).map(b => b.name).join(', ')}</span>
                     }
                     <span style={{ marginLeft: 'auto', fontSize: '0.7rem' }}>{dataBrokerDropdownOpen ? '▲' : '▼'}</span>
                   </div>
@@ -310,14 +309,6 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                           <span>{b.name}</span>
                         </label>
                       ))}
-                      <label className="multi-select-option">
-                        <input
-                          type="checkbox"
-                          checked={dataBrokerIds.includes(NO_BROKER)}
-                          onChange={() => setDataBrokerIds(prev => prev.includes(NO_BROKER) ? prev.filter(x => x !== NO_BROKER) : [...prev, NO_BROKER])}
-                        />
-                        <span>No broker (manual entries)</span>
-                      </label>
                     </div>
                   )}
                 </div>

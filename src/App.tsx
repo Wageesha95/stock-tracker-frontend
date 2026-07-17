@@ -131,7 +131,7 @@ function App() {
                 <NavLink to="/companies" onClick={() => setMenuOpen(false)}>Companies</NavLink>
                 <NavLink to="/market-data" onClick={() => setMenuOpen(false)}>Market Data</NavLink>
                 <NavLink to="/calculator" onClick={() => setMenuOpen(false)}>Calculator</NavLink>
-                {!isReadMode && <NavLink to="/upload" onClick={() => setMenuOpen(false)}>Upload PDF</NavLink>}
+                {!isReadMode && <NavLink to="/upload" onClick={() => setMenuOpen(false)}>Upload</NavLink>}
               </>
             )}
           </div>

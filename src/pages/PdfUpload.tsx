@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, DragEvent } from 'react';
-import { previewPdf, uploadPdf, getPdfUploads, deletePdfUpload, getBrokers, getUserSettings, BrokerData } from '../api';
+import { previewPdf, uploadPdf, getPdfUploads, deletePdfUpload, updatePdfUpload, getBrokers, getUserSettings, BrokerData } from '../api';
 import { Transaction } from '../types';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -39,6 +39,13 @@ export default function PdfUpload() {
   const [tradeDate, setTradeDate] = useState('');
   const [brokerId, setBrokerId] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Edit-upload modal (change trade date / broker of an existing upload)
+  const [editUpload, setEditUpload] = useState<PdfRecord | null>(null);
+  const [editTradeDate, setEditTradeDate] = useState('');
+  const [editBrokerId, setEditBrokerId] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
 
   const loadUploads = () => {
     getPdfUploads().then(setUploads).catch(() => {});
@@ -135,6 +142,32 @@ export default function PdfUpload() {
     }
   };
 
+  const openEditUpload = (u: PdfRecord) => {
+    setEditUpload(u);
+    setEditTradeDate(u.tradeDate || '');
+    setEditBrokerId(u.brokerId || '');
+    setEditError('');
+  };
+
+  const handleUpdateUpload = async () => {
+    if (!editUpload) return;
+    if (!editTradeDate || !editBrokerId) {
+      setEditError('Trade date and broker are required.');
+      return;
+    }
+    setEditSaving(true);
+    setEditError('');
+    try {
+      await updatePdfUpload(editUpload.id, editTradeDate, editBrokerId);
+      setEditUpload(null);
+      loadUploads();
+    } catch (err: any) {
+      setEditError(err?.response?.data?.error || err?.message || 'Update failed.');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const getDefaultBrokerId = () => {
     const available = selectedBrokerIds.length > 0
       ? brokers.filter(x => selectedBrokerIds.includes(x.id))
@@ -160,7 +193,7 @@ export default function PdfUpload() {
 
   return (
     <div>
-      <h1>Upload PDF</h1>
+      <h1>Upload Daily Trade Confirmation</h1>
 
       {step === 'select' && (
         <>
@@ -318,6 +351,7 @@ export default function PdfUpload() {
                     <td>{new Date(u.uploadedAt).toLocaleString('en-US', { timeZone: 'Asia/Colombo' })}</td>
                     <td>
                       <ActionMenu actions={[
+                        { label: 'Edit', onClick: () => openEditUpload(u) },
                         { label: 'Delete', onClick: () => handleDeleteUpload(u.id), danger: true },
                       ]} />
                     </td>
@@ -327,6 +361,54 @@ export default function PdfUpload() {
             </table>
           </div>
         </>
+      )}
+
+      {editUpload && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
+        }} onClick={() => setEditUpload(null)}>
+          <div style={{
+            background: 'var(--bg-card)', borderRadius: '12px', padding: '1.5rem',
+            width: '100%', maxWidth: '420px', margin: '1rem', boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+          }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 1rem' }}>Edit Upload</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: '0 0 1rem' }}>
+              Changing the date or broker updates all {editUpload.transactionCount} linked transaction{editUpload.transactionCount !== 1 ? 's' : ''}.
+            </p>
+            <div className="upload-fields">
+              <div className="upload-field">
+                <label htmlFor="editTradeDate">Trade Date</label>
+                <input
+                  id="editTradeDate"
+                  type="date"
+                  value={editTradeDate}
+                  onChange={e => setEditTradeDate(e.target.value)}
+                />
+              </div>
+              <div className="upload-field">
+                <label htmlFor="editBroker">Broker</label>
+                <select id="editBroker" value={editBrokerId} onChange={e => setEditBrokerId(e.target.value)}>
+                  <option value="">Select broker...</option>
+                  {brokers.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {editError && <div className="error-message" style={{ marginTop: '0.75rem' }}>{editError}</div>}
+            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+              <button onClick={() => setEditUpload(null)} style={{
+                padding: '0.5rem 1rem', borderRadius: '6px', border: '1.5px solid var(--border-input)',
+                background: 'transparent', cursor: 'pointer', fontSize: '0.85rem',
+              }}>Cancel</button>
+              <button onClick={handleUpdateUpload} disabled={editSaving} style={{
+                padding: '0.5rem 1rem', borderRadius: '6px', border: 'none',
+                background: '#3182ce', color: 'white', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
+              }}>{editSaving ? 'Saving...' : 'Save'}</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

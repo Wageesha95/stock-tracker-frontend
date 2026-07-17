@@ -145,6 +145,8 @@ export const getPdfUploads = () =>
   cached('uploads', () => api.get<{ id: string; filename: string; tradeDate: string; brokerId: string; transactionCount: number; uploadedAt: string }[]>('/pdf/uploads').then(res => res.data));
 export const deletePdfUpload = (id: string) =>
   api.delete(`/pdf/uploads/${id}`).then(res => { invalidate('uploads', 'transactions', 'portfolio', 'realized', 'summary'); return res; });
+export const updatePdfUpload = (id: string, tradeDate: string, brokerId: string) =>
+  api.put(`/pdf/uploads/${id}`, { tradeDate, brokerId }).then(res => { invalidate('uploads', 'transactions', 'portfolio', 'realized', 'summary', 'dashboard-all'); return res.data; });
 
 // Brokers
 export interface BrokerData {

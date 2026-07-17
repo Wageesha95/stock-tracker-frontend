@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend, getDividendPayouts, getAllDividendPayouts, DividendPayoutData, getShareSplits, ShareSplitData } from '../api';
+import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend, getDividendPayouts, getAllDividendPayouts, DividendPayoutData, getShareSplits, ShareSplitData, getBrokers, BrokerData } from '../api';
 import { Dividend, Company, Transaction } from '../types';
 import { sharesHeldAtDate } from '../utils/splits';
+import { NO_BROKER } from '../utils/brokers';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -15,6 +16,7 @@ export default function Dividends() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [shareSplits, setShareSplits] = useState<ShareSplitData[]>([]);
+  const [brokers, setBrokers] = useState<BrokerData[]>([]);
   const formRef = useRef<HTMLDivElement>(null);
   const [allPayouts, setAllPayouts] = useState<DividendPayoutData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +31,7 @@ export default function Dividends() {
   const [taxable, setTaxable] = useState(true);
   const [companyPayouts, setCompanyPayouts] = useState<DividendPayoutData[]>([]);
   const [selectedPayout, setSelectedPayout] = useState<DividendPayoutData | null>(null);
+  const [brokerId, setBrokerId] = useState<string | null>(null);
 
   // Edit modal state
   const [editDividend, setEditDividend] = useState<Dividend | null>(null);
@@ -74,6 +77,7 @@ export default function Dividends() {
         scripShares: editType === 'SCRIP' ? Number(editScripShares) : 0,
         totalAmount: editType === 'CASH' ? Number(editTotal) : 0,
         taxed: editType === 'CASH' ? editTaxable : true,
+        brokerId: editDividend.brokerId ?? null,
       });
       setEditDividend(null);
       loadData();
@@ -92,15 +96,17 @@ export default function Dividends() {
       getCompanies(),
       getTransactions(),
       getShareSplits(),
+      getBrokers().catch(() => [] as BrokerData[]),
       dividendPayoutsEnabled
         ? getAllDividendPayouts().catch(() => [] as DividendPayoutData[])
         : Promise.resolve([] as DividendPayoutData[]),
     ])
-      .then(([divs, comps, txns, splits, payouts]) => {
+      .then(([divs, comps, txns, splits, brks, payouts]) => {
         setDividends(divs);
         setCompanies(comps);
         setTransactions(txns);
         setShareSplits(splits);
+        setBrokers(brks);
         setAllPayouts(payouts);
       })
       .catch(console.error)
@@ -115,6 +121,30 @@ export default function Dividends() {
       shareSplits.filter(s => s.companyCode === code),
       beforeDate,
     );
+
+  // Shares held for a company as of a date, broken down by broker. Groups the
+  // company's transactions by brokerId (null → NO_BROKER) and computes the split-
+  // adjusted holding for each broker separately. Only positive holdings are returned.
+  const sharesHeldByBrokerAtDate = (code: string, beforeDate: string): { brokerKey: string; brokerId: string | null; shares: number }[] => {
+    const splits = shareSplits.filter(s => s.companyCode === code);
+    const byBroker = new Map<string, Transaction[]>();
+    for (const t of transactions.filter(t => t.companyCode === code)) {
+      const key = t.brokerId ?? NO_BROKER;
+      if (!byBroker.has(key)) byBroker.set(key, []);
+      byBroker.get(key)!.push(t);
+    }
+    const groups: { brokerKey: string; brokerId: string | null; shares: number }[] = [];
+    byBroker.forEach((txns, key) => {
+      // No-broker (manual) holdings are not a broker attribution target.
+      if (key === NO_BROKER) return;
+      const shares = sharesHeldAtDate(txns, splits, beforeDate);
+      if (shares > 0) groups.push({ brokerKey: key, brokerId: key, shares });
+    });
+    return groups;
+  };
+
+  const brokerName = (id: string | null | undefined): string =>
+    id ? (brokers.find(b => b.id === id)?.name ?? '—') : 'No broker';
 
   // A recorded cash dividend's shares/amount re-expressed in the split basis in
   // effect on its XD date. When a split is entered after the dividend, the shares
@@ -135,17 +165,24 @@ export default function Dividends() {
   const pendingDividends = useMemo(() => {
     if (!dividendPayoutsEnabled || allPayouts.length === 0) return [];
     const today = new Date().toLocaleDateString('en-CA');
+    // Recorded per company + XD + broker, so a payout still shows as pending for any
+    // broker that holds shares but has no dividend recorded yet.
     const recordedKeys = new Set(
-      dividends.filter(d => d.xdDate).map(d => `${d.companyCode}|${d.xdDate}`)
+      dividends.filter(d => d.xdDate).map(d => `${d.companyCode}|${d.xdDate}|${d.brokerId ?? NO_BROKER}`)
     );
     return allPayouts
       .filter(p => p.exDividendDate && p.exDividendDate <= today)
-      .filter(p => !recordedKeys.has(`${p.companyCode}|${p.exDividendDate}`))
-      .map(p => ({ payout: p, sharesHeld: getSharesHeldAtDate(p.companyCode, p.exDividendDate) }))
-      .filter(x => x.sharesHeld > 0)
-      .sort((a, b) => b.payout.exDividendDate.localeCompare(a.payout.exDividendDate));
+      .flatMap(p =>
+        sharesHeldByBrokerAtDate(p.companyCode, p.exDividendDate)
+          .filter(g => !recordedKeys.has(`${p.companyCode}|${p.exDividendDate}|${g.brokerKey}`))
+          .map(g => ({ payout: p, brokerId: g.brokerId, brokerKey: g.brokerKey, sharesHeld: g.shares }))
+      )
+      .sort((a, b) =>
+        b.payout.exDividendDate.localeCompare(a.payout.exDividendDate)
+        || a.payout.companyCode.localeCompare(b.payout.companyCode)
+      );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allPayouts, dividends, transactions, dividendPayoutsEnabled]);
+  }, [allPayouts, dividends, transactions, shareSplits, brokers, dividendPayoutsEnabled]);
 
   // Auto-suggest shares when XD date or company changes
   const handleXdDateChange = (newXdDate: string) => {
@@ -159,6 +196,10 @@ export default function Dividends() {
     if (newXdDate && companyCode) {
       const held = getSharesHeldAtDate(companyCode, newXdDate);
       setShares(held > 0 ? String(held) : '');
+      const groups = sharesHeldByBrokerAtDate(companyCode, newXdDate);
+      setBrokerId(groups.length === 1 ? groups[0].brokerId : null);
+    } else {
+      setBrokerId(null);
     }
   };
 
@@ -168,17 +209,20 @@ export default function Dividends() {
     setDate('');
     setSelectedPayout(null);
     setCompanyPayouts([]);
+    setBrokerId(null);
     if (newCode && dividendPayoutsEnabled) {
       getDividendPayouts(newCode).then(setCompanyPayouts).catch(() => setCompanyPayouts([]));
     }
     if (xdDate && newCode) {
       const held = getSharesHeldAtDate(newCode, xdDate);
       setShares(held > 0 ? String(held) : '');
+      const groups = sharesHeldByBrokerAtDate(newCode, xdDate);
+      setBrokerId(groups.length === 1 ? groups[0].brokerId : null);
     }
   };
 
   // Prefill the Add Dividend card from a pending ("to be received") row and jump to it.
-  const fillFromPending = (payout: DividendPayoutData, sharesHeld: number) => {
+  const fillFromPending = (payout: DividendPayoutData, pendingBrokerId: string | null, sharesHeld: number) => {
     setType('CASH');
     setCompanyCode(payout.companyCode);
     setXdDate(payout.exDividendDate);
@@ -187,6 +231,7 @@ export default function Dividends() {
     setShares(sharesHeld > 0 ? String(sharesHeld) : '');
     setTaxable(true);
     setCustomTotal('');
+    setBrokerId(pendingBrokerId);
     setSelectedPayout(payout);
     if (dividendPayoutsEnabled) {
       getDividendPayouts(payout.companyCode).then(setCompanyPayouts).catch(() => setCompanyPayouts([]));
@@ -212,6 +257,7 @@ export default function Dividends() {
         scripShares: type === 'SCRIP' ? Number(scripShares) : 0,
         totalAmount,
         taxed: type === 'CASH' ? taxable : undefined,
+        brokerId: brokerId ?? null,
       });
       // Clear the whole Add Dividend card after a successful add.
       setCompanyCode('');
@@ -223,6 +269,7 @@ export default function Dividends() {
       setScripShares('');
       setTaxable(true);
       setCustomTotal('');
+      setBrokerId(null);
       setSelectedPayout(null);
       setCompanyPayouts([]);
       loadData();
@@ -295,6 +342,7 @@ export default function Dividends() {
                 <tr>
                   <th>XD Date</th>
                   <th>Company</th>
+                  <th>Broker</th>
                   <th className="hide-sm">Type</th>
                   <th className="text-right">Amount/Share</th>
                   <th className="text-right">Shares Held</th>
@@ -305,12 +353,12 @@ export default function Dividends() {
                 </tr>
               </thead>
               <tbody>
-                {pendingDividends.map(({ payout, sharesHeld }) => {
+                {pendingDividends.map(({ payout, brokerId: rowBrokerId, brokerKey, sharesHeld }) => {
                   const aps = payout.amountPerShare != null ? Number(payout.amountPerShare) : null;
                   const estGross = aps != null ? aps * sharesHeld : null;
                   const estNet = estGross != null ? estGross * 0.85 : null;
                   return (
-                    <tr key={`${payout.companyCode}-${payout.exDividendDate}`}>
+                    <tr key={`${payout.companyCode}-${payout.exDividendDate}-${brokerKey}`}>
                       <td className="mono">{payout.exDividendDate}</td>
                       <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${payout.companyCode}`)}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -318,6 +366,7 @@ export default function Dividends() {
                           {payout.companyCode}
                         </div>
                       </td>
+                      <td style={{ fontSize: '0.85rem' }}>{brokerName(rowBrokerId)}</td>
                       <td className="hide-sm" style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{payout.dividendType || '—'}</td>
                       <td className="text-right mono">{aps != null ? aps.toFixed(2) : '—'}</td>
                       <td className="text-right mono">{sharesHeld}</td>
@@ -327,7 +376,7 @@ export default function Dividends() {
                       {!isReadMode && (
                         <td>
                           <button
-                            onClick={() => fillFromPending(payout, sharesHeld)}
+                            onClick={() => fillFromPending(payout, rowBrokerId, sharesHeld)}
                             style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: 'none', background: '#3182ce', color: 'white', cursor: 'pointer', fontWeight: 600 }}
                           >
                             + Add
@@ -458,6 +507,19 @@ export default function Dividends() {
               </label>
             </div>
           )}
+          {type === 'CASH' && companyCode && xdDate && (() => {
+            const groups = sharesHeldByBrokerAtDate(companyCode, xdDate);
+            if (groups.length === 0) return null;
+            return (
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                {groups.length === 1 ? (
+                  <>Broker: <strong style={{ color: 'var(--text-primary)' }}>{brokerName(groups[0].brokerId)}</strong> <span>(auto-attributed from holdings)</span></>
+                ) : (
+                  <span style={{ color: '#dd6b20' }}>Held across {groups.length} brokers — use the “+ Add” button on the Pending Dividends rows above to record each broker separately.</span>
+                )}
+              </div>
+            );
+          })()}
           {type === 'CASH' && (
             <div className="form-row">
               <label className="radio-label" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
@@ -523,6 +585,7 @@ export default function Dividends() {
                 <th className="sort-header" onClick={() => handleDivSort('date')}>Date{dsi('date')}</th>
                 <th>XD Date</th>
                 <th className="sort-header" onClick={() => handleDivSort('companyCode')}>Company{dsi('companyCode')}</th>
+                <th>Broker</th>
                 <th>Tax</th>
                 <th className="sort-header text-right" onClick={() => handleDivSort('amount')}>Amount/Share{dsi('amount')}</th>
                 <th className="sort-header text-right" onClick={() => handleDivSort('shares')}>Shares{dsi('shares')}</th>
@@ -541,6 +604,7 @@ export default function Dividends() {
                       {d.companyCode}
                     </div>
                   </td>
+                  <td style={{ fontSize: '0.85rem' }}>{d.brokerId ? brokerName(d.brokerId) : '—'}</td>
                   <td style={{ fontSize: '0.8rem' }}>
                     {d.taxed !== false ? <span className="gain-pill gain-pill-taxed" style={{ fontSize: '0.65rem' }}>Taxed</span> : <span style={{ color: 'var(--text-muted)' }}>-</span>}
                   </td>
@@ -560,7 +624,7 @@ export default function Dividends() {
             </tbody>
             <tfoot>
               <tr className="portfolio-total">
-                <td colSpan={4}>Total</td>
+                <td colSpan={5}>Total</td>
                 <td></td>
                 <td className="text-right mono">{cashDivs.reduce((s, d) => s + divShares(d), 0)}</td>
                 <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.totalAmount, 0).toFixed(2)}</td>
@@ -581,6 +645,7 @@ export default function Dividends() {
                 <th className="sort-header" onClick={() => handleDivSort('date')}>Date{dsi('date')}</th>
                 <th>XD Date</th>
                 <th className="sort-header" onClick={() => handleDivSort('companyCode')}>Company{dsi('companyCode')}</th>
+                <th>Broker</th>
                 <th className="text-right">Shares Received</th>
                 {!isReadMode && <th></th>}
               </tr>
@@ -596,6 +661,7 @@ export default function Dividends() {
                       {d.companyCode}
                     </div>
                   </td>
+                  <td style={{ fontSize: '0.85rem' }}>{d.brokerId ? brokerName(d.brokerId) : '—'}</td>
                   <td className="text-right mono">{d.scripShares}</td>
                   {!isReadMode && (
                   <td>
@@ -610,7 +676,7 @@ export default function Dividends() {
             </tbody>
             <tfoot>
               <tr className="portfolio-total">
-                <td colSpan={3}>Total</td>
+                <td colSpan={4}>Total</td>
                 <td className="text-right mono">{scripDivs.reduce((s, d) => s + d.scripShares, 0)} shares</td>
                 {!isReadMode && <td></td>}
               </tr>

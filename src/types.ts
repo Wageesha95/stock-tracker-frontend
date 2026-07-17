@@ -52,6 +52,7 @@ export interface Dividend {
   scripShares: number;
   totalAmount: number;
   taxed?: boolean;
+  brokerId?: string | null;
   createdAt: string;
 }
 
