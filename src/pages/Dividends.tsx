@@ -165,16 +165,25 @@ export default function Dividends() {
   const pendingDividends = useMemo(() => {
     if (!dividendPayoutsEnabled || allPayouts.length === 0) return [];
     const today = new Date().toLocaleDateString('en-CA');
-    // Recorded per company + XD + broker, so a payout still shows as pending for any
-    // broker that holds shares but has no dividend recorded yet.
-    const recordedKeys = new Set(
-      dividends.filter(d => d.xdDate).map(d => `${d.companyCode}|${d.xdDate}|${d.brokerId ?? NO_BROKER}`)
-    );
+    // A recorded dividend suppresses the matching pending row. When it has a broker,
+    // it only clears that broker's row (a company held across brokers can still be
+    // pending elsewhere). When it has no broker (older/unattributed dividends), it
+    // covers every broker for that company + XD so it never lingers as pending.
+    const recordedByBroker = new Set<string>();
+    const recordedAnyBroker = new Set<string>();
+    dividends.filter(d => d.xdDate).forEach(d => {
+      const base = `${d.companyCode}|${d.xdDate}`;
+      if (d.brokerId) recordedByBroker.add(`${base}|${d.brokerId}`);
+      else recordedAnyBroker.add(base);
+    });
     return allPayouts
       .filter(p => p.exDividendDate && p.exDividendDate <= today)
       .flatMap(p =>
         sharesHeldByBrokerAtDate(p.companyCode, p.exDividendDate)
-          .filter(g => !recordedKeys.has(`${p.companyCode}|${p.exDividendDate}|${g.brokerKey}`))
+          .filter(g => {
+            const base = `${p.companyCode}|${p.exDividendDate}`;
+            return !recordedAnyBroker.has(base) && !recordedByBroker.has(`${base}|${g.brokerKey}`);
+          })
           .map(g => ({ payout: p, brokerId: g.brokerId, brokerKey: g.brokerKey, sharesHeld: g.shares }))
       )
       .sort((a, b) =>
