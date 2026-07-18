@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend, getDividendPayouts, getAllDividendPayouts, DividendPayoutData, getShareSplits, ShareSplitData, getBrokers, BrokerData } from '../api';
+import { getDividends, getCompanies, getTransactions, createDividend, updateDividend, deleteDividend, getDividendPayouts, getAllDividendPayouts, DividendPayoutData, getShareSplits, ShareSplitData, getBrokers, BrokerData, getUserSettings } from '../api';
 import { Dividend, Company, Transaction } from '../types';
 import { sharesHeldAtDate } from '../utils/splits';
-import { NO_BROKER } from '../utils/brokers';
+import { NO_BROKER, filterByBroker } from '../utils/brokers';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -17,6 +17,7 @@ export default function Dividends() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [shareSplits, setShareSplits] = useState<ShareSplitData[]>([]);
   const [brokers, setBrokers] = useState<BrokerData[]>([]);
+  const [dataBrokerIds, setDataBrokerIds] = useState<string[]>([]);
   const formRef = useRef<HTMLDivElement>(null);
   const [allPayouts, setAllPayouts] = useState<DividendPayoutData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,16 +98,18 @@ export default function Dividends() {
       getTransactions(),
       getShareSplits(),
       getBrokers().catch(() => [] as BrokerData[]),
+      getUserSettings().catch(() => ({ selectedDataBrokerIds: [] as string[] })),
       dividendPayoutsEnabled
         ? getAllDividendPayouts().catch(() => [] as DividendPayoutData[])
         : Promise.resolve([] as DividendPayoutData[]),
     ])
-      .then(([divs, comps, txns, splits, brks, payouts]) => {
+      .then(([divs, comps, txns, splits, brks, settings, payouts]) => {
         setDividends(divs);
         setCompanies(comps);
         setTransactions(txns);
         setShareSplits(splits);
         setBrokers(brks);
+        setDataBrokerIds(settings.selectedDataBrokerIds || []);
         setAllPayouts(payouts);
       })
       .catch(console.error)
@@ -181,6 +184,8 @@ export default function Dividends() {
       .flatMap(p =>
         sharesHeldByBrokerAtDate(p.companyCode, p.exDividendDate)
           .filter(g => {
+            // Respect the broker data filter (empty = all brokers).
+            if (dataBrokerIds.length > 0 && (g.brokerId == null || !dataBrokerIds.includes(g.brokerId))) return false;
             const base = `${p.companyCode}|${p.exDividendDate}`;
             return !recordedAnyBroker.has(base) && !recordedByBroker.has(`${base}|${g.brokerKey}`);
           })
@@ -191,7 +196,7 @@ export default function Dividends() {
         || a.payout.companyCode.localeCompare(b.payout.companyCode)
       );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allPayouts, dividends, transactions, shareSplits, brokers, dividendPayoutsEnabled]);
+  }, [allPayouts, dividends, transactions, shareSplits, brokers, dataBrokerIds, dividendPayoutsEnabled]);
 
   // Auto-suggest shares when XD date or company changes
   const handleXdDateChange = (newXdDate: string) => {
@@ -324,7 +329,7 @@ export default function Dividends() {
     return idx >= 0 && idx < 12 ? `${names[idx]} ${y}` : ym;
   };
 
-  const sorted = [...dividends]
+  const sorted = filterByBroker(dividends, dataBrokerIds)
     .filter(d =>
       divSearch === '' ||
       d.companyCode.toLowerCase().includes(divSearch.toLowerCase()) ||
