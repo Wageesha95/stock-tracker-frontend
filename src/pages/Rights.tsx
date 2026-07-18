@@ -42,7 +42,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
   const brokerName = (id: string | null | undefined) => id ? (brokers.find(b => b.id === id)?.name ?? '—') : '—';
 
   const loadData = () => {
-    Promise.all([getRights(), getCompanies(), getTransactions(), getBrokers().catch(() => [] as BrokerData[]), getUserSettings().catch(() => ({ selectedBrokerIds: [] as string[] }))])
+    Promise.all([getRights(), getCompanies(), getTransactions(), getBrokers().catch(() => [] as BrokerData[]), getUserSettings().catch(() => ({ selectedBrokerIds: [] as string[], selectedDataBrokerIds: [] as string[] }))])
       .then(([r, comps, txns, brks, settings]) => {
         setRights(r);
         setCompanies(comps);

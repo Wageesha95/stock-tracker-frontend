@@ -35,7 +35,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
   const brokerName = (id: string | null | undefined) => id ? (brokers.find(b => b.id === id)?.name ?? '—') : '—';
 
   const loadData = () => {
-    Promise.all([getIpos(), getCompanies(), getBrokers().catch(() => [] as BrokerData[]), getUserSettings().catch(() => ({ selectedBrokerIds: [] as string[] }))])
+    Promise.all([getIpos(), getCompanies(), getBrokers().catch(() => [] as BrokerData[]), getUserSettings().catch(() => ({ selectedBrokerIds: [] as string[], selectedDataBrokerIds: [] as string[] }))])
       .then(([r, comps, brks, settings]) => {
         setIpos(r);
         setCompanies(comps);
