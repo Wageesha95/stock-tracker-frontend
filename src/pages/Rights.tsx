@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getRights, createRights, updateRights, deleteRights, getCompanies, getTransactions, setTransactionsDisabledByCompany, RightsData } from '../api';
+import { getRights, createRights, updateRights, deleteRights, getCompanies, getTransactions, getBrokers, getUserSettings, setTransactionsDisabledByCompany, RightsData, BrokerData } from '../api';
 import { Company, Transaction } from '../types';
+import { defaultBrokerId } from '../utils/brokers';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -13,12 +14,15 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
   const [rights, setRights] = useState<RightsData[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [brokers, setBrokers] = useState<BrokerData[]>([]);
+  const [selectedBrokerIds, setSelectedBrokerIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [companyCode, setCompanyCode] = useState('');
   const [date, setDate] = useState('');
   const [count, setCount] = useState('');
   const [price, setPrice] = useState('');
+  const [brokerId, setBrokerId] = useState('');
   // Per-share cost already paid to buy the right (from a ".R" holding); 0 for a
   // plain manual rights entry. The recorded price/share = purchasedCost + premium.
   const [purchasedCost, setPurchasedCost] = useState(0);
@@ -32,13 +36,20 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
   const [editDate, setEditDate] = useState('');
   const [editCount, setEditCount] = useState('');
   const [editPrice, setEditPrice] = useState('');
+  const [editBrokerId, setEditBrokerId] = useState('');
+
+  const brokerName = (id: string | null | undefined) => id ? (brokers.find(b => b.id === id)?.name ?? '—') : '—';
 
   const loadData = () => {
-    Promise.all([getRights(), getCompanies(), getTransactions()])
-      .then(([r, comps, txns]) => {
+    Promise.all([getRights(), getCompanies(), getTransactions(), getBrokers().catch(() => [] as BrokerData[]), getUserSettings().catch(() => ({ selectedBrokerIds: [] as string[] }))])
+      .then(([r, comps, txns, brks, settings]) => {
         setRights(r);
         setCompanies(comps);
         setTransactions(txns);
+        setBrokers(brks);
+        const sel = settings.selectedBrokerIds || [];
+        setSelectedBrokerIds(sel);
+        setBrokerId(prev => prev || defaultBrokerId(brks, sel));
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -59,22 +70,28 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
         else { shares += c; cost += c * t.price + (t.commission || 0); bought += c; }
       });
       const disabled = txns.every(t => t.disabled === true);
-      return { companyCode: code, shares, avg: bought > 0 ? cost / bought : 0, disabled };
+      const holdingBrokerId = txns.find(t => t.brokerId)?.brokerId ?? null;
+      return { companyCode: code, shares, avg: bought > 0 ? cost / bought : 0, disabled, brokerId: holdingBrokerId };
     })
-      // Converted/disabled ".R" holdings drop out of the list once the user acts on them.
-      .filter(r => r.shares > 0 && !r.disabled)
+      .filter(r => r.shares > 0)
       .sort((a, b) => a.companyCode.localeCompare(b.companyCode));
   }, [transactions]);
 
+  // Active holdings show in "Purchased Rights"; converted/disabled ones move to a
+  // separate "Disabled Rights" table where they can be re-enabled.
+  const activePurchased = purchasedRights.filter(r => !r.disabled);
+  const disabledPurchased = purchasedRights.filter(r => r.disabled);
+
   // Load a purchased right into the Add Rights card: base company (.R -> .N),
   // shares held, and the average price paid for the rights.
-  const fillFromPurchased = (code: string, shares: number, avg: number) => {
+  const fillFromPurchased = (code: string, shares: number, avg: number, holdingBrokerId: string | null) => {
     setCompanyCode(code.replace('.R', '.N'));
     setCount(String(shares));
     setPurchasedCost(avg);
     setConvertCode(code);
     setPrice(''); // user enters the rights-issue price (premium) to add on top
     setDate(new Date().toLocaleDateString('en-CA'));
+    setBrokerId(holdingBrokerId || defaultBrokerId(brokers, selectedBrokerIds));
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
@@ -99,6 +116,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
         count: Number(count),
         // Total per-share cost = what was paid for the right + the rights-issue premium.
         price: purchasedCost + (Number(price) || 0),
+        brokerId: brokerId || null,
       });
       // Converting a purchased right: retire its ".R" holding so it stops counting.
       if (convertCode) {
@@ -110,6 +128,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
       setPrice('');
       setPurchasedCost(0);
       setConvertCode('');
+      setBrokerId(defaultBrokerId(brokers, selectedBrokerIds));
       loadData();
     } catch (err) {
       console.error('Failed to create rights', err);
@@ -127,6 +146,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
     setEditDate(r.date);
     setEditCount(String(r.count));
     setEditPrice(String(r.price));
+    setEditBrokerId(r.brokerId || '');
   };
 
   const handleEditSubmit = async () => {
@@ -135,6 +155,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
       date: editDate,
       count: Number(editCount),
       price: Number(editPrice),
+      brokerId: editBrokerId || null,
     });
     setEditItem(null);
     loadData();
@@ -142,7 +163,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
 
   const perShareCost = purchasedCost + (Number(price) || 0);
   const totalCost = (Number(count) || 0) * perShareCost;
-  const canAdd = companyCode !== '' && date !== '' && count !== '' && price !== '';
+  const canAdd = companyCode !== '' && date !== '' && count !== '' && price !== '' && brokerId !== '';
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const [rSortKey, setRSortKey] = useState<'date' | 'companyCode' | 'count' | 'price' | 'total'>('date');
@@ -175,9 +196,9 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
     <div>
       {!embedded && <h1>Rights Issues ({sorted.length})</h1>}
 
-      {purchasedRights.length > 0 && (
+      {activePurchased.length > 0 && (
         <div className="form-card">
-          <h2>Purchased Rights ({purchasedRights.length})</h2>
+          <h2>Purchased Rights ({activePurchased.length})</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
             Holdings recorded under a ".R" code. Convert them to a rights issue for the underlying ".N" shares — the ".R" holding is then disabled and drops out of calculations.
           </p>
@@ -187,6 +208,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
                 <tr>
                   <th>Rights Code</th>
                   <th className="hide-sm">For</th>
+                  <th>Broker</th>
                   <th className="text-right">Shares</th>
                   <th className="text-right">Avg Price</th>
                   <th className="text-right">Value</th>
@@ -194,7 +216,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
                 </tr>
               </thead>
               <tbody>
-                {purchasedRights.map(r => (
+                {activePurchased.map(r => (
                   <tr key={r.companyCode}>
                     <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${r.companyCode}`)}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -203,6 +225,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
                       </div>
                     </td>
                     <td className="mono hide-sm" style={{ color: 'var(--text-muted)' }}>{r.companyCode.replace('.R', '.N')}</td>
+                    <td style={{ fontSize: '0.85rem' }}>{brokerName(r.brokerId)}</td>
                     <td className="text-right mono">{r.shares}</td>
                     <td className="text-right mono">{fmt(r.avg)}</td>
                     <td className="text-right mono">{fmt(r.shares * r.avg)}</td>
@@ -210,7 +233,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
                       <td>
                         <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
                           <button
-                            onClick={() => fillFromPurchased(r.companyCode, r.shares, r.avg)}
+                            onClick={() => fillFromPurchased(r.companyCode, r.shares, r.avg, r.brokerId)}
                             style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: 'none', background: '#3182ce', color: 'white', cursor: 'pointer', fontWeight: 600 }}
                           >
                             + Add
@@ -257,6 +280,15 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
               {purchasedCost > 0 ? 'Rights Issue Price (premium)' : 'Price per Share'}
               <input type="number" step="0.01" min="0" value={price} onChange={e => setPrice(e.target.value)} required />
             </label>
+            <label>
+              Broker
+              <select value={brokerId} onChange={e => setBrokerId(e.target.value)} required>
+                <option value="">Select broker...</option>
+                {(selectedBrokerIds.length > 0 ? brokers.filter(b => selectedBrokerIds.includes(b.id)) : brokers).map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </label>
           </div>
           {purchasedCost > 0 && (
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
@@ -291,6 +323,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
               <tr>
                 <th className="sort-header" onClick={() => handleRSort('date')}>Date{rsi('date')}</th>
                 <th className="sort-header" onClick={() => handleRSort('companyCode')}>Company{rsi('companyCode')}</th>
+                <th>Broker</th>
                 <th className="sort-header text-right" onClick={() => handleRSort('count')}>Shares{rsi('count')}</th>
                 <th className="sort-header text-right" onClick={() => handleRSort('price')}>Price{rsi('price')}</th>
                 <th className="sort-header text-right" onClick={() => handleRSort('total')}>Total{rsi('total')}</th>
@@ -307,6 +340,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
                       {r.companyCode}
                     </div>
                   </td>
+                  <td style={{ fontSize: '0.85rem' }}>{brokerName(r.brokerId)}</td>
                   <td className="text-right mono">{r.count}</td>
                   <td className="text-right mono">{fmt(r.price)}</td>
                   <td className="text-right mono">{fmt(r.count * r.price)}</td>
@@ -356,6 +390,17 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
                 <input type="number" step="0.01" min="0" value={editPrice} onChange={e => setEditPrice(e.target.value)} required />
               </label>
             </div>
+            <div className="form-row">
+              <label>
+                Broker
+                <select value={editBrokerId} onChange={e => setEditBrokerId(e.target.value)} required>
+                  <option value="">Select broker...</option>
+                  {brokers.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
               Total: LKR {((Number(editCount) || 0) * (Number(editPrice) || 0)).toFixed(2)}
             </div>
@@ -369,6 +414,60 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
                 background: '#3182ce', color: 'white', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600,
               }}>Save</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {disabledPurchased.length > 0 && (
+        <div className="form-card" style={{ marginTop: '1.5rem' }}>
+          <h2>Disabled Rights ({disabledPurchased.length})</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
+            Converted / retired ".R" holdings. They are excluded from calculations — re-enable one to bring it back.
+          </p>
+          <div className="portfolio-table-wrap">
+            <table className="portfolio-table">
+              <thead>
+                <tr>
+                  <th>Rights Code</th>
+                  <th className="hide-sm">For</th>
+                  <th>Broker</th>
+                  <th className="text-right">Shares</th>
+                  <th className="text-right">Avg Price</th>
+                  <th className="text-right">Value</th>
+                  {!isReadMode && <th></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {disabledPurchased.map(r => (
+                  <tr key={r.companyCode} style={{ opacity: 0.65 }}>
+                    <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${r.companyCode}`)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <CompanyAvatar code={r.companyCode} size={26} />
+                        {r.companyCode}
+                        <span className="gain-pill" style={{ fontSize: '0.6rem', background: '#e2e8f0', color: '#4a5568' }}>DISABLED</span>
+                      </div>
+                    </td>
+                    <td className="mono hide-sm" style={{ color: 'var(--text-muted)' }}>{r.companyCode.replace('.R', '.N')}</td>
+                    <td style={{ fontSize: '0.85rem' }}>{brokerName(r.brokerId)}</td>
+                    <td className="text-right mono">{r.shares}</td>
+                    <td className="text-right mono">{fmt(r.avg)}</td>
+                    <td className="text-right mono">{fmt(r.shares * r.avg)}</td>
+                    {!isReadMode && (
+                      <td>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => toggleRightDisabled(r.companyCode, false)}
+                            style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: '1.5px solid var(--border-input)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}
+                          >
+                            Enable
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

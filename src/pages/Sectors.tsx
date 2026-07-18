@@ -71,15 +71,17 @@ export default function Sectors() {
   const [companySortDir, setCompanySortDir] = useState<SortDir>('desc');
 
   useEffect(() => {
-    Promise.all([
-      getDashboardAll(),
-      getIndustryGroups(),
-      getCompanies(),
-      getMarketData(),
-      getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
-      getUserSettings(),
-    ])
-      .then(([data, groups, comps, md, payouts, settings]) => {
+    // Settings first so the sector breakdown honours the selected broker filter.
+    getUserSettings().then(settings => {
+      const dataBrokers = settings.selectedDataBrokerIds || [];
+      return Promise.all([
+        getDashboardAll(dataBrokers),
+        getIndustryGroups(),
+        getCompanies(),
+        getMarketData(),
+        getAllDividendPayouts().catch(() => [] as DividendPayoutData[]),
+      ])
+      .then(([data, groups, comps, md, payouts]) => {
         setSectors(data.sectors || []);
         setIndustryGroups(groups);
         setCompanies(comps);
@@ -99,7 +101,8 @@ export default function Sectors() {
         const priceByCode: Record<string, number | undefined> = {};
         for (const [code, m] of Object.entries(mMap)) priceByCode[code] = m?.lastTrade;
         setTtmYieldMap(computeTtmYieldMap(settings.companyTtmWeeks, payouts, priceByCode));
-      })
+      });
+    })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);

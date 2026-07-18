@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardAll, getDividends, getMarketData, getTransactions, getCompanies, getUserSettings, getAvailableDates, getMarketDataByDate, getAllDividendPayouts, getShareSplits, ShareSplitData, invalidate } from '../api';
 import { sharesHeldAtDate } from '../utils/splits';
-import { filterTxByBroker } from '../utils/brokers';
+import { filterTxByBroker, filterByBroker } from '../utils/brokers';
 import type { DividendPayoutData } from '../api';
 import { PortfolioItem, Dividend, RealizedGainItem, Transaction, Company } from '../types';
 import { SELL_COMMISSION_RATE } from '../constants';
@@ -60,8 +60,10 @@ export default function Dashboard() {
       return Promise.all([getDashboardAll(dataBrokers), getDividends(), getMarketData(), getTransactions(), getCompanies(), getAvailableDates(), getAllDividendPayouts().catch(() => [] as DividendPayoutData[]), getShareSplits()])
         .then(([dash, d, md, txns, comps, dates, payouts, splits]) => {
           setPortfolio(dash.portfolio);
-          setDividends(d);
-          setOrigDividends(d);
+          // Dividends carry a brokerId — filter them to match the broker data filter.
+          const filteredDivs = filterByBroker(d, dataBrokers);
+          setDividends(filteredDivs);
+          setOrigDividends(filteredDivs);
           setRealizedItems(dash.realizedItems);
           setOrigRealizedItems(dash.realizedItems);
           setOpportunityCost(dash.opportunityCost);

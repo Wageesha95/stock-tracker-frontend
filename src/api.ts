@@ -487,13 +487,14 @@ export interface RightsData {
   date: string;
   count: number;
   price: number;
+  brokerId?: string | null;
   transactionId: string;
   createdAt: string;
 }
 export const getRights = () => cached('rights', () => api.get<RightsData[]>('/rights').then(res => res.data));
-export const createRights = (data: { companyCode: string; date: string; count: number; price: number }) =>
+export const createRights = (data: { companyCode: string; date: string; count: number; price: number; brokerId?: string | null }) =>
   api.post<RightsData>('/rights', data).then(res => { invalidate('rights', 'transactions', 'portfolio', 'dashboard-all'); return res.data; });
-export const updateRights = (id: string, data: { date: string; count: number; price: number }) =>
+export const updateRights = (id: string, data: { date: string; count: number; price: number; brokerId?: string | null }) =>
   api.put<RightsData>(`/rights/${id}`, data).then(res => { invalidate('rights', 'transactions', 'portfolio', 'dashboard-all'); return res.data; });
 export const deleteRights = (id: string) =>
   api.delete(`/rights/${id}`).then(res => { invalidate('rights', 'transactions', 'portfolio', 'dashboard-all'); return res; });
@@ -505,13 +506,14 @@ export interface IpoData {
   date: string;
   count: number;
   price: number;
+  brokerId?: string | null;
   transactionId: string;
   createdAt: string;
 }
 export const getIpos = () => cached('ipos', () => api.get<IpoData[]>('/ipos').then(res => res.data));
-export const createIpo = (data: { companyCode: string; date: string; count: number; price: number }) =>
+export const createIpo = (data: { companyCode: string; date: string; count: number; price: number; brokerId?: string | null }) =>
   api.post<IpoData>('/ipos', data).then(res => { invalidate('ipos', 'transactions', 'portfolio', 'dashboard-all'); return res.data; });
-export const updateIpo = (id: string, data: { date: string; count: number; price: number }) =>
+export const updateIpo = (id: string, data: { date: string; count: number; price: number; brokerId?: string | null }) =>
   api.put<IpoData>(`/ipos/${id}`, data).then(res => { invalidate('ipos', 'transactions', 'portfolio', 'dashboard-all'); return res.data; });
 export const deleteIpo = (id: string) =>
   api.delete(`/ipos/${id}`).then(res => { invalidate('ipos', 'transactions', 'portfolio', 'dashboard-all'); return res; });

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, DragEvent } from 'react';
 import { previewPdf, uploadPdf, getPdfUploads, deletePdfUpload, updatePdfUpload, getBrokers, getUserSettings, BrokerData } from '../api';
 import { Transaction } from '../types';
+import { defaultBrokerId } from '../utils/brokers';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 import { useTableSort } from '../hooks/useTableSort';
@@ -62,10 +63,7 @@ export default function PdfUpload() {
       const selected = s.selectedBrokerIds || [];
       setSelectedBrokerIds(selected);
       // Auto-select if user has a single broker (from settings or system-wide)
-      const available = selected.length > 0 ? b.filter(x => selected.includes(x.id)) : b;
-      if (available.length === 1) {
-        setBrokerId(available[0].id);
-      }
+      setBrokerId(defaultBrokerId(b, selected));
     }).catch(() => { loadBrokers(); });
   }, []);
 
@@ -168,12 +166,7 @@ export default function PdfUpload() {
     }
   };
 
-  const getDefaultBrokerId = () => {
-    const available = selectedBrokerIds.length > 0
-      ? brokers.filter(x => selectedBrokerIds.includes(x.id))
-      : brokers;
-    return available.length === 1 ? available[0].id : '';
-  };
+  const getDefaultBrokerId = () => defaultBrokerId(brokers, selectedBrokerIds);
 
   const handleReset = () => {
     setFile(null);

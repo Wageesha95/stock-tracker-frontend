@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getIpos, createIpo, updateIpo, deleteIpo, getCompanies, IpoData } from '../api';
+import { getIpos, createIpo, updateIpo, deleteIpo, getCompanies, getBrokers, getUserSettings, IpoData, BrokerData } from '../api';
 import { Company } from '../types';
+import { defaultBrokerId } from '../utils/brokers';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -12,12 +13,15 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
   const { isReadMode } = useAuth();
   const [ipos, setIpos] = useState<IpoData[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [brokers, setBrokers] = useState<BrokerData[]>([]);
+  const [selectedBrokerIds, setSelectedBrokerIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [companyCode, setCompanyCode] = useState('');
   const [date, setDate] = useState('');
   const [count, setCount] = useState('');
   const [price, setPrice] = useState('');
+  const [brokerId, setBrokerId] = useState('');
   const [search, setSearch] = useState('');
 
   // Edit modal
@@ -25,12 +29,19 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
   const [editDate, setEditDate] = useState('');
   const [editCount, setEditCount] = useState('');
   const [editPrice, setEditPrice] = useState('');
+  const [editBrokerId, setEditBrokerId] = useState('');
+
+  const brokerName = (id: string | null | undefined) => id ? (brokers.find(b => b.id === id)?.name ?? '—') : '—';
 
   const loadData = () => {
-    Promise.all([getIpos(), getCompanies()])
-      .then(([r, comps]) => {
+    Promise.all([getIpos(), getCompanies(), getBrokers().catch(() => [] as BrokerData[]), getUserSettings().catch(() => ({ selectedBrokerIds: [] as string[] }))])
+      .then(([r, comps, brks, settings]) => {
         setIpos(r);
         setCompanies(comps);
+        setBrokers(brks);
+        const sel = settings.selectedBrokerIds || [];
+        setSelectedBrokerIds(sel);
+        setBrokerId(prev => prev || defaultBrokerId(brks, sel));
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -46,10 +57,12 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
         date,
         count: Number(count),
         price: Number(price),
+        brokerId: brokerId || null,
       });
       setDate('');
       setCount('');
       setPrice('');
+      setBrokerId(defaultBrokerId(brokers, selectedBrokerIds));
       loadData();
     } catch (err) {
       console.error('Failed to create IPO', err);
@@ -67,6 +80,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
     setEditDate(r.date);
     setEditCount(String(r.count));
     setEditPrice(String(r.price));
+    setEditBrokerId(r.brokerId || '');
   };
 
   const handleEditSubmit = async () => {
@@ -75,13 +89,14 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
       date: editDate,
       count: Number(editCount),
       price: Number(editPrice),
+      brokerId: editBrokerId || null,
     });
     setEditItem(null);
     loadData();
   };
 
   const totalCost = (Number(count) || 0) * (Number(price) || 0);
-  const canAdd = companyCode !== '' && date !== '' && count !== '' && price !== '';
+  const canAdd = companyCode !== '' && date !== '' && count !== '' && price !== '' && brokerId !== '';
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const [rSortKey, setRSortKey] = useState<'date' | 'companyCode' | 'count' | 'price' | 'total'>('date');
@@ -139,6 +154,15 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
               Price per Share
               <input type="number" step="0.01" min="0" value={price} onChange={e => setPrice(e.target.value)} required />
             </label>
+            <label>
+              Broker
+              <select value={brokerId} onChange={e => setBrokerId(e.target.value)} required>
+                <option value="">Select broker...</option>
+                {(selectedBrokerIds.length > 0 ? brokers.filter(b => selectedBrokerIds.includes(b.id)) : brokers).map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </label>
           </div>
           <div className="form-row">
             <span className="total-cost">Total Cost: {totalCost.toFixed(2)}</span>
@@ -168,6 +192,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
               <tr>
                 <th className="sort-header" onClick={() => handleRSort('date')}>Date{rsi('date')}</th>
                 <th className="sort-header" onClick={() => handleRSort('companyCode')}>Company{rsi('companyCode')}</th>
+                <th>Broker</th>
                 <th className="sort-header text-right" onClick={() => handleRSort('count')}>Shares{rsi('count')}</th>
                 <th className="sort-header text-right" onClick={() => handleRSort('price')}>Price{rsi('price')}</th>
                 <th className="sort-header text-right" onClick={() => handleRSort('total')}>Total{rsi('total')}</th>
@@ -184,6 +209,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
                       {r.companyCode}
                     </div>
                   </td>
+                  <td style={{ fontSize: '0.85rem' }}>{brokerName(r.brokerId)}</td>
                   <td className="text-right mono">{r.count}</td>
                   <td className="text-right mono">{fmt(r.price)}</td>
                   <td className="text-right mono">{fmt(r.count * r.price)}</td>
@@ -231,6 +257,17 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
               <label>
                 Price per Share
                 <input type="number" step="0.01" min="0" value={editPrice} onChange={e => setEditPrice(e.target.value)} required />
+              </label>
+            </div>
+            <div className="form-row">
+              <label>
+                Broker
+                <select value={editBrokerId} onChange={e => setEditBrokerId(e.target.value)} required>
+                  <option value="">Select broker...</option>
+                  {brokers.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
               </label>
             </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
