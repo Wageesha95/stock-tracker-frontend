@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getRights, createRights, updateRights, deleteRights, getCompanies, getTransactions, getBrokers, getUserSettings, setTransactionsDisabledByCompany, RightsData, BrokerData } from '../api';
 import { Company, Transaction } from '../types';
@@ -78,10 +78,10 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
       .sort((a, b) => a.companyCode.localeCompare(b.companyCode));
   }, [transactions]);
 
-  // Active holdings show in "Purchased Rights". Converted holdings are now held as
-  // ".N" shares and drop out entirely. Wasted (disabled, not converted) holdings move
-  // to the "Wasted / Lapsed Rights" table (their cost is booked as a realized loss).
+  // The three buckets of ".R" holdings: active (Purchased), exercised (Converted, now
+  // held as ".N" shares), and lapsed (Wasted, booked as a realized loss).
   const activePurchased = purchasedRights.filter(r => !r.disabled);
+  const convertedPurchased = purchasedRights.filter(r => r.disabled && r.converted);
   const wastedPurchased = purchasedRights.filter(r => r.disabled && !r.converted);
 
   // Load a purchased right into the Add Rights card: base company (.R -> .N),
@@ -195,68 +195,81 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
 
   if (loading) return <p>Loading...</p>;
 
+  type PurchasedRight = typeof purchasedRights[number];
+  // Shared renderer for the three ".R" holdings tables. Shows "No records found" when
+  // empty; `pill` badges converted/lapsed rows; `renderActions` supplies the row buttons.
+  const renderHoldingsTable = (
+    rows: PurchasedRight[],
+    renderActions: ((r: PurchasedRight) => ReactNode) | null,
+    pill?: { text: string; bg: string; color: string },
+  ) => {
+    if (rows.length === 0) {
+      return <p style={{ color: 'var(--text-muted)', margin: 0 }}>No records found</p>;
+    }
+    return (
+      <div className="portfolio-table-wrap">
+        <table className="portfolio-table">
+          <thead>
+            <tr>
+              <th>Rights Code</th>
+              <th className="hide-sm">For</th>
+              <th>Broker</th>
+              <th className="text-right">Shares</th>
+              <th className="text-right">Avg Price</th>
+              <th className="text-right">Value</th>
+              {!isReadMode && renderActions && <th></th>}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.companyCode} style={pill ? { opacity: 0.65 } : undefined}>
+                <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${r.companyCode}`)}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <CompanyAvatar code={r.companyCode} size={26} />
+                    {r.companyCode}
+                    {pill && <span className="gain-pill" style={{ fontSize: '0.6rem', background: pill.bg, color: pill.color }}>{pill.text}</span>}
+                  </div>
+                </td>
+                <td className="mono hide-sm" style={{ color: 'var(--text-muted)' }}>{r.companyCode.replace('.R', '.N')}</td>
+                <td style={{ fontSize: '0.85rem' }}>{brokerName(r.brokerId)}</td>
+                <td className="text-right mono">{r.shares}</td>
+                <td className="text-right mono">{fmt(r.avg)}</td>
+                <td className="text-right mono">{fmt(r.shares * r.avg)}</td>
+                {!isReadMode && renderActions && <td>{renderActions(r)}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <div>
       {!embedded && <h1>Rights Issues ({sorted.length})</h1>}
 
-      {activePurchased.length > 0 && (
-        <div className="form-card">
-          <h2>Purchased Rights ({activePurchased.length})</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
-            Holdings recorded under a ".R" code. Convert them to a rights issue for the underlying ".N" shares — the ".R" holding is then disabled and drops out of calculations.
-          </p>
-          <div className="portfolio-table-wrap">
-            <table className="portfolio-table">
-              <thead>
-                <tr>
-                  <th>Rights Code</th>
-                  <th className="hide-sm">For</th>
-                  <th>Broker</th>
-                  <th className="text-right">Shares</th>
-                  <th className="text-right">Avg Price</th>
-                  <th className="text-right">Value</th>
-                  {!isReadMode && <th></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {activePurchased.map(r => (
-                  <tr key={r.companyCode}>
-                    <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${r.companyCode}`)}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <CompanyAvatar code={r.companyCode} size={26} />
-                        {r.companyCode}
-                      </div>
-                    </td>
-                    <td className="mono hide-sm" style={{ color: 'var(--text-muted)' }}>{r.companyCode.replace('.R', '.N')}</td>
-                    <td style={{ fontSize: '0.85rem' }}>{brokerName(r.brokerId)}</td>
-                    <td className="text-right mono">{r.shares}</td>
-                    <td className="text-right mono">{fmt(r.avg)}</td>
-                    <td className="text-right mono">{fmt(r.shares * r.avg)}</td>
-                    {!isReadMode && (
-                      <td>
-                        <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => fillFromPurchased(r.companyCode, r.shares, r.avg, r.brokerId)}
-                            style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: 'none', background: '#3182ce', color: 'white', cursor: 'pointer', fontWeight: 600 }}
-                          >
-                            + Add
-                          </button>
-                          <button
-                            onClick={() => toggleRightDisabled(r.companyCode, true)}
-                            style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: '1.5px solid var(--border-input)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}
-                          >
-                            Disable
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <div className="form-card">
+        <h2>Purchased Rights ({activePurchased.length})</h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
+          Holdings recorded under a ".R" code. Convert them to a rights issue for the underlying ".N" shares, or mark them lapsed if you didn't take them up.
+        </p>
+        {renderHoldingsTable(activePurchased, !isReadMode ? (r => (
+          <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => fillFromPurchased(r.companyCode, r.shares, r.avg, r.brokerId)}
+              style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: 'none', background: '#3182ce', color: 'white', cursor: 'pointer', fontWeight: 600 }}
+            >
+              + Add
+            </button>
+            <button
+              onClick={() => toggleRightDisabled(r.companyCode, true)}
+              style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: '1.5px solid var(--border-input)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}
+            >
+              Lapse
+            </button>
           </div>
-        </div>
-      )}
+        )) : null)}
+      </div>
 
       {!isReadMode && (
       <div className="form-card" ref={formRef}>
@@ -318,7 +331,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
       )}
 
       {sorted.length === 0 ? (
-        <p>No rights issues yet.</p>
+        <p style={{ color: 'var(--text-muted)' }}>No records found</p>
       ) : (
         <div className="portfolio-table-wrap">
           <table className="portfolio-table">
@@ -421,59 +434,47 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
         </div>
       )}
 
-      {wastedPurchased.length > 0 && (
-        <div className="form-card" style={{ marginTop: '1.5rem' }}>
-          <h2>Wasted / Lapsed Rights ({wastedPurchased.length})</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
-            Rights you purchased but did not convert to shares. The money paid is booked as a realized loss. Re-enable one to bring it back as an active holding.
-          </p>
-          <div className="portfolio-table-wrap">
-            <table className="portfolio-table">
-              <thead>
-                <tr>
-                  <th>Rights Code</th>
-                  <th className="hide-sm">For</th>
-                  <th>Broker</th>
-                  <th className="text-right">Shares</th>
-                  <th className="text-right">Avg Price</th>
-                  <th className="text-right">Value</th>
-                  {!isReadMode && <th></th>}
-                </tr>
-              </thead>
-              <tbody>
-                {wastedPurchased.map(r => (
-                  <tr key={r.companyCode} style={{ opacity: 0.65 }}>
-                    <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${r.companyCode}`)}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <CompanyAvatar code={r.companyCode} size={26} />
-                        {r.companyCode}
-                        <span className="gain-pill" style={{ fontSize: '0.6rem', background: '#fed7d7', color: '#9b2c2c' }}>LAPSED</span>
-                      </div>
-                    </td>
-                    <td className="mono hide-sm" style={{ color: 'var(--text-muted)' }}>{r.companyCode.replace('.R', '.N')}</td>
-                    <td style={{ fontSize: '0.85rem' }}>{brokerName(r.brokerId)}</td>
-                    <td className="text-right mono">{r.shares}</td>
-                    <td className="text-right mono">{fmt(r.avg)}</td>
-                    <td className="text-right mono">{fmt(r.shares * r.avg)}</td>
-                    {!isReadMode && (
-                      <td>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => toggleRightDisabled(r.companyCode, false)}
-                            style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: '1.5px solid var(--border-input)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}
-                          >
-                            Enable
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      <div className="form-card" style={{ marginTop: '1.5rem' }}>
+        <h2>Converted Rights ({convertedPurchased.length})</h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
+          Rights you exercised — now held as ".N" shares, so they are excluded from these calculations. Revert one to bring back the ".R" holding.
+        </p>
+        {renderHoldingsTable(
+          convertedPurchased,
+          !isReadMode ? (r => (
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => toggleRightDisabled(r.companyCode, false)}
+                style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: '1.5px solid var(--border-input)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}
+              >
+                Revert
+              </button>
+            </div>
+          )) : null,
+          { text: 'CONVERTED', bg: '#c6f6d5', color: '#22543d' },
+        )}
+      </div>
+
+      <div className="form-card" style={{ marginTop: '1.5rem' }}>
+        <h2>Wasted / Lapsed Rights ({wastedPurchased.length})</h2>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
+          Rights you purchased but did not convert to shares. The money paid is booked as a realized loss. Re-enable one to bring it back as an active holding.
+        </p>
+        {renderHoldingsTable(
+          wastedPurchased,
+          !isReadMode ? (r => (
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => toggleRightDisabled(r.companyCode, false)}
+                style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: '1.5px solid var(--border-input)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}
+              >
+                Enable
+              </button>
+            </div>
+          )) : null,
+          { text: 'LAPSED', bg: '#fed7d7', color: '#9b2c2c' },
+        )}
+      </div>
     </div>
   );
 }
