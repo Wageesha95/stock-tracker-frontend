@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { getCompanies, scrapeMarketDataPreview, scrapeMarketDataSaveBars, scrapeMarketDataSaveBar, getMarketDataHistory, ScrapedBar } from '../api';
+import { getCompanies, scrapeMarketDataPreview, scrapeMarketDataSaveBars, scrapeMarketDataSaveBar, getMarketDataHistory, scrapeMarketDataCse, ScrapedBar } from '../api';
 import { Company, MarketData } from '../types';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -37,6 +37,25 @@ export default function MarketDataScraper() {
   const [results, setResults] = useState<CompanyScrapeResult[]>([]);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const abortRef = useRef(false);
+
+  // CSE quick fetch (browserless HTTP — today's snapshot for all companies)
+  const [cseRunning, setCseRunning] = useState(false);
+  const [cseResult, setCseResult] = useState('');
+  const [cseError, setCseError] = useState('');
+
+  const runCseFetch = async () => {
+    setCseRunning(true);
+    setCseResult('');
+    setCseError('');
+    try {
+      const r = await scrapeMarketDataCse();
+      setCseResult(`Fetched ${r.tradeDate}: ${r.succeeded} saved, ${r.failed} failed of ${r.totalCompanies} companies.`);
+    } catch (err: any) {
+      setCseError(err?.response?.data?.error || err?.message || 'Fetch failed.');
+    } finally {
+      setCseRunning(false);
+    }
+  };
 
   useEffect(() => {
     getCompanies().then(setCompanies).catch(() => {});
@@ -210,6 +229,22 @@ export default function MarketDataScraper() {
         <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem', fontSize: '0.8rem' }}>
           <span style={{ background: 'var(--gain-pill-up-bg)', color: 'var(--gain-pill-up-color)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>New record</span>
           <span style={{ background: 'var(--gain-pill-down-bg)', color: 'var(--gain-pill-down-color)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>Value differs</span>
+        </div>
+      )}
+
+      {mode === 'select' && (
+        <div className="form-card" style={{ maxWidth: '500px', marginBottom: '1rem' }}>
+          <h2 style={{ marginTop: 0 }}>Today's Prices — CSE (fast)</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
+            Pulls today's last price, high/low and volume for every company straight from the CSE JSON API over plain HTTP — no headless browser, so it's fast and light enough to run anywhere.
+          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <button className="btn-upload" onClick={runCseFetch} disabled={cseRunning}>
+              {cseRunning ? 'Fetching…' : 'Fetch Today’s Prices'}
+            </button>
+            {cseResult && <span style={{ color: 'var(--text-success)', fontSize: '0.85rem' }}>{cseResult}</span>}
+            {cseError && <span className="gain-negative" style={{ fontSize: '0.85rem' }}>{cseError}</span>}
+          </div>
         </div>
       )}
 
