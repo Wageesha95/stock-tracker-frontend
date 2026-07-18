@@ -105,7 +105,7 @@ export default function AvgCalculator() {
     }
     // (currentCost + shares * price + commission) / (currentShares + shares) = target
     // shares * (price - target) = target * currentShares - currentCost - commission
-    const sharesToBuy = (target * currentShares - currentCost + commission) / (price - target);
+    const sharesToBuy = (target * currentShares - currentCost - commission) / (price - target);
     if (sharesToBuy <= 0 || !isFinite(sharesToBuy)) {
       return { error: 'Not possible with given price and target' };
     }
