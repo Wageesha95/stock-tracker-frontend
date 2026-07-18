@@ -600,61 +600,106 @@ export default function Dividends() {
         )}
       </div>
 
-      {divTab === 'cash' && cashView !== 'list' && (cashDivs.length === 0 ? (
-        <p style={{ color: 'var(--text-muted)' }}>No cash dividends yet.</p>
-      ) : (() => {
-        const groups = new Map<string, { label: string; count: number; shares: number; total: number }>();
+      {divTab === 'cash' && cashView !== 'list' && sorted.length > 0 && (() => {
+        const groups: Record<string, typeof cashDivs> = {};
         for (const d of cashDivs) {
           const key = cashView === 'company' ? d.companyCode : (d.xdDate || d.date).slice(0, 7);
-          const g = groups.get(key) || { label: key, count: 0, shares: 0, total: 0 };
-          g.count += 1;
-          g.shares += divShares(d);
-          g.total += d.totalAmount;
-          groups.set(key, g);
+          (groups[key] = groups[key] || []).push(d);
         }
-        const rows = [...groups.values()].sort((a, b) =>
-          cashView === 'month' ? b.label.localeCompare(a.label) : b.total - a.total
+        const keys = Object.keys(groups).sort((a, b) =>
+          cashView === 'month'
+            ? b.localeCompare(a)
+            : groups[b].reduce((s, d) => s + d.totalAmount, 0) - groups[a].reduce((s, d) => s + d.totalAmount, 0)
         );
-        return (
-          <div className="portfolio-table-wrap">
-            <table className="portfolio-table">
-              <thead>
-                <tr>
-                  <th>{cashView === 'company' ? 'Company' : 'Month (XD)'}</th>
-                  <th className="text-right">Dividends</th>
-                  <th className="text-right">Shares</th>
-                  <th className="text-right">Total Received</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(g => (
-                  <tr key={g.label}>
-                    <td style={cashView === 'company' ? { cursor: 'pointer' } : undefined} onClick={cashView === 'company' ? () => navigate(`/company/${g.label}`) : undefined}>
-                      {cashView === 'company' ? (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                          <CompanyAvatar code={g.label} size={26} />
-                          {g.label}
-                        </div>
-                      ) : monthLabel(g.label)}
-                    </td>
-                    <td className="text-right mono">{g.count}</td>
-                    <td className="text-right mono">{g.shares}</td>
-                    <td className="text-right mono">{g.total.toFixed(2)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="portfolio-total">
-                  <td>Total</td>
-                  <td className="text-right mono">{cashDivs.length}</td>
-                  <td></td>
-                  <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.totalAmount, 0).toFixed(2)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        );
-      })())}
+        return keys.map(key => {
+          const divs = groups[key];
+          const total = divs.reduce((s, d) => s + d.totalAmount, 0);
+          const totalShares = divs.reduce((s, d) => s + divShares(d), 0);
+          return (
+            <div key={key} className="group-card">
+              <div className="group-header">
+                <div className="group-header-left">
+                  {cashView === 'company' ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <CompanyAvatar code={key} size={32} />
+                      <div>
+                        <div className="group-code">{key}</div>
+                        <div className="group-name">{divs.length} dividend{divs.length !== 1 ? 's' : ''}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="group-code">{monthLabel(key)}</div>
+                      <div className="group-name">{divs.length} dividend{divs.length !== 1 ? 's' : ''}</div>
+                    </div>
+                  )}
+                </div>
+                <div className="group-header-stats">
+                  <div className="group-stat">
+                    <div className="group-stat-label">Received</div>
+                    <div className="group-stat-value">{total.toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+              <div className="portfolio-table-wrap">
+                <table className="portfolio-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>XD Date</th>
+                      {cashView === 'month' && <th>Company</th>}
+                      <th>Broker</th>
+                      <th className="text-right">Amount/Share</th>
+                      <th className="text-right">Shares</th>
+                      <th className="text-right">Total</th>
+                      {!isReadMode && <th></th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {divs.map(d => (
+                      <tr key={d.id}>
+                        <td>{d.date}</td>
+                        <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{d.xdDate || '—'}</td>
+                        {cashView === 'month' && (
+                          <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${d.companyCode}`)}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <CompanyAvatar code={d.companyCode} size={26} />
+                              {d.companyCode}
+                            </div>
+                          </td>
+                        )}
+                        <td style={{ fontSize: '0.85rem' }}>{d.brokerId ? brokerName(d.brokerId) : '—'}</td>
+                        <td className="text-right mono">{divAmountPerShare(d).toFixed(2)}</td>
+                        <td className="text-right mono">{divShares(d)}</td>
+                        <td className="text-right mono">{d.totalAmount.toFixed(2)}</td>
+                        {!isReadMode && (
+                          <td>
+                            <ActionMenu actions={[
+                              { label: 'Edit', onClick: () => openEdit(d) },
+                              { label: 'Delete', onClick: () => handleDelete(d.id), danger: true },
+                            ]} />
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="portfolio-total">
+                      <td colSpan={cashView === 'month' ? 5 : 4}>Total ({divs.length})</td>
+                      <td className="text-right mono">{totalShares}</td>
+                      <td className="text-right mono">{total.toFixed(2)}</td>
+                      {!isReadMode && <td></td>}
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          );
+        });
+      })()}
+      {divTab === 'cash' && cashView !== 'list' && cashDivs.length === 0 && (
+        <p style={{ color: 'var(--text-muted)' }}>No cash dividends yet.</p>
+      )}
 
       {divTab === 'cash' && cashView === 'list' && (cashDivs.length === 0 ? (
         <p style={{ color: 'var(--text-muted)' }}>No cash dividends yet.</p>
