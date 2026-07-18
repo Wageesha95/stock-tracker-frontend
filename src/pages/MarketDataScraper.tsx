@@ -324,7 +324,7 @@ export default function MarketDataScraper() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <CompanyAvatar code={r.code} size={22} />
                             <span className="company-code">{r.code}</span>
-                            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{r.name}</span>
+                            <span className="hide-sm" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{r.name}</span>
                           </div>
                         </td>
                         <td style={{ fontSize: '0.8rem' }}>

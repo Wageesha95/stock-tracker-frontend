@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
 import { getLoginHistory, LoginHistoryItem } from '../api';
+import { useTableSort } from '../hooks/useTableSort';
 
 export default function LoginHistory() {
   const [history, setHistory] = useState<LoginHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const { sorted, handleSort, sortIcon } = useTableSort(history, 'timestamp');
 
   const loadData = () => {
     setLoading(true);
@@ -44,17 +46,17 @@ export default function LoginHistory() {
         <table className="portfolio-table">
           <thead>
             <tr>
-              <th>User</th>
-              <th>Action</th>
+              <th className="sort-header" onClick={() => handleSort('username')}>User{sortIcon('username')}</th>
+              <th className="sort-header" onClick={() => handleSort('action')}>Action{sortIcon('action')}</th>
               <th>Mode</th>
-              <th>Device</th>
-              <th>IP</th>
-              <th>Location</th>
-              <th>Time</th>
+              <th className="sort-header" onClick={() => handleSort('device')}>Device{sortIcon('device')}</th>
+              <th className="sort-header" onClick={() => handleSort('ipAddress')}>IP{sortIcon('ipAddress')}</th>
+              <th className="sort-header" onClick={() => handleSort('location')}>Location{sortIcon('location')}</th>
+              <th className="sort-header" onClick={() => handleSort('timestamp')}>Time{sortIcon('timestamp')}</th>
             </tr>
           </thead>
           <tbody>
-            {history.map(h => (
+            {sorted.map(h => (
               <tr key={h.id}>
                 <td style={{ fontWeight: 600 }}>{h.username}</td>
                 <td>

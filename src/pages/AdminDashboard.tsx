@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getAdminStats, getSystemStats, createAdminUser, updateAdminUser, deleteAdminUser, unlockUser, toggleDividendPayouts, getAllDividendPayouts, createDividendPayout, updateDividendPayout, deleteDividendPayout, DividendPayoutData, getBrokers, createBroker, deleteBroker, BrokerData, getRightsRecords, setRightsRecordDisabled, RightsRecord } from '../api';
 import ActionMenu from '../components/ActionMenu';
 import ShareSplitsPage from './ShareSplits';
+import { useTableSort } from '../hooks/useTableSort';
 
 const emptyPayoutForm = { companyCode: '', exDividendDate: '', amountPerShare: '', paymentDate: '', announcementDate: '', dividendType: '' };
 type PayoutForm = typeof emptyPayoutForm;
@@ -205,10 +206,14 @@ export default function AdminDashboard() {
 
   const filteredPayouts = useMemo(() => {
     const s = payoutSearch.trim().toLowerCase();
-    return [...payouts]
-      .filter(p => s === '' || p.companyCode.toLowerCase().includes(s) || (p.exDividendDate || '').includes(s))
-      .sort((a, b) => (b.exDividendDate || '').localeCompare(a.exDividendDate || ''));
+    return payouts.filter(p => s === '' || p.companyCode.toLowerCase().includes(s) || (p.exDividendDate || '').includes(s));
   }, [payouts, payoutSearch]);
+
+  // Sortable admin tables.
+  const usersSort = useTableSort(users, 'username', 'asc');
+  const brokersSort = useTableSort(brokers, 'name', 'asc');
+  const payoutsSort = useTableSort(filteredPayouts, 'exDividendDate');
+  const rightsSort = useTableSort(rightsRecords, 'userId', 'asc');
 
   // ---- Broker CRUD ----
   const handleAddBroker = async () => {
@@ -313,14 +318,14 @@ export default function AdminDashboard() {
         <table className="portfolio-table">
           <thead>
             <tr>
-              <th>Username</th>
-              <th>Role</th>
-              <th className="text-right">Transactions</th>
+              <th className="sort-header" onClick={() => usersSort.handleSort('username')}>Username{usersSort.sortIcon('username')}</th>
+              <th className="sort-header" onClick={() => usersSort.handleSort('role')}>Role{usersSort.sortIcon('role')}</th>
+              <th className="sort-header text-right" onClick={() => usersSort.handleSort('transactionCount')}>Transactions{usersSort.sortIcon('transactionCount')}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
-            {users.map(u => (
+            {usersSort.sorted.map(u => (
               <tr key={u.id}>
                 <td style={{ fontWeight: 600 }}>
                   {u.username}
@@ -370,10 +375,10 @@ export default function AdminDashboard() {
             <div className="portfolio-table-wrap">
               <table className="portfolio-table">
                 <thead>
-                  <tr><th>Name</th><th></th></tr>
+                  <tr><th className="sort-header" onClick={() => brokersSort.handleSort('name')}>Name{brokersSort.sortIcon('name')}</th><th></th></tr>
                 </thead>
                 <tbody>
-                  {brokers.map(b => (
+                  {brokersSort.sorted.map(b => (
                     <tr key={b.id}>
                       <td style={{ fontWeight: 600 }}>{b.name}</td>
                       <td>
@@ -430,17 +435,17 @@ export default function AdminDashboard() {
           <table className="portfolio-table">
             <thead>
               <tr>
-                <th>Company</th>
-                <th>XD Date</th>
-                <th className="text-right">Amount/Share</th>
-                <th>Payment Date</th>
-                <th>Announced</th>
-                <th>Type</th>
+                <th className="sort-header" onClick={() => payoutsSort.handleSort('companyCode')}>Company{payoutsSort.sortIcon('companyCode')}</th>
+                <th className="sort-header" onClick={() => payoutsSort.handleSort('exDividendDate')}>XD Date{payoutsSort.sortIcon('exDividendDate')}</th>
+                <th className="sort-header text-right" onClick={() => payoutsSort.handleSort('amountPerShare')}>Amount/Share{payoutsSort.sortIcon('amountPerShare')}</th>
+                <th className="sort-header" onClick={() => payoutsSort.handleSort('paymentDate')}>Payment Date{payoutsSort.sortIcon('paymentDate')}</th>
+                <th className="sort-header" onClick={() => payoutsSort.handleSort('announcementDate')}>Announced{payoutsSort.sortIcon('announcementDate')}</th>
+                <th className="sort-header" onClick={() => payoutsSort.handleSort('dividendType')}>Type{payoutsSort.sortIcon('dividendType')}</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filteredPayouts.map(p => (
+              {payoutsSort.sorted.map(p => (
                 <tr key={p.id}>
                   <td style={{ fontWeight: 600 }}>{p.companyCode}</td>
                   <td className="mono">{p.exDividendDate || '—'}</td>
@@ -487,16 +492,16 @@ export default function AdminDashboard() {
               <table className="portfolio-table">
                 <thead>
                   <tr>
-                    <th>User</th>
-                    <th>Rights Code</th>
-                    <th className="text-right">Shares</th>
-                    <th className="text-right hide-sm">Txns</th>
-                    <th>Status</th>
+                    <th className="sort-header" onClick={() => rightsSort.handleSort('userId')}>User{rightsSort.sortIcon('userId')}</th>
+                    <th className="sort-header" onClick={() => rightsSort.handleSort('companyCode')}>Rights Code{rightsSort.sortIcon('companyCode')}</th>
+                    <th className="sort-header text-right" onClick={() => rightsSort.handleSort('shares')}>Shares{rightsSort.sortIcon('shares')}</th>
+                    <th className="sort-header text-right hide-sm" onClick={() => rightsSort.handleSort('txCount')}>Txns{rightsSort.sortIcon('txCount')}</th>
+                    <th className="sort-header" onClick={() => rightsSort.handleSort('disabled')}>Status{rightsSort.sortIcon('disabled')}</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rightsRecords.map(r => (
+                  {rightsSort.sorted.map(r => (
                     <tr key={`${r.userId}|${r.companyCode}`} style={r.disabled ? { opacity: 0.55 } : undefined}>
                       <td style={{ fontWeight: 600 }}>{r.userId}</td>
                       <td className="mono">{r.companyCode}</td>
