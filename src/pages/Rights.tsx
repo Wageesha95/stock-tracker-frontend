@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getRights, createRights, updateRights, deleteRights, getCompanies, getTransactions, getBrokers, getUserSettings, setTransactionsDisabledByCompany, RightsData, BrokerData } from '../api';
 import { Company, Transaction } from '../types';
-import { defaultBrokerId } from '../utils/brokers';
+import { defaultBrokerId, filterByBroker, filterTxByBroker } from '../utils/brokers';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -16,6 +16,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [brokers, setBrokers] = useState<BrokerData[]>([]);
   const [selectedBrokerIds, setSelectedBrokerIds] = useState<string[]>([]);
+  const [dataBrokerIds, setDataBrokerIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [companyCode, setCompanyCode] = useState('');
@@ -49,6 +50,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
         setBrokers(brks);
         const sel = settings.selectedBrokerIds || [];
         setSelectedBrokerIds(sel);
+        setDataBrokerIds(settings.selectedDataBrokerIds || []);
         setBrokerId(prev => prev || defaultBrokerId(brks, sel));
       })
       .catch(console.error)
@@ -59,7 +61,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
   // transactions so disabled (converted) ones are still listed and can be re-enabled.
   const purchasedRights = useMemo(() => {
     const groups: Record<string, Transaction[]> = {};
-    transactions.filter(t => t.companyCode.includes('.R')).forEach(t => {
+    filterTxByBroker(transactions, dataBrokerIds).filter(t => t.companyCode.includes('.R')).forEach(t => {
       (groups[t.companyCode] = groups[t.companyCode] || []).push(t);
     });
     return Object.entries(groups).map(([code, txns]) => {
@@ -76,7 +78,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
     })
       .filter(r => r.shares > 0)
       .sort((a, b) => a.companyCode.localeCompare(b.companyCode));
-  }, [transactions]);
+  }, [transactions, dataBrokerIds]);
 
   // The three buckets of ".R" holdings: active (Purchased), exercised (Converted, now
   // held as ".N" shares), and lapsed (Wasted, booked as a realized loss).
@@ -176,7 +178,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
   };
   const rsi = (key: typeof rSortKey) => rSortKey === key ? (rSortDir === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
 
-  const sorted = [...rights]
+  const sorted = filterByBroker(rights, dataBrokerIds)
     .filter(r =>
       search === '' ||
       r.companyCode.toLowerCase().includes(search.toLowerCase()) ||

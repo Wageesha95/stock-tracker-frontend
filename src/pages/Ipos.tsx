@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getIpos, createIpo, updateIpo, deleteIpo, getCompanies, getBrokers, getUserSettings, IpoData, BrokerData } from '../api';
 import { Company } from '../types';
-import { defaultBrokerId } from '../utils/brokers';
+import { defaultBrokerId, filterByBroker } from '../utils/brokers';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -15,6 +15,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [brokers, setBrokers] = useState<BrokerData[]>([]);
   const [selectedBrokerIds, setSelectedBrokerIds] = useState<string[]>([]);
+  const [dataBrokerIds, setDataBrokerIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [companyCode, setCompanyCode] = useState('');
@@ -41,6 +42,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
         setBrokers(brks);
         const sel = settings.selectedBrokerIds || [];
         setSelectedBrokerIds(sel);
+        setDataBrokerIds(settings.selectedDataBrokerIds || []);
         setBrokerId(prev => prev || defaultBrokerId(brks, sel));
       })
       .catch(console.error)
@@ -107,7 +109,7 @@ export default function IpoPage({ embedded }: { embedded?: boolean }) {
   };
   const rsi = (key: typeof rSortKey) => rSortKey === key ? (rSortDir === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
 
-  const sorted = [...ipos]
+  const sorted = filterByBroker(ipos, dataBrokerIds)
     .filter(r =>
       search === '' ||
       r.companyCode.toLowerCase().includes(search.toLowerCase()) ||
