@@ -314,6 +314,15 @@ export default function Dividends() {
   const dsi = (key: typeof divSortKey) => divSortKey === key ? (divSortDir === 'asc' ? ' \u2191' : ' \u2193') : ' \u2195';
   const [divSearch, setDivSearch] = useState('');
   const [divTab, setDivTab] = useState<'cash' | 'scrip'>('cash');
+  const [cashView, setCashView] = useState<'list' | 'company' | 'month'>('list');
+
+  // "2026-03" → "Mar 2026" for the by-month grouping label.
+  const monthLabel = (ym: string): string => {
+    const [y, m] = ym.split('-');
+    const names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const idx = Number(m) - 1;
+    return idx >= 0 && idx < 12 ? `${names[idx]} ${y}` : ym;
+  };
 
   const sorted = [...dividends]
     .filter(d =>
@@ -579,12 +588,75 @@ export default function Dividends() {
           <button className={divTab === 'cash' ? 'active' : ''} onClick={() => setDivTab('cash')}>Cash ({cashDivs.length})</button>
           <button className={divTab === 'scrip' ? 'active' : ''} onClick={() => setDivTab('scrip')}>Scrip ({scripDivs.length})</button>
         </div>
+        {divTab === 'cash' && (
+          <div className="segmented-control">
+            <button className={cashView === 'list' ? 'active' : ''} onClick={() => setCashView('list')}>List</button>
+            <button className={cashView === 'company' ? 'active' : ''} onClick={() => setCashView('company')}>By Company</button>
+            <button className={cashView === 'month' ? 'active' : ''} onClick={() => setCashView('month')}>By Month</button>
+          </div>
+        )}
         {dividends.length >= 5 && (
           <input className="search-bar" value={divSearch} onChange={e => setDivSearch(e.target.value)} placeholder="Search..." />
         )}
       </div>
 
-      {divTab === 'cash' && (cashDivs.length === 0 ? (
+      {divTab === 'cash' && cashView !== 'list' && (cashDivs.length === 0 ? (
+        <p style={{ color: 'var(--text-muted)' }}>No cash dividends yet.</p>
+      ) : (() => {
+        const groups = new Map<string, { label: string; count: number; shares: number; total: number }>();
+        for (const d of cashDivs) {
+          const key = cashView === 'company' ? d.companyCode : (d.xdDate || d.date).slice(0, 7);
+          const g = groups.get(key) || { label: key, count: 0, shares: 0, total: 0 };
+          g.count += 1;
+          g.shares += divShares(d);
+          g.total += d.totalAmount;
+          groups.set(key, g);
+        }
+        const rows = [...groups.values()].sort((a, b) =>
+          cashView === 'month' ? b.label.localeCompare(a.label) : b.total - a.total
+        );
+        return (
+          <div className="portfolio-table-wrap">
+            <table className="portfolio-table">
+              <thead>
+                <tr>
+                  <th>{cashView === 'company' ? 'Company' : 'Month (XD)'}</th>
+                  <th className="text-right">Dividends</th>
+                  <th className="text-right">Shares</th>
+                  <th className="text-right">Total Received</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(g => (
+                  <tr key={g.label}>
+                    <td style={cashView === 'company' ? { cursor: 'pointer' } : undefined} onClick={cashView === 'company' ? () => navigate(`/company/${g.label}`) : undefined}>
+                      {cashView === 'company' ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <CompanyAvatar code={g.label} size={26} />
+                          {g.label}
+                        </div>
+                      ) : monthLabel(g.label)}
+                    </td>
+                    <td className="text-right mono">{g.count}</td>
+                    <td className="text-right mono">{g.shares}</td>
+                    <td className="text-right mono">{g.total.toFixed(2)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="portfolio-total">
+                  <td>Total</td>
+                  <td className="text-right mono">{cashDivs.length}</td>
+                  <td></td>
+                  <td className="text-right mono">{cashDivs.reduce((s, d) => s + d.totalAmount, 0).toFixed(2)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        );
+      })())}
+
+      {divTab === 'cash' && cashView === 'list' && (cashDivs.length === 0 ? (
         <p style={{ color: 'var(--text-muted)' }}>No cash dividends yet.</p>
       ) : (
         <div className="portfolio-table-wrap">

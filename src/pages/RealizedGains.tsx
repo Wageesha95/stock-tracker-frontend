@@ -52,7 +52,9 @@ export default function RealizedGains() {
                   <CompanyAvatar code={r.companyCode} size={26} />
                   <div className="company-cell">
                     <span className="company-code">{r.companyCode}</span>
-                    {r.companyName && r.companyName !== r.companyCode && (
+                    {r.note ? (
+                      <span className="company-name" style={{ color: '#c53030' }}>{r.note}</span>
+                    ) : r.companyName && r.companyName !== r.companyCode && (
                       <span className="company-name">{r.companyName}</span>
                     )}
                   </div>

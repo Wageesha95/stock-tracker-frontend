@@ -38,6 +38,7 @@ export interface Transaction {
   commission: number;
   brokerId?: string | null;
   disabled?: boolean;
+  converted?: boolean;
   createdAt: string;
 }
 
@@ -67,6 +68,7 @@ export interface RealizedGainItem {
   commission: number;
   realizedGain: number;
   gainPercent: number;
+  note?: string;
 }
 
 export interface MarketData {

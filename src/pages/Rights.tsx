@@ -70,17 +70,19 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
         else { shares += c; cost += c * t.price + (t.commission || 0); bought += c; }
       });
       const disabled = txns.every(t => t.disabled === true);
+      const converted = disabled && txns.every(t => t.converted === true);
       const holdingBrokerId = txns.find(t => t.brokerId)?.brokerId ?? null;
-      return { companyCode: code, shares, avg: bought > 0 ? cost / bought : 0, disabled, brokerId: holdingBrokerId };
+      return { companyCode: code, shares, avg: bought > 0 ? cost / bought : 0, disabled, converted, brokerId: holdingBrokerId };
     })
       .filter(r => r.shares > 0)
       .sort((a, b) => a.companyCode.localeCompare(b.companyCode));
   }, [transactions]);
 
-  // Active holdings show in "Purchased Rights"; converted/disabled ones move to a
-  // separate "Disabled Rights" table where they can be re-enabled.
+  // Active holdings show in "Purchased Rights". Converted holdings are now held as
+  // ".N" shares and drop out entirely. Wasted (disabled, not converted) holdings move
+  // to the "Wasted / Lapsed Rights" table (their cost is booked as a realized loss).
   const activePurchased = purchasedRights.filter(r => !r.disabled);
-  const disabledPurchased = purchasedRights.filter(r => r.disabled);
+  const wastedPurchased = purchasedRights.filter(r => r.disabled && !r.converted);
 
   // Load a purchased right into the Add Rights card: base company (.R -> .N),
   // shares held, and the average price paid for the rights.
@@ -118,9 +120,10 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
         price: purchasedCost + (Number(price) || 0),
         brokerId: brokerId || null,
       });
-      // Converting a purchased right: retire its ".R" holding so it stops counting.
+      // Converting a purchased right: retire its ".R" holding as CONVERTED (now held as
+      // ".N" shares), so it is excluded from calculations but not booked as a loss.
       if (convertCode) {
-        await setTransactionsDisabledByCompany(convertCode, true);
+        await setTransactionsDisabledByCompany(convertCode, true, true);
       }
       setCompanyCode('');
       setDate('');
@@ -418,11 +421,11 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
         </div>
       )}
 
-      {disabledPurchased.length > 0 && (
+      {wastedPurchased.length > 0 && (
         <div className="form-card" style={{ marginTop: '1.5rem' }}>
-          <h2>Disabled Rights ({disabledPurchased.length})</h2>
+          <h2>Wasted / Lapsed Rights ({wastedPurchased.length})</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
-            Converted / retired ".R" holdings. They are excluded from calculations — re-enable one to bring it back.
+            Rights you purchased but did not convert to shares. The money paid is booked as a realized loss. Re-enable one to bring it back as an active holding.
           </p>
           <div className="portfolio-table-wrap">
             <table className="portfolio-table">
@@ -438,13 +441,13 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
                 </tr>
               </thead>
               <tbody>
-                {disabledPurchased.map(r => (
+                {wastedPurchased.map(r => (
                   <tr key={r.companyCode} style={{ opacity: 0.65 }}>
                     <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${r.companyCode}`)}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                         <CompanyAvatar code={r.companyCode} size={26} />
                         {r.companyCode}
-                        <span className="gain-pill" style={{ fontSize: '0.6rem', background: '#e2e8f0', color: '#4a5568' }}>DISABLED</span>
+                        <span className="gain-pill" style={{ fontSize: '0.6rem', background: '#fed7d7', color: '#9b2c2c' }}>LAPSED</span>
                       </div>
                     </td>
                     <td className="mono hide-sm" style={{ color: 'var(--text-muted)' }}>{r.companyCode.replace('.R', '.N')}</td>

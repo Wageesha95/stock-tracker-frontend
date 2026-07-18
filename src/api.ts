@@ -115,8 +115,8 @@ export const deleteTransaction = (id: string) =>
   api.delete(`/transactions/${id}`).then(res => { invalidate('transactions', 'portfolio', 'realized', 'summary'); return res; });
 // Enable/disable all of the current user's transactions under a company code
 // (e.g. retire a ".R" rights holding once converted to shares).
-export const setTransactionsDisabledByCompany = (code: string, value: boolean) =>
-  api.put(`/transactions/company/${code}/disabled?value=${value}`).then(res => {
+export const setTransactionsDisabledByCompany = (code: string, value: boolean, converted = false) =>
+  api.put(`/transactions/company/${code}/disabled?value=${value}&converted=${converted}`).then(res => {
     invalidate('transactions', 'portfolio', 'realized', 'summary', 'dashboard-all');
     return res.data;
   });

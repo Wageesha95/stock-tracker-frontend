@@ -5,6 +5,17 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Stock Tracker</title>
+    <!-- Apply the saved (default: dark) theme before the bundle loads to avoid a light flash -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('theme') || 'dark';
+          document.documentElement.style.backgroundColor = t === 'dark' ? '#0f1923' : '#f0f4f8';
+        } catch (e) {
+          document.documentElement.style.backgroundColor = '#0f1923';
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
