@@ -318,61 +318,72 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
       </div>
       )}
 
-      {rights.length >= 3 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-          <input
-            className="search-bar"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search..."
-          />
+      <div className="form-card" style={{ marginTop: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+          <h2 style={{ margin: 0 }}>Rights Issues ({sorted.length})</h2>
+          {rights.length >= 3 && (
+            <input
+              className="search-bar"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search..."
+            />
+          )}
         </div>
-      )}
-
-      {sorted.length === 0 ? (
-        <p style={{ color: 'var(--text-muted)' }}>No records found</p>
-      ) : (
-        <div className="portfolio-table-wrap">
-          <table className="portfolio-table">
-            <thead>
-              <tr>
-                <th className="sort-header" onClick={() => handleRSort('date')}>Date{rsi('date')}</th>
-                <th className="sort-header" onClick={() => handleRSort('companyCode')}>Company{rsi('companyCode')}</th>
-                <th>Broker</th>
-                <th className="sort-header text-right" onClick={() => handleRSort('count')}>Shares{rsi('count')}</th>
-                <th className="sort-header text-right" onClick={() => handleRSort('price')}>Price{rsi('price')}</th>
-                <th className="sort-header text-right" onClick={() => handleRSort('total')}>Total{rsi('total')}</th>
-                {!isReadMode && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map(r => (
-                <tr key={r.id}>
-                  <td>{r.date}</td>
-                  <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${r.companyCode}`)}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <CompanyAvatar code={r.companyCode} size={26} />
-                      {r.companyCode}
-                    </div>
-                  </td>
-                  <td style={{ fontSize: '0.85rem' }}>{brokerName(r.brokerId)}</td>
-                  <td className="text-right mono">{r.count}</td>
-                  <td className="text-right mono">{fmt(r.price)}</td>
-                  <td className="text-right mono">{fmt(r.count * r.price)}</td>
-                  {!isReadMode && (
-                  <td>
-                    <ActionMenu actions={[
-                      { label: 'Edit', onClick: () => openEdit(r) },
-                      { label: 'Delete', onClick: () => handleDelete(r.id), danger: true },
-                    ]} />
-                  </td>
-                  )}
+        {sorted.length === 0 ? (
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>No records found</p>
+        ) : (
+          <div className="portfolio-table-wrap">
+            <table className="portfolio-table">
+              <thead>
+                <tr>
+                  <th className="sort-header" onClick={() => handleRSort('date')}>Date{rsi('date')}</th>
+                  <th className="sort-header" onClick={() => handleRSort('companyCode')}>Company{rsi('companyCode')}</th>
+                  <th>Broker</th>
+                  <th className="sort-header text-right" onClick={() => handleRSort('count')}>Shares{rsi('count')}</th>
+                  <th className="sort-header text-right" onClick={() => handleRSort('price')}>Price{rsi('price')}</th>
+                  <th className="sort-header text-right" onClick={() => handleRSort('total')}>Total{rsi('total')}</th>
+                  {!isReadMode && <th></th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {sorted.map(r => (
+                  <tr key={r.id}>
+                    <td>{r.date}</td>
+                    <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${r.companyCode}`)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <CompanyAvatar code={r.companyCode} size={26} />
+                        {r.companyCode}
+                      </div>
+                    </td>
+                    <td style={{ fontSize: '0.85rem' }}>{brokerName(r.brokerId)}</td>
+                    <td className="text-right mono">{r.count}</td>
+                    <td className="text-right mono">{fmt(r.price)}</td>
+                    <td className="text-right mono">{fmt(r.count * r.price)}</td>
+                    {!isReadMode && (
+                    <td>
+                      <ActionMenu actions={[
+                        { label: 'Edit', onClick: () => openEdit(r) },
+                        { label: 'Delete', onClick: () => handleDelete(r.id), danger: true },
+                      ]} />
+                    </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="portfolio-total">
+                  <td colSpan={3}>Total ({sorted.length})</td>
+                  <td className="text-right mono">{sorted.reduce((s, r) => s + r.count, 0)}</td>
+                  <td></td>
+                  <td className="text-right mono">{fmt(sorted.reduce((s, r) => s + r.count * r.price, 0))}</td>
+                  {!isReadMode && <td></td>}
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* Edit Modal */}
       {!isReadMode && editItem && (
@@ -436,7 +447,7 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
       <div className="form-card" style={{ marginTop: '1.5rem' }}>
         <h2>Wasted / Lapsed Rights ({wastedPurchased.length})</h2>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
-          Rights you purchased but did not convert to shares. The money paid is booked as a realized loss. Re-enable one to bring it back as an active holding.
+          Rights you purchased but did not convert to shares. The money paid is booked as a realized loss.
         </p>
         {renderHoldingsTable(
           wastedPurchased,
