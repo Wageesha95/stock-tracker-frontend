@@ -472,9 +472,12 @@ export interface CseScrapeStatus {
   saved: number;
   failed: number;
   status: 'success' | 'partial' | 'failed';
+  autoEnabled?: boolean | null;
 }
 export const getCseStatus = () =>
   api.get<CseScrapeStatus | null>('/admin/scrape/market-data-cse/status').then(res => res.data);
+export const setCseAuto = (enabled: boolean) =>
+  api.post<CseScrapeStatus>(`/admin/scrape/market-data-cse/auto?enabled=${enabled}`).then(res => res.data);
 export const recordCseRun = (data: { total: number; saved: number; failed: number; tradeDate: string }) =>
   api.post<CseScrapeStatus>('/admin/scrape/market-data-cse/record', data).then(res => res.data);
 

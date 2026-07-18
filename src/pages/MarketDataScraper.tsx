@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { getCompanies, scrapeMarketDataPreview, scrapeMarketDataSaveBars, scrapeMarketDataSaveBar, getMarketDataHistory, scrapeMarketDataCseOne, getCseTradeDate, getCseStatus, recordCseRun, invalidate, ScrapedBar, CseScrapeStatus } from '../api';
+import { getCompanies, scrapeMarketDataPreview, scrapeMarketDataSaveBars, scrapeMarketDataSaveBar, getMarketDataHistory, scrapeMarketDataCseOne, getCseTradeDate, getCseStatus, recordCseRun, setCseAuto, invalidate, ScrapedBar, CseScrapeStatus } from '../api';
 import { Company, MarketData } from '../types';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -46,6 +46,14 @@ export default function MarketDataScraper() {
   const [cseTradeDate, setCseTradeDate] = useState('');
   const [cseStatus, setCseStatus] = useState<CseScrapeStatus | null>(null);
   const cseAbortRef = useRef(false);
+
+  const autoOn = cseStatus?.autoEnabled !== false; // default on
+  const toggleAuto = async () => {
+    try {
+      const st = await setCseAuto(!autoOn);
+      setCseStatus(st);
+    } catch { /* ignore */ }
+  };
 
   const runCseFetch = async () => {
     cseAbortRef.current = false;
@@ -273,6 +281,15 @@ export default function MarketDataScraper() {
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
               Pulls the last price, high/low and volume for every company straight from the CSE JSON API over plain HTTP — no headless browser. Saved under the last actual market day, so running on a weekend/holiday still aligns correctly.
             </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
+              <span style={{ fontSize: '0.85rem' }}>
+                Auto-fetch (every 15 min, server):{' '}
+                <strong className={autoOn ? 'gain-positive' : 'gain-negative'}>{autoOn ? 'ON' : 'OFF'}</strong>
+              </span>
+              <button className="btn-reset" onClick={toggleAuto}>
+                {autoOn ? 'Stop auto-fetch' : 'Start auto-fetch'}
+              </button>
+            </div>
             {cseTradeDate && (
               <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
                 Market day: <strong>{cseTradeDate}</strong>
