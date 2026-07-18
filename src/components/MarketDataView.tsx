@@ -139,13 +139,15 @@ export default function MarketDataView() {
                       <td className="text-right mono">{md.lastTrade.toFixed(2)}</td>
                       <td className="text-right mono">{md.high != null ? md.high.toFixed(2) : '\u2014'}</td>
                       <td className="text-right mono">{md.low != null ? md.low.toFixed(2) : '\u2014'}</td>
-                      <td className={`text-right mono ${gainClass(md.change)}`}>
-                        {gainSign(md.change)}{md.change.toFixed(2)}
+                      <td className={`text-right mono ${md.change != null ? gainClass(md.change) : ''}`}>
+                        {md.change != null ? `${gainSign(md.change)}${md.change.toFixed(2)}` : '—'}
                       </td>
                       <td className="text-right mono">
-                        <span className={`gain-pill ${md.changePercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
-                          {gainSign(md.changePercent)}{md.changePercent.toFixed(2)}%
-                        </span>
+                        {md.changePercent != null ? (
+                          <span className={`gain-pill ${md.changePercent >= 0 ? 'gain-pill-up' : 'gain-pill-down'}`}>
+                            {gainSign(md.changePercent)}{md.changePercent.toFixed(2)}%
+                          </span>
+                        ) : '—'}
                       </td>
                     </tr>
                   ))}
