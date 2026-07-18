@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { getCompanies, scrapeMarketDataPreview, scrapeMarketDataSaveBars, scrapeMarketDataSaveBar, getMarketDataHistory, scrapeMarketDataCseOne, invalidate, ScrapedBar } from '../api';
+import { getCompanies, scrapeMarketDataPreview, scrapeMarketDataSaveBars, scrapeMarketDataSaveBar, getMarketDataHistory, scrapeMarketDataCseOne, getCseTradeDate, invalidate, ScrapedBar } from '../api';
 import { Company, MarketData } from '../types';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -43,11 +43,16 @@ export default function MarketDataScraper() {
   const [cseRunning, setCseRunning] = useState(false);
   const [cseProgress, setCseProgress] = useState({ current: 0, total: 0 });
   const [cseResults, setCseResults] = useState<{ code: string; name: string; status: CseStatus; error?: string }[]>([]);
+  const [cseTradeDate, setCseTradeDate] = useState('');
   const cseAbortRef = useRef(false);
 
   const runCseFetch = async () => {
     cseAbortRef.current = false;
     setCseRunning(true);
+    // Resolve the last actual market day once, so a run on a weekend/holiday still
+    // saves under the day the data belongs to (not calendar today).
+    const tradeDate = await getCseTradeDate().catch(() => '');
+    setCseTradeDate(tradeDate);
     const sorted = [...companies].sort((a, b) => a.code.localeCompare(b.code));
     setCseResults(sorted.map(c => ({ code: c.code, name: c.name, status: 'pending' as CseStatus })));
     setCseProgress({ current: 0, total: sorted.length });
@@ -58,7 +63,7 @@ export default function MarketDataScraper() {
       setCseProgress({ current: i + 1, total: sorted.length });
       setCseResults(prev => prev.map(r => r.code === code ? { ...r, status: 'fetching' } : r));
       try {
-        const res = await scrapeMarketDataCseOne(code);
+        const res = await scrapeMarketDataCseOne(code, tradeDate || undefined);
         const st: CseStatus = res.status === 'saved' ? 'saved' : res.status === 'skipped' ? 'skipped' : 'error';
         setCseResults(prev => prev.map(r => r.code === code ? { ...r, status: st, error: res.error } : r));
       } catch (err: any) {
@@ -255,8 +260,13 @@ export default function MarketDataScraper() {
           <div className="form-card" style={{ maxWidth: '600px', marginBottom: '1rem' }}>
             <h2 style={{ marginTop: 0 }}>Today's Prices — CSE (fast)</h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
-              Pulls today's last price, high/low and volume for every company straight from the CSE JSON API over plain HTTP — no headless browser, so it's fast and light enough to run anywhere.
+              Pulls the last price, high/low and volume for every company straight from the CSE JSON API over plain HTTP — no headless browser. Saved under the last actual market day, so running on a weekend/holiday still aligns correctly.
             </p>
+            {cseTradeDate && (
+              <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                Market day: <strong>{cseTradeDate}</strong>
+              </div>
+            )}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <button className="btn-upload" onClick={runCseFetch} disabled={cseRunning || companies.length === 0}>
                 {cseRunning ? 'Fetching…' : 'Fetch Today’s Prices'}

@@ -457,9 +457,14 @@ export const scrapeMarketDataAll = () =>
 // Lightweight browserless market-data fetch straight from the CSE JSON API (no Selenium).
 export const scrapeMarketDataCse = () =>
   api.post<{ source: string; tradeDate: string; totalCompanies: number; succeeded: number; failed: number }>('/admin/scrape/market-data-cse').then(res => { invalidate('market', 'ytd', 'year-low', 'dashboard-all', 'portfolio'); return res.data; });
-// Per-company variant so the UI can loop and show live progress.
-export const scrapeMarketDataCseOne = (companyCode: string) =>
-  api.post<{ companyCode: string; status: 'saved' | 'skipped' | 'error'; error?: string }>(`/admin/scrape/market-data-cse/${companyCode}`).then(res => res.data);
+// Last actual CSE trading day — resolve once, then align the whole run to it.
+export const getCseTradeDate = () =>
+  api.get<{ tradeDate: string }>('/admin/scrape/market-data-cse/trade-date').then(res => res.data.tradeDate);
+// Per-company variant so the UI can loop and show live progress. tradeDate aligns to the last market day.
+export const scrapeMarketDataCseOne = (companyCode: string, tradeDate?: string) =>
+  api.post<{ companyCode: string; status: 'saved' | 'skipped' | 'error'; tradeDate?: string; error?: string }>(
+    `/admin/scrape/market-data-cse/${companyCode}${tradeDate ? `?tradeDate=${tradeDate}` : ''}`
+  ).then(res => res.data);
 
 // Market Data Delete
 export const deleteMarketDataRange = (from?: string, to?: string) => {
