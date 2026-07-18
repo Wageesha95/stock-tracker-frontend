@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { getCompanies, scrapeMarketDataPreview, scrapeMarketDataSaveBars, scrapeMarketDataSaveBar, getMarketDataHistory, scrapeMarketDataCse, ScrapedBar } from '../api';
+import { getCompanies, scrapeMarketDataPreview, scrapeMarketDataSaveBars, scrapeMarketDataSaveBar, getMarketDataHistory, scrapeMarketDataCseOne, invalidate, ScrapedBar } from '../api';
 import { Company, MarketData } from '../types';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -38,23 +38,37 @@ export default function MarketDataScraper() {
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const abortRef = useRef(false);
 
-  // CSE quick fetch (browserless HTTP — today's snapshot for all companies)
+  // CSE fetch (browserless HTTP) — looped per company so the UI shows live status.
+  type CseStatus = 'pending' | 'fetching' | 'saved' | 'skipped' | 'error';
   const [cseRunning, setCseRunning] = useState(false);
-  const [cseResult, setCseResult] = useState('');
-  const [cseError, setCseError] = useState('');
+  const [cseProgress, setCseProgress] = useState({ current: 0, total: 0 });
+  const [cseResults, setCseResults] = useState<{ code: string; name: string; status: CseStatus; error?: string }[]>([]);
+  const cseAbortRef = useRef(false);
 
   const runCseFetch = async () => {
+    cseAbortRef.current = false;
     setCseRunning(true);
-    setCseResult('');
-    setCseError('');
-    try {
-      const r = await scrapeMarketDataCse();
-      setCseResult(`Fetched ${r.tradeDate}: ${r.succeeded} saved, ${r.failed} failed of ${r.totalCompanies} companies.`);
-    } catch (err: any) {
-      setCseError(err?.response?.data?.error || err?.message || 'Fetch failed.');
-    } finally {
-      setCseRunning(false);
+    const sorted = [...companies].sort((a, b) => a.code.localeCompare(b.code));
+    setCseResults(sorted.map(c => ({ code: c.code, name: c.name, status: 'pending' as CseStatus })));
+    setCseProgress({ current: 0, total: sorted.length });
+
+    for (let i = 0; i < sorted.length; i++) {
+      if (cseAbortRef.current) break;
+      const code = sorted[i].code;
+      setCseProgress({ current: i + 1, total: sorted.length });
+      setCseResults(prev => prev.map(r => r.code === code ? { ...r, status: 'fetching' } : r));
+      try {
+        const res = await scrapeMarketDataCseOne(code);
+        const st: CseStatus = res.status === 'saved' ? 'saved' : res.status === 'skipped' ? 'skipped' : 'error';
+        setCseResults(prev => prev.map(r => r.code === code ? { ...r, status: st, error: res.error } : r));
+      } catch (err: any) {
+        setCseResults(prev => prev.map(r => r.code === code ? { ...r, status: 'error', error: err?.message } : r));
+      }
+      if (i < sorted.length - 1) await new Promise(res => setTimeout(res, 120)); // polite spacing
     }
+
+    invalidate('market', 'ytd', 'year-low', 'dashboard-all', 'portfolio');
+    setCseRunning(false);
   };
 
   useEffect(() => {
@@ -232,21 +246,72 @@ export default function MarketDataScraper() {
         </div>
       )}
 
-      {mode === 'select' && (
-        <div className="form-card" style={{ maxWidth: '500px', marginBottom: '1rem' }}>
-          <h2 style={{ marginTop: 0 }}>Today's Prices — CSE (fast)</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
-            Pulls today's last price, high/low and volume for every company straight from the CSE JSON API over plain HTTP — no headless browser, so it's fast and light enough to run anywhere.
-          </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <button className="btn-upload" onClick={runCseFetch} disabled={cseRunning}>
-              {cseRunning ? 'Fetching…' : 'Fetch Today’s Prices'}
-            </button>
-            {cseResult && <span style={{ color: 'var(--text-success)', fontSize: '0.85rem' }}>{cseResult}</span>}
-            {cseError && <span className="gain-negative" style={{ fontSize: '0.85rem' }}>{cseError}</span>}
+      {mode === 'select' && (() => {
+        const done = !cseRunning && cseProgress.total > 0;
+        const savedN = cseResults.filter(r => r.status === 'saved').length;
+        const skippedN = cseResults.filter(r => r.status === 'skipped').length;
+        const failedN = cseResults.filter(r => r.status === 'error').length;
+        return (
+          <div className="form-card" style={{ maxWidth: '600px', marginBottom: '1rem' }}>
+            <h2 style={{ marginTop: 0 }}>Today's Prices — CSE (fast)</h2>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
+              Pulls today's last price, high/low and volume for every company straight from the CSE JSON API over plain HTTP — no headless browser, so it's fast and light enough to run anywhere.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+              <button className="btn-upload" onClick={runCseFetch} disabled={cseRunning || companies.length === 0}>
+                {cseRunning ? 'Fetching…' : 'Fetch Today’s Prices'}
+              </button>
+              {cseRunning && <button className="btn-reset" onClick={() => { cseAbortRef.current = true; }}>Stop</button>}
+              {cseProgress.total > 0 && (
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                  {cseProgress.current}/{cseProgress.total}
+                </span>
+              )}
+            </div>
+
+            {cseProgress.total > 0 && <ProgressBar current={cseProgress.current} total={cseProgress.total} />}
+
+            {cseResults.length > 0 && (
+              <div style={{ fontSize: '0.85rem', margin: '0.5rem 0' }}>
+                <span className="gain-positive">{savedN} saved</span>
+                {', '}<span style={{ color: 'var(--text-muted)' }}>{skippedN} no price</span>
+                {', '}<span className="gain-negative">{failedN} failed</span>
+                {done && <span style={{ color: 'var(--text-muted)' }}> — done</span>}
+              </div>
+            )}
+
+            {cseResults.length > 0 && (
+              <div className="portfolio-table-wrap" style={{ maxHeight: '320px', overflow: 'auto' }}>
+                <table className="portfolio-table">
+                  <thead>
+                    <tr><th>Company</th><th>Status</th></tr>
+                  </thead>
+                  <tbody>
+                    {cseResults.map(r => (
+                      <tr key={r.code}>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <CompanyAvatar code={r.code} size={22} />
+                            <span className="company-code">{r.code}</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{r.name}</span>
+                          </div>
+                        </td>
+                        <td style={{ fontSize: '0.8rem' }}>
+                          {r.status === 'pending' && <span style={{ color: 'var(--text-muted)' }}>Pending</span>}
+                          {r.status === 'fetching' && <span style={{ color: 'var(--accent)' }}>Fetching…</span>}
+                          {r.status === 'saved' && <span className="gain-positive">Saved</span>}
+                          {r.status === 'skipped' && <span style={{ color: 'var(--text-muted)' }}>No price</span>}
+                          {r.status === 'error' && <span className="gain-negative" title={r.error}>Failed</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {mode === 'select' && (
         <div className="form-card" style={{ maxWidth: '500px' }}>

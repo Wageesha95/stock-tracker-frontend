@@ -457,6 +457,9 @@ export const scrapeMarketDataAll = () =>
 // Lightweight browserless market-data fetch straight from the CSE JSON API (no Selenium).
 export const scrapeMarketDataCse = () =>
   api.post<{ source: string; tradeDate: string; totalCompanies: number; succeeded: number; failed: number }>('/admin/scrape/market-data-cse').then(res => { invalidate('market', 'ytd', 'year-low', 'dashboard-all', 'portfolio'); return res.data; });
+// Per-company variant so the UI can loop and show live progress.
+export const scrapeMarketDataCseOne = (companyCode: string) =>
+  api.post<{ companyCode: string; status: 'saved' | 'skipped' | 'error'; error?: string }>(`/admin/scrape/market-data-cse/${companyCode}`).then(res => res.data);
 
 // Market Data Delete
 export const deleteMarketDataRange = (from?: string, to?: string) => {
