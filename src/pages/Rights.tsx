@@ -81,7 +81,6 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
   // The three buckets of ".R" holdings: active (Purchased), exercised (Converted, now
   // held as ".N" shares), and lapsed (Wasted, booked as a realized loss).
   const activePurchased = purchasedRights.filter(r => !r.disabled);
-  const convertedPurchased = purchasedRights.filter(r => r.disabled && r.converted);
   const wastedPurchased = purchasedRights.filter(r => r.disabled && !r.converted);
 
   // Load a purchased right into the Add Rights card: base company (.R -> .N),
@@ -433,27 +432,6 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
           </div>
         </div>
       )}
-
-      <div className="form-card" style={{ marginTop: '1.5rem' }}>
-        <h2>Converted Rights ({convertedPurchased.length})</h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
-          Rights you exercised — now held as ".N" shares, so they are excluded from these calculations. Revert one to bring back the ".R" holding.
-        </p>
-        {renderHoldingsTable(
-          convertedPurchased,
-          !isReadMode ? (r => (
-            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => toggleRightDisabled(r.companyCode, false)}
-                style={{ padding: '0.3rem 0.7rem', fontSize: '0.75rem', borderRadius: '6px', border: '1.5px solid var(--border-input)', background: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontWeight: 600 }}
-              >
-                Revert
-              </button>
-            </div>
-          )) : null,
-          { text: 'CONVERTED', bg: '#c6f6d5', color: '#22543d' },
-        )}
-      </div>
 
       <div className="form-card" style={{ marginTop: '1.5rem' }}>
         <h2>Wasted / Lapsed Rights ({wastedPurchased.length})</h2>
