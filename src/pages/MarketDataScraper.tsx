@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { getCompanies, scrapeMarketDataPreview, scrapeMarketDataSaveBars, scrapeMarketDataSaveBar, getMarketDataHistory, scrapeMarketDataCseOne, getCseTradeDate, invalidate, ScrapedBar } from '../api';
+import { getCompanies, scrapeMarketDataPreview, scrapeMarketDataSaveBars, scrapeMarketDataSaveBar, getMarketDataHistory, scrapeMarketDataCseOne, getCseTradeDate, getCseStatus, recordCseRun, invalidate, ScrapedBar, CseScrapeStatus } from '../api';
 import { Company, MarketData } from '../types';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -44,6 +44,7 @@ export default function MarketDataScraper() {
   const [cseProgress, setCseProgress] = useState({ current: 0, total: 0 });
   const [cseResults, setCseResults] = useState<{ code: string; name: string; status: CseStatus; error?: string }[]>([]);
   const [cseTradeDate, setCseTradeDate] = useState('');
+  const [cseStatus, setCseStatus] = useState<CseScrapeStatus | null>(null);
   const cseAbortRef = useRef(false);
 
   const runCseFetch = async () => {
@@ -57,6 +58,7 @@ export default function MarketDataScraper() {
     setCseResults(sorted.map(c => ({ code: c.code, name: c.name, status: 'pending' as CseStatus })));
     setCseProgress({ current: 0, total: sorted.length });
 
+    let savedN = 0, failedN = 0, processed = 0;
     for (let i = 0; i < sorted.length; i++) {
       if (cseAbortRef.current) break;
       const code = sorted[i].code;
@@ -65,19 +67,28 @@ export default function MarketDataScraper() {
       try {
         const res = await scrapeMarketDataCseOne(code, tradeDate || undefined);
         const st: CseStatus = res.status === 'saved' ? 'saved' : res.status === 'skipped' ? 'skipped' : 'error';
+        if (st === 'saved') savedN++; else if (st === 'error') failedN++;
         setCseResults(prev => prev.map(r => r.code === code ? { ...r, status: st, error: res.error } : r));
       } catch (err: any) {
+        failedN++;
         setCseResults(prev => prev.map(r => r.code === code ? { ...r, status: 'error', error: err?.message } : r));
       }
+      processed++;
       if (i < sorted.length - 1) await new Promise(res => setTimeout(res, 120)); // polite spacing
     }
 
     invalidate('market', 'ytd', 'year-low', 'dashboard-all', 'portfolio');
+    // Record the run (server stamps the time) and refresh the status line.
+    try {
+      const st = await recordCseRun({ total: processed, saved: savedN, failed: failedN, tradeDate: tradeDate || '' });
+      setCseStatus(st);
+    } catch { /* status is best-effort */ }
     setCseRunning(false);
   };
 
   useEffect(() => {
     getCompanies().then(setCompanies).catch(() => {});
+    getCseStatus().then(setCseStatus).catch(() => {});
   }, []);
 
   const handleScrape = async () => {
@@ -265,6 +276,16 @@ export default function MarketDataScraper() {
             {cseTradeDate && (
               <div style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>
                 Market day: <strong>{cseTradeDate}</strong>
+              </div>
+            )}
+            {cseStatus?.lastRunAt && (
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>
+                Last run: {new Date(cseStatus.lastRunAt).toLocaleString('en-US', { timeZone: 'Asia/Colombo' })}
+                {' — '}
+                <span className={cseStatus.status === 'success' ? 'gain-positive' : cseStatus.status === 'failed' ? 'gain-negative' : undefined}>
+                  {cseStatus.status}
+                </span>
+                {` (${cseStatus.saved} saved, ${cseStatus.failed} failed of ${cseStatus.total}${cseStatus.tradeDate ? `, ${cseStatus.tradeDate}` : ''})`}
               </div>
             )}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
