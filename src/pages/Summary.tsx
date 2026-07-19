@@ -1,31 +1,122 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getDashboardAll, getDividends, getUserSettings } from '../api';
-import { PortfolioItem, RealizedGainItem, Dividend } from '../types';
-import { filterByBroker } from '../utils/brokers';
+import { getDashboardAll, getDividends, getUserSettings, getTransactions, getCompanies, getAvailableDates, getMarketDataByDate } from '../api';
+import { PortfolioItem, RealizedGainItem, Dividend, Company, Transaction } from '../types';
+import { filterByBroker, filterTxByBroker } from '../utils/brokers';
 import { useTableSort } from '../hooks/useTableSort';
 import CompanyAvatar from '../components/CompanyAvatar';
+import MarketDatePicker from '../components/MarketDatePicker';
+import { compareTxDateBuysFirst } from '../utils/transactionSort';
 
 export default function Summary() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Current view (mutated when a historical date is picked)
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [realized, setRealized] = useState<RealizedGainItem[]>([]);
   const [dividends, setDividends] = useState<Dividend[]>([]);
 
-  useEffect(() => {
-    getUserSettings()
-      .then(settings => {
-        const brokers = settings.selectedDataBrokerIds || [];
-        return Promise.all([getDashboardAll(brokers), getDividends()]).then(([dash, divs]) => {
-          setPortfolio(dash.portfolio || []);
-          setRealized(dash.realizedItems || []);
-          setDividends(filterByBroker(divs, brokers));
-        });
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
+  // Originals / raw data for historical recompute
+  const [origRealized, setOrigRealized] = useState<RealizedGainItem[]>([]);
+  const [origDividends, setOrigDividends] = useState<Dividend[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [availableDates, setAvailableDates] = useState<string[]>([]);
+  const [latestDate, setLatestDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+  const historicalMode = !!selectedDate;
+
+  const loadData = useCallback(() => {
+    return getUserSettings().then(settings => {
+      const brokers = settings.selectedDataBrokerIds || [];
+      return Promise.all([
+        getDashboardAll(brokers), getDividends(), getTransactions(), getCompanies(), getAvailableDates(),
+      ]).then(([dash, divs, txns, comps, dates]) => {
+        const fd = filterByBroker(divs, brokers);
+        setPortfolio(dash.portfolio || []);
+        setRealized(dash.realizedItems || []);
+        setDividends(fd);
+        setOrigRealized(dash.realizedItems || []);
+        setOrigDividends(fd);
+        setTransactions(filterTxByBroker(txns.filter(t => !t.disabled), brokers));
+        setCompanies(comps);
+        setAvailableDates(dates);
+        setLatestDate(dates.reduce((a, b) => (a > b ? a : b), ''));
+      });
+    });
   }, []);
+
+  useEffect(() => { loadData().catch(console.error).finally(() => setLoading(false)); }, [loadData]);
+
+  // Recompute the whole summary as of a past market day: holdings from transactions up to that
+  // date valued at that day's prices, realized/dividends cumulative to that date. Mirrors the
+  // Dashboard's historical mode.
+  const loadHistorical = useCallback(async (finalDate: string) => {
+    const md = await getMarketDataByDate(finalDate);
+    const priceMap: Record<string, number> = {};
+    md.forEach(m => { priceMap[m.companyCode] = m.lastTrade; });
+
+    const grouped: Record<string, Transaction[]> = {};
+    transactions.filter(t => t.date <= finalDate).forEach(t => {
+      (grouped[t.companyCode] = grouped[t.companyCode] || []).push(t);
+    });
+
+    const hist: PortfolioItem[] = [];
+    for (const [code, txns] of Object.entries(grouped)) {
+      const sorted = [...txns].sort(compareTxDateBuysFirst);
+      let shares = 0, cost = 0;
+      for (const t of sorted) {
+        if (t.type === 'SELL') {
+          const avg = shares > 0 ? cost / shares : 0;
+          cost -= avg * t.count;
+          shares -= t.count;
+        } else {
+          cost += t.count * t.price + t.commission;
+          shares += t.count;
+        }
+      }
+      if (shares <= 0) continue;
+      const avgBuy = shares > 0 ? cost / shares : 0;
+      const price = priceMap[code] || 0;
+      const currentValue = shares * price;
+      const totalInv = shares * avgBuy;
+      const comp = companies.find(c => c.code === code);
+      const mdItem = md.find(m => m.companyCode === code);
+      hist.push({
+        companyCode: code,
+        companyName: comp?.name || mdItem?.companyName || code,
+        sharesHeld: shares,
+        avgBuyPrice: avgBuy,
+        lastTrade: price,
+        change: mdItem?.change || 0,
+        changePercent: mdItem?.changePercent || 0,
+        currentValue,
+        totalInvested: totalInv,
+        unrealizedGain: currentValue - totalInv,
+        unrealizedGainPercent: totalInv !== 0 ? ((currentValue - totalInv) / totalInv) * 100 : 0,
+        unrealizedDayGain: 0,
+        realizedGain: 0,
+      });
+    }
+
+    setPortfolio(hist);
+    setRealized(origRealized.filter(r => r.sellDate <= finalDate));
+    setDividends(origDividends.filter(d => d.date <= finalDate));
+  }, [transactions, companies, origRealized, origDividends]);
+
+  const onSelectDate = async (finalDate: string) => {
+    if (!finalDate || finalDate === latestDate) {
+      setSelectedDate('');
+      setRefreshing(true);
+      loadData().catch(console.error).finally(() => setRefreshing(false));
+      return;
+    }
+    setSelectedDate(finalDate);
+    setRefreshing(true);
+    await loadHistorical(finalDate).catch(console.error).finally(() => setRefreshing(false));
+  };
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cls = (n: number) => (n >= 0 ? 'gain-positive' : 'gain-negative');
@@ -57,20 +148,33 @@ export default function Summary() {
   const dividendsTotal = dividends.filter(d => d.type === 'CASH').reduce((s, d) => s + d.totalAmount, 0);
   const netCumulative = unrealized + realizedTotal + dividendsTotal;
   const unrealizedPct = totalInvested > 0 ? (unrealized / totalInvested) * 100 : 0;
-  // Cumulative return measured against the money currently at work.
   const netPct = totalInvested > 0 ? (netCumulative / totalInvested) * 100 : 0;
 
   const rows: { label: string; value: number; note?: string }[] = [
     { label: 'Unrealized gain / loss', value: unrealized, note: 'Open positions (current value − invested)' },
-    { label: 'Realized gain / loss', value: realizedTotal, note: 'Lifetime, from sells & lapsed rights' },
-    { label: 'Dividends received', value: dividendsTotal, note: 'Lifetime cash dividends (net)' },
+    { label: 'Realized gain / loss', value: realizedTotal, note: 'Cumulative, from sells & lapsed rights' },
+    { label: 'Dividends received', value: dividendsTotal, note: 'Cumulative cash dividends (net)' },
   ];
 
   return (
     <div>
-      <h1>Summary</h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+        <h1 style={{ margin: 0 }}>Summary</h1>
+        <MarketDatePicker availableDates={availableDates} selectedDate={selectedDate} onSelect={onSelectDate} />
+        {refreshing && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading…</span>}
+        {historicalMode && (
+          <span style={{ fontSize: '0.75rem', color: '#3182ce', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+            As of {selectedDate}
+            <button
+              onClick={() => onSelectDate('')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#3182ce', fontSize: '0.85rem', padding: '0 0.2rem' }}
+              title="Back to today"
+            >&times;</button>
+          </span>
+        )}
+      </div>
       <p style={{ color: 'var(--text-muted)', margin: '0 0 1.25rem', fontSize: '0.9rem' }}>
-        Your cumulative performance — realized, unrealized and dividends combined.
+        Your cumulative performance — realized, unrealized and dividends combined{historicalMode ? `, as of ${selectedDate}` : ''}.
       </p>
 
       <div className="stats-grid">
