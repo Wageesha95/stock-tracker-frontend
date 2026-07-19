@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getDashboardAll, getDividends, getUserSettings } from '../api';
 import { PortfolioItem, RealizedGainItem, Dividend } from '../types';
 import { filterByBroker } from '../utils/brokers';
+import { useTableSort } from '../hooks/useTableSort';
+import CompanyAvatar from '../components/CompanyAvatar';
 
 export default function Summary() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [portfolio, setPortfolio] = useState<PortfolioItem[]>([]);
   const [realized, setRealized] = useState<RealizedGainItem[]>([]);
@@ -26,6 +30,20 @@ export default function Summary() {
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cls = (n: number) => (n >= 0 ? 'gain-positive' : 'gain-negative');
   const sign = (n: number) => (n >= 0 ? '+' : '');
+
+  // Per-company cumulative breakdown (union of held / sold / dividend-paying companies).
+  const byCompany = new Map<string, { code: string; name: string; unrealized: number; realized: number; dividends: number }>();
+  const ensure = (code: string, name?: string) => {
+    let e = byCompany.get(code);
+    if (!e) { e = { code, name: name || code, unrealized: 0, realized: 0, dividends: 0 }; byCompany.set(code, e); }
+    else if (name && e.name === code) e.name = name;
+    return e;
+  };
+  portfolio.forEach(p => { ensure(p.companyCode, p.companyName).unrealized += p.unrealizedGain; });
+  realized.forEach(r => { ensure(r.companyCode, r.companyName).realized += r.realizedGain; });
+  dividends.filter(d => d.type === 'CASH').forEach(d => { ensure(d.companyCode).dividends += d.totalAmount; });
+  const companyRows = [...byCompany.values()].map(c => ({ ...c, net: c.unrealized + c.realized + c.dividends }));
+  const compSort = useTableSort(companyRows, 'net');
 
   if (loading) return <p>Loading...</p>;
 
@@ -91,6 +109,47 @@ export default function Summary() {
           <tfoot>
             <tr className="portfolio-total">
               <td>Net Cumulative Gain / Loss</td>
+              <td className={`text-right mono ${cls(netCumulative)}`}>{sign(netCumulative)}{fmt(netCumulative)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <h2 style={{ margin: '2rem 0 1rem' }}>By Company ({companyRows.length})</h2>
+      <div className="portfolio-table-wrap">
+        <table className="portfolio-table">
+          <thead>
+            <tr>
+              <th className="sort-header" onClick={() => compSort.handleSort('code')}>Company{compSort.sortIcon('code')}</th>
+              <th className="sort-header text-right" onClick={() => compSort.handleSort('unrealized')}>Unrealized{compSort.sortIcon('unrealized')}</th>
+              <th className="sort-header text-right" onClick={() => compSort.handleSort('realized')}>Realized{compSort.sortIcon('realized')}</th>
+              <th className="sort-header text-right" onClick={() => compSort.handleSort('dividends')}>Dividends{compSort.sortIcon('dividends')}</th>
+              <th className="sort-header text-right" onClick={() => compSort.handleSort('net')}>Net P/L{compSort.sortIcon('net')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {compSort.sorted.map(c => (
+              <tr key={c.code}>
+                <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${c.code}`)}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <CompanyAvatar code={c.code} size={26} />
+                    <span className="company-code">{c.code}</span>
+                    <span className="hide-sm" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{c.name !== c.code ? c.name : ''}</span>
+                  </div>
+                </td>
+                <td className={`text-right mono ${cls(c.unrealized)}`}>{sign(c.unrealized)}{fmt(c.unrealized)}</td>
+                <td className={`text-right mono ${cls(c.realized)}`}>{sign(c.realized)}{fmt(c.realized)}</td>
+                <td className={`text-right mono ${c.dividends > 0 ? 'gain-positive' : ''}`}>{c.dividends > 0 ? `+${fmt(c.dividends)}` : '—'}</td>
+                <td className={`text-right mono ${cls(c.net)}`} style={{ fontWeight: 700 }}>{sign(c.net)}{fmt(c.net)}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr className="portfolio-total">
+              <td>Total</td>
+              <td className={`text-right mono ${cls(unrealized)}`}>{sign(unrealized)}{fmt(unrealized)}</td>
+              <td className={`text-right mono ${cls(realizedTotal)}`}>{sign(realizedTotal)}{fmt(realizedTotal)}</td>
+              <td className={`text-right mono ${cls(dividendsTotal)}`}>{sign(dividendsTotal)}{fmt(dividendsTotal)}</td>
               <td className={`text-right mono ${cls(netCumulative)}`}>{sign(netCumulative)}{fmt(netCumulative)}</td>
             </tr>
           </tfoot>
