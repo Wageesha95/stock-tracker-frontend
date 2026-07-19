@@ -159,12 +159,15 @@ export default function Summary() {
   const companyRows = [...byCompany.values()].map(c => {
     const net = c.unrealized + c.realized + c.dividends;
     const purchaseCost = purchaseByCompany.get(c.code) || 0;
+    // Unrealized gain minus the commission to sell the current holding at market value.
+    const unrealizedNet = c.unrealized - (c.value * SELL_PCT) / 100;
     return {
       ...c,
       net,
       purchaseCost,
-      // Unrealized gain minus the commission to sell the current holding at market value.
-      unrealizedNet: c.unrealized - (c.value * SELL_PCT) / 100,
+      unrealizedNet,
+      // That net unrealized gain as a % of what's invested in the open holding.
+      unrealizedNetPct: c.invested > 0 ? (unrealizedNet / c.invested) * 100 : 0,
       // Realized return excludes unrealized (booked gains only): (realized + dividends) / cost.
       realizedPct: purchaseCost > 0 ? ((c.realized + c.dividends) / purchaseCost) * 100 : 0,
       netPct: purchaseCost > 0 ? (net / purchaseCost) * 100 : 0,
@@ -184,6 +187,7 @@ export default function Summary() {
   const netPct = totalPurchaseCost > 0 ? (netCumulative / totalPurchaseCost) * 100 : 0;
   const realizedReturnPct = totalPurchaseCost > 0 ? ((realizedTotal + dividendsTotal) / totalPurchaseCost) * 100 : 0;
   const unrealizedNetTotal = unrealized - (currentValue * SELL_PCT) / 100;
+  const unrealizedReturnPct = totalInvested > 0 ? (unrealizedNetTotal / totalInvested) * 100 : 0;
 
   const pieData = sectors
     .map(s => ({ name: s.sector, value: pieMetric === 'value' ? s.currentValue : s.totalInvested }))
@@ -302,6 +306,7 @@ export default function Summary() {
               <th className="sort-header text-right hide-sm" title="Cash dividends received (net)" onClick={() => compSort.handleSort('dividends')}>Dividends{compSort.sortIcon('dividends')}</th>
               <th className="sort-header text-right" title="Net P/L = Unrealized + Realized + Dividends" onClick={() => compSort.handleSort('net')}>Net P/L{compSort.sortIcon('net')}</th>
               <th className="sort-header text-right hide-sm" title={`Unrealized gain after deducting the ~${SELL_PCT}% commission to sell the current holding`} onClick={() => compSort.handleSort('unrealizedNet')}>Unrealized − Sell&nbsp;Comm.{compSort.sortIcon('unrealizedNet')}</th>
+              <th className="sort-header text-right hide-sm" title="Unrealized return = unrealized gain after sell commission ÷ open invested × 100" onClick={() => compSort.handleSort('unrealizedNetPct')}>Unrealized Return %{compSort.sortIcon('unrealizedNetPct')}</th>
               <th className="sort-header text-right hide-sm" title="Realized return = (Realized + Dividends) ÷ total purchase cost × 100 (excludes unrealized)" onClick={() => compSort.handleSort('realizedPct')}>Realized Return %{compSort.sortIcon('realizedPct')}</th>
               <th className="sort-header text-right" title="Return = (Unrealized + Realized + Dividends) ÷ total purchase cost × 100" onClick={() => compSort.handleSort('netPct')}>Return %{compSort.sortIcon('netPct')}</th>
             </tr>
@@ -321,6 +326,7 @@ export default function Summary() {
                 <td className={`text-right mono hide-sm ${c.dividends > 0 ? 'gain-positive' : ''}`}>{c.dividends > 0 ? `+${fmt(c.dividends)}` : '—'}</td>
                 <td className={`text-right mono ${cls(c.net)}`} style={{ fontWeight: 700 }}>{sign(c.net)}{fmt(c.net)}</td>
                 <td className={`text-right mono hide-sm ${c.invested > 0 ? cls(c.unrealizedNet) : ''}`}>{c.invested > 0 ? `${sign(c.unrealizedNet)}${fmt(c.unrealizedNet)}` : '—'}</td>
+                <td className={`text-right mono hide-sm ${c.invested > 0 ? cls(c.unrealizedNetPct) : ''}`}>{c.invested > 0 ? `${sign(c.unrealizedNetPct)}${c.unrealizedNetPct.toFixed(2)}%` : '—'}</td>
                 <td className={`text-right mono hide-sm ${c.purchaseCost > 0 ? cls(c.realizedPct) : ''}`}>{c.purchaseCost > 0 ? `${sign(c.realizedPct)}${c.realizedPct.toFixed(2)}%` : '—'}</td>
                 <td className={`text-right mono ${c.purchaseCost > 0 ? cls(c.netPct) : ''}`}>{c.purchaseCost > 0 ? `${sign(c.netPct)}${c.netPct.toFixed(2)}%` : '—'}</td>
               </tr>
@@ -334,6 +340,7 @@ export default function Summary() {
               <td className={`text-right mono hide-sm ${cls(dividendsTotal)}`}>{sign(dividendsTotal)}{fmt(dividendsTotal)}</td>
               <td className={`text-right mono ${cls(netCumulative)}`}>{sign(netCumulative)}{fmt(netCumulative)}</td>
               <td className={`text-right mono hide-sm ${cls(unrealizedNetTotal)}`}>{sign(unrealizedNetTotal)}{fmt(unrealizedNetTotal)}</td>
+              <td className={`text-right mono hide-sm ${cls(unrealizedReturnPct)}`}>{sign(unrealizedReturnPct)}{unrealizedReturnPct.toFixed(2)}%</td>
               <td className={`text-right mono hide-sm ${cls(realizedReturnPct)}`}>{sign(realizedReturnPct)}{realizedReturnPct.toFixed(2)}%</td>
               <td className={`text-right mono ${cls(netPct)}`}>{sign(netPct)}{netPct.toFixed(2)}%</td>
             </tr>
