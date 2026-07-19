@@ -37,7 +37,14 @@ export default function Summary() {
   const [selectedDate, setSelectedDate] = useState('');
   const [sectors, setSectors] = useState<{ sector: string; currentValue: number; totalInvested: number }[]>([]);
   const [pieMetric, setPieMetric] = useState<'value' | 'invested'>('value');
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 640);
   const historicalMode = !!selectedDate;
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const loadData = useCallback(() => {
     return getUserSettings().then(settings => {
@@ -255,16 +262,21 @@ export default function Summary() {
               <button className={pieMetric === 'invested' ? 'active' : ''} onClick={() => setPieMetric('invested')}>Invested</button>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={340}>
+          <ResponsiveContainer width="100%" height={isMobile ? 400 : 340}>
             <PieChart>
-              <Pie data={pieData} cx="50%" cy="50%" outerRadius={115} innerRadius={55} dataKey="value" label={false}>
+              <Pie data={pieData} cx="50%" cy={isMobile ? '42%' : '50%'} outerRadius={isMobile ? 95 : 115} innerRadius={isMobile ? 45 : 55} dataKey="value" label={false}>
                 {pieData.map((d, i) => <Cell key={d.name} fill={sectorColor.get(d.name) || COLORS[i % COLORS.length]} />)}
               </Pie>
               <Tooltip formatter={(v: any) => {
                 const pct = pieTotal > 0 ? ((v / pieTotal) * 100).toFixed(1) : '0';
                 return `LKR ${fmt(v)} (${pct}%)`;
               }} />
-              <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: '0.75rem', lineHeight: '1.6' }} />
+              <Legend
+                layout={isMobile ? 'horizontal' : 'vertical'}
+                align={isMobile ? 'center' : 'right'}
+                verticalAlign={isMobile ? 'bottom' : 'middle'}
+                wrapperStyle={{ fontSize: '0.75rem', lineHeight: '1.6' }}
+              />
             </PieChart>
           </ResponsiveContainer>
         </div>
