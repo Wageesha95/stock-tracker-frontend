@@ -8,8 +8,14 @@ import CompanyAvatar from '../components/CompanyAvatar';
 import MarketDatePicker from '../components/MarketDatePicker';
 import { compareTxDateBuysFirst } from '../utils/transactionSort';
 import { SELL_COMMISSION_PCT } from '../constants';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const SELL_PCT = Number(SELL_COMMISSION_PCT) || 0;
+const COLORS = [
+  '#3182ce', '#38a169', '#d69e2e', '#e53e3e', '#805ad5',
+  '#dd6b20', '#319795', '#d53f8c', '#5a67d8', '#2c7a7b',
+  '#b83280', '#c05621', '#2f855a', '#6b46c1', '#2b6cb0',
+];
 
 export default function Summary() {
   const navigate = useNavigate();
@@ -29,6 +35,8 @@ export default function Summary() {
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [latestDate, setLatestDate] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
+  const [sectors, setSectors] = useState<{ sector: string; currentValue: number; totalInvested: number }[]>([]);
+  const [pieMetric, setPieMetric] = useState<'value' | 'invested'>('value');
   const historicalMode = !!selectedDate;
 
   const loadData = useCallback(() => {
@@ -45,6 +53,7 @@ export default function Summary() {
         setOrigDividends(fd);
         setTransactions(filterTxByBroker(txns.filter(t => !t.disabled), brokers));
         setCompanies(comps);
+        setSectors((dash.sectors || []).map(s => ({ sector: s.sector, currentValue: s.currentValue, totalInvested: s.totalInvested })));
         setAvailableDates(dates);
         setLatestDate(dates.reduce((a, b) => (a > b ? a : b), ''));
       });
@@ -176,6 +185,12 @@ export default function Summary() {
   const realizedReturnPct = totalPurchaseCost > 0 ? ((realizedTotal + dividendsTotal) / totalPurchaseCost) * 100 : 0;
   const unrealizedNetTotal = unrealized - (currentValue * SELL_PCT) / 100;
 
+  const pieData = sectors
+    .map(s => ({ name: s.sector, value: pieMetric === 'value' ? s.currentValue : s.totalInvested }))
+    .filter(d => d.value > 0)
+    .sort((a, b) => b.value - a.value);
+  const pieTotal = pieData.reduce((s, d) => s + d.value, 0);
+
   const rows: { label: string; value: number; note?: string }[] = [
     { label: 'Unrealized gain / loss', value: unrealized, note: 'Open positions (current value − invested)' },
     { label: 'Realized gain / loss', value: realizedTotal, note: 'Cumulative, from sells & lapsed rights' },
@@ -223,6 +238,30 @@ export default function Summary() {
           <p className="stat-value gain-negative">{fmt(totalCommission)}</p>
         </div>
       </div>
+
+      {pieData.length > 0 && (
+        <div className="form-card" style={{ marginTop: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <h2 style={{ margin: 0 }}>By Sector</h2>
+            <div className="segmented-control">
+              <button className={pieMetric === 'value' ? 'active' : ''} onClick={() => setPieMetric('value')}>Value</button>
+              <button className={pieMetric === 'invested' ? 'active' : ''} onClick={() => setPieMetric('invested')}>Invested</button>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={340}>
+            <PieChart>
+              <Pie data={pieData} cx="50%" cy="50%" outerRadius={115} innerRadius={55} dataKey="value" label={false}>
+                {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+              </Pie>
+              <Tooltip formatter={(v: any) => {
+                const pct = pieTotal > 0 ? ((v / pieTotal) * 100).toFixed(1) : '0';
+                return `LKR ${fmt(v)} (${pct}%)`;
+              }} />
+              <Legend layout="vertical" align="right" verticalAlign="middle" wrapperStyle={{ fontSize: '0.75rem', lineHeight: '1.6' }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       <div className="portfolio-table-wrap" style={{ marginTop: '2rem' }}>
         <table className="portfolio-table">
