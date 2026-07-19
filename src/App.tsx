@@ -20,6 +20,7 @@ import RightsAndIpo from './pages/RightsAndIpo';
 import DividendScraper from './pages/DividendScraper';
 import LoginHistory from './pages/LoginHistory';
 import UpcomingDividends from './pages/UpcomingDividends';
+import Summary from './pages/Summary';
 import MarketDataScraper from './pages/MarketDataScraper';
 import MarketData from './pages/MarketData';
 import AdminMessages from './pages/AdminMessages';
@@ -133,6 +134,7 @@ function App() {
                   label="Advanced"
                   onNavigate={() => setMenuOpen(false)}
                   items={[
+                    { to: '/summary', label: 'Summary' },
                     { to: '/upcoming-dividends', label: 'Upcoming Dividends' },
                     { to: '/watchlists', label: 'Watchlists' },
                     { to: '/market-data', label: 'Market Data' },
@@ -198,6 +200,7 @@ function App() {
             <Route path="/" element={isAdmin ? <AdminDashboard key={user.username} /> : <Dashboard key={user.username} />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/dividends" element={<Dividends />} />
+            <Route path="/summary" element={<Summary />} />
             <Route path="/upcoming-dividends" element={<UpcomingDividends />} />
             <Route path="/rights-ipo" element={<RightsAndIpo />} />
             <Route path="/rights" element={<RightsPage />} />
