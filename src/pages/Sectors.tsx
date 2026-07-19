@@ -44,6 +44,7 @@ export default function Sectors() {
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<'allocation' | 'industries'>(isAdmin ? 'industries' : 'allocation');
+  const [pieMetric, setPieMetric] = useState<'value' | 'invested'>('value');
   const [sectors, setSectors] = useState<SectorItem[]>([]);
   const [industryGroups, setIndustryGroups] = useState<IndustryGroup[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -176,10 +177,14 @@ export default function Sectors() {
     return map;
   }, [sectors]);
 
-  const pieData = sectors.map(s => ({
-    name: s.sector,
-    value: s.currentValue,
-  }));
+  // Stable colour per sector so toggling Value/Invested doesn't reshuffle colours.
+  const sectorColor = new Map<string, string>();
+  [...sectors].sort((a, b) => a.sector.localeCompare(b.sector)).forEach((s, i) => sectorColor.set(s.sector, COLORS[i % COLORS.length]));
+  const pieData = sectors
+    .map(s => ({ name: s.sector, value: pieMetric === 'value' ? s.currentValue : s.totalInvested }))
+    .filter(d => d.value > 0)
+    .sort((a, b) => b.value - a.value);
+  const pieTotal = pieData.reduce((s, d) => s + d.value, 0);
 
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) return;
@@ -324,6 +329,12 @@ export default function Sectors() {
       {tab === 'allocation' && (<>
       {sectors.length > 0 && (
         <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '0.5rem' }}>
+            <div className="segmented-control">
+              <button className={pieMetric === 'value' ? 'active' : ''} onClick={() => setPieMetric('value')}>Value</button>
+              <button className={pieMetric === 'invested' ? 'active' : ''} onClick={() => setPieMetric('invested')}>Invested</button>
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', marginBottom: '2rem' }}>
             <div className="sectors-pie" style={{ flex: '1 1 350px', minHeight: 350 }}>
               <ResponsiveContainer width="100%" height={350}>
@@ -337,13 +348,13 @@ export default function Sectors() {
                     dataKey="value"
                     label={false}
                   >
-                    {pieData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    {pieData.map((d, i) => (
+                      <Cell key={d.name} fill={sectorColor.get(d.name) || COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip
                     formatter={(value: any) => {
-                      const pct = totalPortfolioValue > 0 ? ((value / totalPortfolioValue) * 100).toFixed(1) : '0';
+                      const pct = pieTotal > 0 ? ((value / pieTotal) * 100).toFixed(1) : '0';
                       return `LKR ${fmt(value)} (${pct}%)`;
                     }}
                   />

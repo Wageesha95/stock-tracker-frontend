@@ -189,6 +189,9 @@ export default function Summary() {
   const unrealizedNetTotal = unrealized - (currentValue * SELL_PCT) / 100;
   const unrealizedReturnPct = totalInvested > 0 ? (unrealizedNetTotal / totalInvested) * 100 : 0;
 
+  // Stable colour per sector (by a fixed order) so toggling Value/Invested doesn't reshuffle colours.
+  const sectorColor = new Map<string, string>();
+  [...sectors].sort((a, b) => a.sector.localeCompare(b.sector)).forEach((s, i) => sectorColor.set(s.sector, COLORS[i % COLORS.length]));
   const pieData = sectors
     .map(s => ({ name: s.sector, value: pieMetric === 'value' ? s.currentValue : s.totalInvested }))
     .filter(d => d.value > 0)
@@ -255,7 +258,7 @@ export default function Summary() {
           <ResponsiveContainer width="100%" height={340}>
             <PieChart>
               <Pie data={pieData} cx="50%" cy="50%" outerRadius={115} innerRadius={55} dataKey="value" label={false}>
-                {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                {pieData.map((d, i) => <Cell key={d.name} fill={sectorColor.get(d.name) || COLORS[i % COLORS.length]} />)}
               </Pie>
               <Tooltip formatter={(v: any) => {
                 const pct = pieTotal > 0 ? ((v / pieTotal) * 100).toFixed(1) : '0';
