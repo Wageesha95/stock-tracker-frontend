@@ -133,9 +133,19 @@ export default function Summary() {
   portfolio.forEach(p => { const e = ensure(p.companyCode, p.companyName); e.unrealized += p.unrealizedGain; e.invested += p.totalInvested; });
   realized.forEach(r => { ensure(r.companyCode, r.companyName).realized += r.realizedGain; });
   dividends.filter(d => d.type === 'CASH').forEach(d => { ensure(d.companyCode).dividends += d.totalAmount; });
+  // Total purchase cost = every buy-type transaction's cost (up to the selected date). This is
+  // the return-% base: (unrealized + realized + dividends) / total purchase cost × 100.
+  const purchaseByCompany = new Map<string, number>();
+  transactions.forEach(t => {
+    if (selectedDate && t.date > selectedDate) return;
+    if (t.type === 'SELL') return;
+    purchaseByCompany.set(t.companyCode, (purchaseByCompany.get(t.companyCode) || 0) + (t.count * t.price + (t.commission || 0)));
+  });
+  const totalPurchaseCost = [...purchaseByCompany.values()].reduce((s, v) => s + v, 0);
   const companyRows = [...byCompany.values()].map(c => {
     const net = c.unrealized + c.realized + c.dividends;
-    return { ...c, net, netPct: c.invested > 0 ? (net / c.invested) * 100 : 0 };
+    const purchaseCost = purchaseByCompany.get(c.code) || 0;
+    return { ...c, net, purchaseCost, netPct: purchaseCost > 0 ? (net / purchaseCost) * 100 : 0 };
   });
   const compSort = useTableSort(companyRows, 'net');
 
@@ -148,7 +158,7 @@ export default function Summary() {
   const dividendsTotal = dividends.filter(d => d.type === 'CASH').reduce((s, d) => s + d.totalAmount, 0);
   const netCumulative = unrealized + realizedTotal + dividendsTotal;
   const unrealizedPct = totalInvested > 0 ? (unrealized / totalInvested) * 100 : 0;
-  const netPct = totalInvested > 0 ? (netCumulative / totalInvested) * 100 : 0;
+  const netPct = totalPurchaseCost > 0 ? (netCumulative / totalPurchaseCost) * 100 : 0;
 
   const rows: { label: string; value: number; note?: string }[] = [
     { label: 'Unrealized gain / loss', value: unrealized, note: 'Open positions (current value − invested)' },
@@ -232,7 +242,7 @@ export default function Summary() {
               <th className="sort-header text-right" onClick={() => compSort.handleSort('realized')}>Realized{compSort.sortIcon('realized')}</th>
               <th className="sort-header text-right" onClick={() => compSort.handleSort('dividends')}>Dividends{compSort.sortIcon('dividends')}</th>
               <th className="sort-header text-right" onClick={() => compSort.handleSort('net')}>Net P/L{compSort.sortIcon('net')}</th>
-              <th className="sort-header text-right" onClick={() => compSort.handleSort('netPct')}>% of Invested{compSort.sortIcon('netPct')}</th>
+              <th className="sort-header text-right" onClick={() => compSort.handleSort('netPct')}>Return %{compSort.sortIcon('netPct')}</th>
             </tr>
           </thead>
           <tbody>
@@ -249,7 +259,7 @@ export default function Summary() {
                 <td className={`text-right mono ${cls(c.realized)}`}>{sign(c.realized)}{fmt(c.realized)}</td>
                 <td className={`text-right mono ${c.dividends > 0 ? 'gain-positive' : ''}`}>{c.dividends > 0 ? `+${fmt(c.dividends)}` : '—'}</td>
                 <td className={`text-right mono ${cls(c.net)}`} style={{ fontWeight: 700 }}>{sign(c.net)}{fmt(c.net)}</td>
-                <td className={`text-right mono ${c.invested > 0 ? cls(c.netPct) : ''}`}>{c.invested > 0 ? `${sign(c.netPct)}${c.netPct.toFixed(2)}%` : '—'}</td>
+                <td className={`text-right mono ${c.purchaseCost > 0 ? cls(c.netPct) : ''}`}>{c.purchaseCost > 0 ? `${sign(c.netPct)}${c.netPct.toFixed(2)}%` : '—'}</td>
               </tr>
             ))}
           </tbody>
