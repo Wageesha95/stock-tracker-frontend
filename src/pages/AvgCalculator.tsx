@@ -82,8 +82,11 @@ export default function AvgCalculator() {
   const calcResult = useMemo(() => {
     const shares = Number(newShares) || 0;
     const price = Number(newPrice) || 0;
-    const commission = Number(newCommission) || 0;
+    const commissionPct = Number(newCommission) || 0;
     if (shares <= 0 || price <= 0) return null;
+    // Commission is a percentage of the trade value (CSE brokerage ~1.12%), matching how
+    // real transactions record it — not a flat amount.
+    const commission = shares * price * commissionPct / 100;
     const buyCost = shares * price + commission;
     const totalShares = currentShares + shares;
     const totalCost = currentCost + buyCost;
@@ -95,25 +98,28 @@ export default function AvgCalculator() {
   const targetResult = useMemo(() => {
     const target = Number(targetAvg) || 0;
     const price = Number(buyPrice) || 0;
-    const commission = Number(targetCommission) || 0;
+    const commissionPct = Number(targetCommission) || 0;
     if (target <= 0 || price <= 0) return null;
-    if (price >= target && target < currentAvg) {
+    // Commission is a % of trade value, so the effective per-share cost is price × (1 + pct/100).
+    const effPrice = price * (1 + commissionPct / 100);
+    if (effPrice >= target && target < currentAvg) {
       return { error: 'Buy price must be lower than target average to bring average down' };
     }
-    if (price <= target && target > currentAvg) {
+    if (effPrice <= target && target > currentAvg) {
       return { error: 'Buy price must be higher than target average to bring average up' };
     }
-    // (currentCost + shares * price + commission) / (currentShares + shares) = target
-    // shares * (price - target) = target * currentShares - currentCost - commission
-    const sharesToBuy = (target * currentShares - currentCost - commission) / (price - target);
+    // (currentCost + shares × effPrice) / (currentShares + shares) = target
+    // shares × (effPrice - target) = target × currentShares - currentCost
+    const sharesToBuy = (target * currentShares - currentCost) / (effPrice - target);
     if (sharesToBuy <= 0 || !isFinite(sharesToBuy)) {
       return { error: 'Not possible with given price and target' };
     }
     const shares = Math.ceil(sharesToBuy);
-    const totalCost = currentCost + shares * price + commission;
+    const buyCost = shares * effPrice;
+    const totalCost = currentCost + buyCost;
     const totalShares = currentShares + shares;
     const actualAvg = totalShares > 0 ? totalCost / totalShares : 0;
-    return { sharesToBuy: shares, cost: shares * price + commission, totalShares, totalCost, actualAvg };
+    return { sharesToBuy: shares, cost: buyCost, totalShares, totalCost, actualAvg };
   }, [currentShares, currentCost, currentAvg, targetAvg, buyPrice, targetCommission]);
 
   const fmt = (n: number) => n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -242,8 +248,8 @@ export default function AvgCalculator() {
                 <input type="number" step="0.01" min="0" value={newPrice} onChange={e => setNewPrice(e.target.value)} placeholder="e.g. 120.00" />
               </label>
               <label>
-                Commission
-                <input type="number" step="0.01" min="0" value={newCommission} onChange={e => setNewCommission(e.target.value)} placeholder="0.00" />
+                Commission %
+                <input type="number" step="0.01" min="0" value={newCommission} onChange={e => setNewCommission(e.target.value)} placeholder="1.12" />
               </label>
             </div>
 
@@ -312,8 +318,8 @@ export default function AvgCalculator() {
                 <input type="number" step="0.01" min="0" value={buyPrice} onChange={e => setBuyPrice(e.target.value)} placeholder="e.g. 120.00" />
               </label>
               <label>
-                Commission
-                <input type="number" step="0.01" min="0" value={targetCommission} onChange={e => setTargetCommission(e.target.value)} placeholder="0.00" />
+                Commission %
+                <input type="number" step="0.01" min="0" value={targetCommission} onChange={e => setTargetCommission(e.target.value)} placeholder="1.12" />
               </label>
             </div>
 
