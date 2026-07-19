@@ -316,11 +316,11 @@ export default function Summary() {
                     <span className="hide-sm" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{c.name !== c.code ? c.name : ''}</span>
                   </div>
                 </td>
-                <td className={`text-right mono hide-sm ${cls(c.unrealized)}`}>{sign(c.unrealized)}{fmt(c.unrealized)}</td>
+                <td className={`text-right mono hide-sm ${c.invested > 0 ? cls(c.unrealized) : ''}`}>{c.invested > 0 ? `${sign(c.unrealized)}${fmt(c.unrealized)}` : '—'}</td>
                 <td className={`text-right mono hide-sm ${cls(c.realized)}`}>{sign(c.realized)}{fmt(c.realized)}</td>
                 <td className={`text-right mono hide-sm ${c.dividends > 0 ? 'gain-positive' : ''}`}>{c.dividends > 0 ? `+${fmt(c.dividends)}` : '—'}</td>
                 <td className={`text-right mono ${cls(c.net)}`} style={{ fontWeight: 700 }}>{sign(c.net)}{fmt(c.net)}</td>
-                <td className={`text-right mono hide-sm ${cls(c.unrealizedNet)}`}>{sign(c.unrealizedNet)}{fmt(c.unrealizedNet)}</td>
+                <td className={`text-right mono hide-sm ${c.invested > 0 ? cls(c.unrealizedNet) : ''}`}>{c.invested > 0 ? `${sign(c.unrealizedNet)}${fmt(c.unrealizedNet)}` : '—'}</td>
                 <td className={`text-right mono hide-sm ${c.purchaseCost > 0 ? cls(c.realizedPct) : ''}`}>{c.purchaseCost > 0 ? `${sign(c.realizedPct)}${c.realizedPct.toFixed(2)}%` : '—'}</td>
                 <td className={`text-right mono ${c.purchaseCost > 0 ? cls(c.netPct) : ''}`}>{c.purchaseCost > 0 ? `${sign(c.netPct)}${c.netPct.toFixed(2)}%` : '—'}</td>
               </tr>
