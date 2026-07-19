@@ -4,9 +4,10 @@ interface Props {
   availableDates: string[];
   selectedDate: string;
   onSelect: (date: string) => void;
+  align?: 'left' | 'right';
 }
 
-export default function MarketDatePicker({ availableDates, selectedDate, onSelect }: Props) {
+export default function MarketDatePicker({ availableDates, selectedDate, onSelect, align = 'right' }: Props) {
   const [open, setOpen] = useState(false);
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
   const [viewMonth, setViewMonth] = useState(new Date().getMonth());
@@ -68,10 +69,10 @@ export default function MarketDatePicker({ availableDates, selectedDate, onSelec
       </button>
       {open && (
         <div style={{
-          position: 'absolute', top: '100%', right: 0, marginTop: '0.25rem', zIndex: 200,
+          position: 'absolute', top: '100%', ...(align === 'left' ? { left: 0 } : { right: 0 }), marginTop: '0.25rem', zIndex: 200,
           background: 'var(--bg-card)', border: '1px solid var(--border-color)',
           borderRadius: '10px', boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-          padding: '0.75rem', width: '260px',
+          padding: '0.75rem', width: '260px', maxWidth: 'calc(100vw - 2rem)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
             <button onClick={prevMonth} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '1rem', padding: '0.2rem 0.4rem', color: 'var(--text-muted)' }}>&lsaquo;</button>

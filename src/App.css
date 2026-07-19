@@ -2224,7 +2224,3 @@ button:disabled {
   h1 { font-size: 1.35rem; }
   .content { padding-left: 0.75rem; padding-right: 0.75rem; }
 }
-@media (max-width: 480px) {
-  /* A stray wide element must never scroll the whole page (tables scroll in their own wrap) */
-  .app { overflow-x: hidden; }
-}

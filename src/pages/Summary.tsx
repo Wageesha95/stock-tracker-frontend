@@ -215,7 +215,7 @@ export default function Summary() {
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0 }}>Summary</h1>
-        <MarketDatePicker availableDates={availableDates} selectedDate={selectedDate} onSelect={onSelectDate} />
+        <MarketDatePicker availableDates={availableDates} selectedDate={selectedDate} onSelect={onSelectDate} align="left" />
         {refreshing && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading…</span>}
         {historicalMode && (
           <span style={{ fontSize: '0.75rem', color: '#3182ce', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
