@@ -2213,3 +2213,18 @@ button:disabled {
     padding: 0.25rem !important;
   }
 }
+
+/* ---- Global mobile refinements (all pages) ---- */
+@media (max-width: 700px) {
+  /* Smooth momentum scrolling for any wide table */
+  .portfolio-table-wrap { -webkit-overflow-scrolling: touch; }
+  /* Toolbars / segmented controls wrap instead of overflowing */
+  .segmented-control { flex-wrap: wrap; }
+  /* Page title + toolbar rows never force horizontal scroll */
+  h1 { font-size: 1.35rem; }
+  .content { padding-left: 0.75rem; padding-right: 0.75rem; }
+}
+@media (max-width: 480px) {
+  /* A stray wide element must never scroll the whole page (tables scroll in their own wrap) */
+  .app { overflow-x: hidden; }
+}
