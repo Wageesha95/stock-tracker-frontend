@@ -462,7 +462,7 @@ export const getCseTradeDate = () =>
   api.get<{ tradeDate: string }>('/admin/scrape/market-data-cse/trade-date').then(res => res.data.tradeDate);
 // Per-company variant so the UI can loop and show live progress. tradeDate aligns to the last market day.
 export const scrapeMarketDataCseOne = (companyCode: string, tradeDate?: string) =>
-  api.post<{ companyCode: string; status: 'saved' | 'skipped' | 'error'; tradeDate?: string; error?: string }>(
+  api.post<{ companyCode: string; status: 'saved' | 'skipped' | 'not-saved' | 'error'; tradeDate?: string; error?: string }>(
     `/admin/scrape/market-data-cse/${companyCode}${tradeDate ? `?tradeDate=${tradeDate}` : ''}`
   ).then(res => res.data);
 export interface CseScrapeStatus {
@@ -478,8 +478,32 @@ export const getCseStatus = () =>
   api.get<CseScrapeStatus | null>('/admin/scrape/market-data-cse/status').then(res => res.data);
 export const setCseAuto = (enabled: boolean) =>
   api.post<CseScrapeStatus>(`/admin/scrape/market-data-cse/auto?enabled=${enabled}`).then(res => res.data);
-export const recordCseRun = (data: { total: number; saved: number; failed: number; tradeDate: string }) =>
+export const recordCseRun = (data: { total: number; saved: number; failed: number; tradeDate: string; startedAt?: string }) =>
   api.post<CseScrapeStatus>('/admin/scrape/market-data-cse/record', data).then(res => res.data);
+
+// Execution log: one row per fetch run (auto + manual), for the admin panel.
+export interface CseScrapeLogEntry {
+  id: string;
+  startedAt: string;
+  endedAt: string;
+  tradeDate: string;
+  total: number;
+  saved: number;
+  failed: number;
+  status: 'success' | 'partial' | 'failed';
+  trigger: 'auto' | 'manual';
+}
+export const getCseScrapeLog = (days = 7) =>
+  api.get<CseScrapeLogEntry[]>(`/admin/scrape/market-data-cse/log?days=${days}`).then(res => res.data);
+
+// Market-data ingestion settings (admin).
+export interface MarketDataSettings {
+  scraperOverwriteCse?: boolean | null;
+}
+export const getMarketDataSettings = () =>
+  api.get<MarketDataSettings>('/admin/market-data/settings').then(res => res.data);
+export const setScraperOverwriteCse = (enabled: boolean) =>
+  api.post<MarketDataSettings>(`/admin/market-data/settings/scraper-overwrite-cse?enabled=${enabled}`).then(res => res.data);
 
 // Market Data Delete
 export const deleteMarketDataRange = (from?: string, to?: string) => {

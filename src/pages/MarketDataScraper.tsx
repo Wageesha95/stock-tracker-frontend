@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { getCompanies, scrapeMarketDataPreview, scrapeMarketDataSaveBars, scrapeMarketDataSaveBar, getMarketDataHistory, scrapeMarketDataCseOne, getCseTradeDate, getCseStatus, recordCseRun, setCseAuto, invalidate, ScrapedBar, CseScrapeStatus } from '../api';
+import { getCompanies, scrapeMarketDataPreview, scrapeMarketDataSaveBars, scrapeMarketDataSaveBar, getMarketDataHistory, scrapeMarketDataCseOne, getCseTradeDate, getCseStatus, recordCseRun, setCseAuto, getCseScrapeLog, getMarketDataSettings, setScraperOverwriteCse, invalidate, ScrapedBar, CseScrapeStatus, CseScrapeLogEntry } from '../api';
 import { Company, MarketData } from '../types';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 import CompanyAvatar from '../components/CompanyAvatar';
@@ -39,13 +39,24 @@ export default function MarketDataScraper() {
   const abortRef = useRef(false);
 
   // CSE fetch (browserless HTTP) — looped per company so the UI shows live status.
-  type CseStatus = 'pending' | 'fetching' | 'saved' | 'skipped' | 'error';
+  type CseStatus = 'pending' | 'fetching' | 'saved' | 'skipped' | 'not-saved' | 'error';
   const [cseRunning, setCseRunning] = useState(false);
   const [cseProgress, setCseProgress] = useState({ current: 0, total: 0 });
   const [cseResults, setCseResults] = useState<{ code: string; name: string; status: CseStatus; error?: string }[]>([]);
   const [cseTradeDate, setCseTradeDate] = useState('');
   const [cseStatus, setCseStatus] = useState<CseScrapeStatus | null>(null);
+  const [cseLog, setCseLog] = useState<CseScrapeLogEntry[]>([]);
+  const [overwriteCse, setOverwriteCse] = useState(false);
   const cseAbortRef = useRef(false);
+
+  const refreshCseLog = () => { getCseScrapeLog(7).then(setCseLog).catch(() => {}); };
+
+  const toggleOverwriteCse = async () => {
+    try {
+      const s = await setScraperOverwriteCse(!overwriteCse);
+      setOverwriteCse(s.scraperOverwriteCse === true);
+    } catch { /* ignore */ }
+  };
 
   const autoOn = cseStatus?.autoEnabled !== false; // default on
   const toggleAuto = async () => {
@@ -58,6 +69,7 @@ export default function MarketDataScraper() {
   const runCseFetch = async () => {
     cseAbortRef.current = false;
     setCseRunning(true);
+    const startedAt = new Date().toISOString(); // run start, for the execution log
     // Resolve the last actual market day once, so a run on a weekend/holiday still
     // saves under the day the data belongs to (not calendar today).
     const tradeDate = await getCseTradeDate().catch(() => '');
@@ -74,7 +86,9 @@ export default function MarketDataScraper() {
       setCseResults(prev => prev.map(r => r.code === code ? { ...r, status: 'fetching' } : r));
       try {
         const res = await scrapeMarketDataCseOne(code, tradeDate || undefined);
-        const st: CseStatus = res.status === 'saved' ? 'saved' : res.status === 'skipped' ? 'skipped' : 'error';
+        const st: CseStatus = res.status === 'saved' ? 'saved'
+          : res.status === 'not-saved' ? 'not-saved'
+          : res.status === 'skipped' ? 'skipped' : 'error';
         if (st === 'saved') savedN++; else if (st === 'error') failedN++;
         setCseResults(prev => prev.map(r => r.code === code ? { ...r, status: st, error: res.error } : r));
       } catch (err: any) {
@@ -86,17 +100,20 @@ export default function MarketDataScraper() {
     }
 
     invalidate('market', 'ytd', 'year-low', 'dashboard-all', 'portfolio');
-    // Record the run (server stamps the time) and refresh the status line.
+    // Record the run (server stamps the end time) and refresh the status line + execution log.
     try {
-      const st = await recordCseRun({ total: processed, saved: savedN, failed: failedN, tradeDate: tradeDate || '' });
+      const st = await recordCseRun({ total: processed, saved: savedN, failed: failedN, tradeDate: tradeDate || '', startedAt });
       setCseStatus(st);
     } catch { /* status is best-effort */ }
+    refreshCseLog();
     setCseRunning(false);
   };
 
   useEffect(() => {
     getCompanies().then(setCompanies).catch(() => {});
     getCseStatus().then(setCseStatus).catch(() => {});
+    getMarketDataSettings().then(s => setOverwriteCse(s.scraperOverwriteCse === true)).catch(() => {});
+    refreshCseLog();
   }, []);
 
   const handleScrape = async () => {
@@ -274,12 +291,14 @@ export default function MarketDataScraper() {
         const done = !cseRunning && cseProgress.total > 0;
         const savedN = cseResults.filter(r => r.status === 'saved').length;
         const skippedN = cseResults.filter(r => r.status === 'skipped').length;
+        const notSavedN = cseResults.filter(r => r.status === 'not-saved').length;
         const failedN = cseResults.filter(r => r.status === 'error').length;
         return (
+          <>
           <div className="form-card" style={{ maxWidth: '600px', marginBottom: '1rem' }}>
             <h2 style={{ marginTop: 0 }}>Today's Prices — CSE (fast)</h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0 0 0.75rem' }}>
-              Pulls the last price, high/low and volume for every company straight from the CSE JSON API over plain HTTP — no headless browser. Saved under the last actual market day, so running on a weekend/holiday still aligns correctly.
+              Pulls the last price, high/low and volume for every company straight from the CSE JSON API over plain HTTP — no headless browser. Saved under the last actual market day, so running on a weekend/holiday still aligns correctly. Between 7:30–9:00 AM (pre-open), it still fetches but skips saving, since pre-open figures aren't final.
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.5rem' }}>
               <span style={{ fontSize: '0.85rem' }}>
@@ -322,6 +341,7 @@ export default function MarketDataScraper() {
             {cseResults.length > 0 && (
               <div style={{ fontSize: '0.85rem', margin: '0.5rem 0' }}>
                 <span className="gain-positive">{savedN} saved</span>
+                {notSavedN > 0 && <>{', '}<span style={{ color: 'var(--text-muted)' }}>{notSavedN} fetched (pre-open)</span></>}
                 {', '}<span style={{ color: 'var(--text-muted)' }}>{skippedN} no price</span>
                 {', '}<span className="gain-negative">{failedN} failed</span>
                 {done && <span style={{ color: 'var(--text-muted)' }}> — done</span>}
@@ -348,6 +368,7 @@ export default function MarketDataScraper() {
                           {r.status === 'pending' && <span style={{ color: 'var(--text-muted)' }}>Pending</span>}
                           {r.status === 'fetching' && <span style={{ color: 'var(--accent)' }}>Fetching…</span>}
                           {r.status === 'saved' && <span className="gain-positive">Saved</span>}
+                          {r.status === 'not-saved' && <span style={{ color: 'var(--text-muted)' }}>Fetched (pre-open)</span>}
                           {r.status === 'skipped' && <span style={{ color: 'var(--text-muted)' }}>No price</span>}
                           {r.status === 'error' && <span className="gain-negative" title={r.error}>Failed</span>}
                         </td>
@@ -358,6 +379,9 @@ export default function MarketDataScraper() {
               </div>
             )}
           </div>
+
+          <CseExecutionLog log={cseLog} onRefresh={refreshCseLog} />
+          </>
         );
       })()}
 
@@ -400,6 +424,18 @@ export default function MarketDataScraper() {
                 <input type="checkbox" checked={autoSave} onChange={e => setAutoSave(e.target.checked)} />
                 Auto-save after scrape
               </label>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.75rem' }}>
+              <span style={{ fontSize: '0.85rem' }}>
+                Overwrite CSE-API data with scraped data:{' '}
+                <strong className={overwriteCse ? 'gain-negative' : 'gain-positive'}>{overwriteCse ? 'ON' : 'OFF'}</strong>
+              </span>
+              <button className="btn-reset" onClick={toggleOverwriteCse}>
+                {overwriteCse ? 'Protect CSE data' : 'Allow overwrite'}
+              </button>
+            </div>
+            <div style={{ marginTop: '0.35rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+              When OFF (default), scraped bars never replace rows fetched from the CSE API. Turn ON only to let TradingView data overwrite them.
             </div>
             <div className="upload-actions" style={{ marginTop: '0.75rem' }}>
               <button className="btn-upload" onClick={handleScrapeAll} disabled={companies.length === 0}>
@@ -504,6 +540,70 @@ export default function MarketDataScraper() {
       )}
 
       {error && <div className="error-message">{error}</div>}
+    </div>
+  );
+}
+
+function CseExecutionLog({ log, onRefresh }: { log: CseScrapeLogEntry[]; onRefresh: () => void }) {
+  // Match the "Last run" line's handling: render the server's naive timestamp in Colombo time.
+  const fmtTime = (s: string) =>
+    s ? new Date(s).toLocaleString('en-US', { timeZone: 'Asia/Colombo' }) : '—';
+  const fmtDuration = (start: string, end: string) => {
+    if (!start || !end) return '—';
+    const ms = new Date(end).getTime() - new Date(start).getTime();
+    if (!isFinite(ms) || ms < 0) return '—';
+    const s = Math.round(ms / 1000);
+    return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
+  };
+
+  return (
+    <div className="form-card" style={{ maxWidth: '600px', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+        <h2 style={{ margin: 0 }}>Execution Log (last 7 days)</h2>
+        <button className="btn-reset" onClick={onRefresh} style={{ fontSize: '0.8rem' }}>Refresh</button>
+      </div>
+      <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: '0.5rem 0 0.75rem' }}>
+        One row per fetch run (manual and the 15-min auto-fetch), newest first.
+      </p>
+      {log.length === 0 ? (
+        <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No runs in the last 7 days.</div>
+      ) : (
+        <div className="portfolio-table-wrap" style={{ maxHeight: '360px', overflow: 'auto' }}>
+          <table className="portfolio-table">
+            <thead>
+              <tr>
+                <th>Started</th>
+                <th>Ended</th>
+                <th className="text-right">Duration</th>
+                <th className="text-right">Saved</th>
+                <th className="text-right">Failed</th>
+                <th>Status</th>
+                <th>Trigger</th>
+              </tr>
+            </thead>
+            <tbody>
+              {log.map(r => (
+                <tr key={r.id}>
+                  <td style={{ fontSize: '0.8rem' }}>{fmtTime(r.startedAt)}</td>
+                  <td style={{ fontSize: '0.8rem' }}>{fmtTime(r.endedAt)}</td>
+                  <td className="text-right mono" style={{ fontSize: '0.8rem' }}>{fmtDuration(r.startedAt, r.endedAt)}</td>
+                  <td className="text-right mono gain-positive">{r.saved}</td>
+                  <td className="text-right mono">
+                    {r.failed > 0 ? <span className="gain-negative">{r.failed}</span> : <span style={{ color: 'var(--text-muted)' }}>0</span>}
+                  </td>
+                  <td style={{ fontSize: '0.8rem' }}>
+                    <span className={r.status === 'success' ? 'gain-positive' : r.status === 'failed' ? 'gain-negative' : undefined}>
+                      {r.status}
+                    </span>
+                    <span style={{ color: 'var(--text-muted)' }}>{r.tradeDate ? ` · ${r.tradeDate}` : ''}</span>
+                  </td>
+                  <td style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{r.trigger}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
