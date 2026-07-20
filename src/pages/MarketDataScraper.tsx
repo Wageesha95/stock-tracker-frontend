@@ -47,15 +47,22 @@ export default function MarketDataScraper() {
   const [cseStatus, setCseStatus] = useState<CseScrapeStatus | null>(null);
   const [cseLog, setCseLog] = useState<CseScrapeLogEntry[]>([]);
   const [overwriteCse, setOverwriteCse] = useState(false);
+  const [overwriteSaving, setOverwriteSaving] = useState(false);
   const cseAbortRef = useRef(false);
 
   const refreshCseLog = () => { getCseScrapeLog(7).then(setCseLog).catch(() => {}); };
 
   const toggleOverwriteCse = async () => {
+    setError('');
+    setOverwriteSaving(true);
     try {
       const s = await setScraperOverwriteCse(!overwriteCse);
       setOverwriteCse(s.scraperOverwriteCse === true);
-    } catch { /* ignore */ }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Failed to update the overwrite setting.');
+    } finally {
+      setOverwriteSaving(false);
+    }
   };
 
   const autoOn = cseStatus?.autoEnabled !== false; // default on
@@ -430,8 +437,8 @@ export default function MarketDataScraper() {
                 Overwrite CSE-API data with scraped data:{' '}
                 <strong className={overwriteCse ? 'gain-negative' : 'gain-positive'}>{overwriteCse ? 'ON' : 'OFF'}</strong>
               </span>
-              <button className="btn-reset" onClick={toggleOverwriteCse}>
-                {overwriteCse ? 'Protect CSE data' : 'Allow overwrite'}
+              <button className="btn-reset" onClick={toggleOverwriteCse} disabled={overwriteSaving}>
+                {overwriteSaving ? 'Saving…' : overwriteCse ? 'Protect CSE data' : 'Allow overwrite'}
               </button>
             </div>
             <div style={{ marginTop: '0.35rem', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
