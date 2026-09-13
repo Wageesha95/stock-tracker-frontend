@@ -40,6 +40,9 @@ export interface Transaction {
   price: number;
   commission: number;
   brokerId?: string | null;
+  // For shares that arrived by transfer, the date their money was originally
+  // committed. Opportunity cost accrues from here, not from the transfer date.
+  costBasisDate?: string | null;
   disabled?: boolean;
   converted?: boolean;
   createdAt: string;

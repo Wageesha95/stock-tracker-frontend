@@ -469,7 +469,6 @@ export default function Summary() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <CompanyAvatar code={c.code} size={26} />
                     <span className="company-code">{c.code}</span>
-                    <span className="hide-sm" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{c.name !== c.code ? c.name : ''}</span>
                     {isCompact && (
                       <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
                         {expandedCode === c.code ? '▲' : '▼'}

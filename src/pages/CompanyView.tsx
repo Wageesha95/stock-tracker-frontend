@@ -381,7 +381,7 @@ export default function CompanyView() {
     // Per-lot FIFO opportunity cost: each buy-lot accrues interest on its own
     // purchase cost for exactly the time it was held (until consumed by a SELL,
     // or until "now" while still held).
-    const lots: { count: number; costPerShare: number }[] = [];
+    const lots: { count: number; costPerShare: number; accrued: number }[] = [];
     let cumRealized = 0;
     let cumDividends = 0;
     let cumInterest = 0;
@@ -394,7 +394,9 @@ export default function CompanyView() {
       const days = (ms - lastAccrualMs) / 86400000;
       if (days > 0 && lots.length > 0) {
         for (const lot of lots) {
-          cumInterest += lot.count * lot.costPerShare * annualRate * days / 365;
+          const inc = lot.count * lot.costPerShare * annualRate * days / 365;
+          lot.accrued += inc;
+          cumInterest += inc;
         }
       }
       lastAccrualMs = ms;
@@ -410,16 +412,35 @@ export default function CompanyView() {
         if (isAcquisition(t.type)) {
           if (adjCount > 0) {
             const lotCost = adjCount * adjPrice + t.commission;
-            lots.push({ count: adjCount, costPerShare: lotCost / adjCount });
+            // Transferred shares carry their original commitment date, so credit the
+            // interest built up before the move; the TRANSFER_OUT leg gives it back.
+            const opened = t.costBasisDate || t.date;
+            const carriedDays = (new Date(t.date).getTime() - new Date(opened).getTime()) / 86400000;
+            const carried = carriedDays > 0 ? lotCost * annualRate * carriedDays / 365 : 0;
+            cumInterest += carried;
+            lots.push({ count: adjCount, costPerShare: lotCost / adjCount, accrued: carried });
           }
         } else if (isDisposal(t.type)) {
           // TRANSFER_OUT consumes lots the same way, so the out/in pair leaves the
           // lot book balanced whether or not a broker filter is hiding one leg.
+          const transferred = t.type === 'TRANSFER_OUT';
           let toSell = adjCount;
           while (toSell > 0 && lots.length > 0) {
             const lot = lots[0];
-            if (lot.count <= toSell) { toSell -= lot.count; lots.shift(); }
-            else { lot.count -= toSell; toSell = 0; }
+            if (lot.count <= toSell) {
+              toSell -= lot.count;
+              // Interest leaves with the shares; the TRANSFER_IN lot already took it.
+              if (transferred) cumInterest -= lot.accrued;
+              lots.shift();
+            } else {
+              if (transferred) {
+                const moved = lot.accrued * (toSell / lot.count);
+                cumInterest -= moved;
+                lot.accrued -= moved;
+              }
+              lot.count -= toSell;
+              toSell = 0;
+            }
           }
         }
       } else if (ev.type === 'div') {

@@ -196,16 +196,23 @@ export default function Dashboard() {
       if (isAcquisition(t.type)) {
         if (t.count > 0) {
           const lotCost = t.count * t.price + t.commission;
+          // Transferred shares keep the date their money was committed, and are
+          // credited up front with the interest built up before the move. The
+          // matching TRANSFER_OUT hands that same amount over, so nothing doubles.
+          const opened = t.costBasisDate || t.date;
+          const carriedDays = (new Date(t.date).getTime() - new Date(opened).getTime()) / 86400000;
+          const carried = carriedDays > 0 ? lotCost * annualRate * carriedDays / 365 : 0;
           const lot: HistLot = {
-            buyDate: t.date,
+            buyDate: opened,
             shares: t.count,
             remaining: t.count,
             costPerShare: lotCost / t.count,
             lotCost,
             status: 'held',
             endDate: null,
-            accruedInterest: 0,
+            accruedInterest: carried,
           };
+          totalInterest += carried;
           allLotsByCode[code].push(lot);
           open.push(lot);
         }
@@ -218,11 +225,21 @@ export default function Dashboard() {
           const lot = open[0];
           if (lot.remaining <= toSell) {
             toSell -= lot.remaining;
+            if (transferred) {
+              // Interest leaves with the shares — the TRANSFER_IN lot already took it.
+              totalInterest -= lot.accruedInterest;
+              lot.accruedInterest = 0;
+            }
             lot.remaining = 0;
             lot.endDate = t.date;
             lot.status = transferred ? 'transferred' : 'sold';
             open.shift();
           } else {
+            if (transferred) {
+              const movedShare = lot.accruedInterest * (toSell / lot.remaining);
+              totalInterest -= movedShare;
+              lot.accruedInterest -= movedShare;
+            }
             lot.remaining -= toSell;
             lot.status = 'partial';
             toSell = 0;
