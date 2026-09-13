@@ -12,8 +12,8 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recha
 
 const SELL_PCT = Number(SELL_COMMISSION_PCT) || 0;
 
-// The expanded-row cells are bare values laid out two-up, so their meaning comes
-// from position. This list must stay in the same order as they are rendered.
+// Definitions for the expanded-row cells, shown behind the info icon next to the
+// By Company heading. The cells carry short labels; this explains how each is derived.
 const CELL_LEGEND = [
   'Pure Unrealized — market value − cost, before any cost of selling',
   `Final Return — the same, after the ~${SELL_PCT}% commission to sell`,
@@ -172,14 +172,14 @@ export default function Summary() {
   const sign = (n: number) => (n >= 0 ? '+' : '');
 
   // Per-company cumulative breakdown (union of held / sold / dividend-paying companies).
-  const byCompany = new Map<string, { code: string; name: string; unrealized: number; realized: number; dividends: number; invested: number; value: number }>();
+  const byCompany = new Map<string, { code: string; name: string; unrealized: number; realized: number; dividends: number; invested: number; value: number; shares: number }>();
   const ensure = (code: string, name?: string) => {
     let e = byCompany.get(code);
-    if (!e) { e = { code, name: name || code, unrealized: 0, realized: 0, dividends: 0, invested: 0, value: 0 }; byCompany.set(code, e); }
+    if (!e) { e = { code, name: name || code, unrealized: 0, realized: 0, dividends: 0, invested: 0, value: 0, shares: 0 }; byCompany.set(code, e); }
     else if (name && e.name === code) e.name = name;
     return e;
   };
-  portfolio.forEach(p => { const e = ensure(p.companyCode, p.companyName); e.unrealized += p.unrealizedGain; e.invested += p.totalInvested; e.value += p.currentValue; });
+  portfolio.forEach(p => { const e = ensure(p.companyCode, p.companyName); e.unrealized += p.unrealizedGain; e.invested += p.totalInvested; e.value += p.currentValue; e.shares += p.sharesHeld; });
   realized.forEach(r => { ensure(r.companyCode, r.companyName).realized += r.realizedGain; });
   dividends.filter(d => d.type === 'CASH').forEach(d => { ensure(d.companyCode).dividends += d.totalAmount; });
   // Total purchase cost = every buy-type transaction's cost (up to the selected date). This is
@@ -443,6 +443,11 @@ export default function Summary() {
                   {/* Spans the three columns that survive the hide-sm breakpoint. */}
                   <td colSpan={3} style={{ padding: '0.25rem 0.5rem 0.75rem' }}>
                     <div className="summary-expanded">
+                      {/* Shares currently held — 0 once a position is fully sold, where
+                          the realized and dividend figures below still apply. */}
+                      <div className="summary-expanded-shares">
+                        {c.shares > 0 ? `${c.shares.toLocaleString('en-US')} shares held` : 'No open holding'}
+                      </div>
                       <div className="summary-expanded-line">
                         <span>Capital Gain</span>
                         <span className={`mono ${cls(c.capitalGain)}`}>{sign(c.capitalGain)}{fmt(c.capitalGain)}</span>
@@ -459,26 +464,44 @@ export default function Summary() {
                           {c.purchaseCost > 0 ? `${sign(c.dividendPct)}${c.dividendPct.toFixed(2)}%` : '—'}
                         </span>
                       </div>
-                      {/* The six columns hide-sm removes on a phone, as bare values.
-                          Position carries the meaning — CELL_LEGEND documents the
-                          order and the info icon above the table shows it. */}
+                      {/* The six columns hide-sm removes on a phone. Each is labelled
+                          so it stands alone; the info icon above the table explains
+                          how they are worked out. */}
                       <div className="summary-expanded-cells">
-                        <span className={`mono ${c.invested > 0 ? cls(c.unrealized) : ''}`}>
-                          {c.invested > 0 ? `${sign(c.unrealized)}${fmt(c.unrealized)}` : '—'}
-                        </span>
-                        <span className={`mono ${c.invested > 0 ? cls(c.unrealizedNet) : ''}`}>
-                          {c.invested > 0 ? `${sign(c.unrealizedNet)}${fmt(c.unrealizedNet)}` : '—'}
-                        </span>
-                        <span className={`mono ${c.invested > 0 ? cls(c.unrealizedNetPct) : ''}`}>
-                          {c.invested > 0 ? `${sign(c.unrealizedNetPct)}${c.unrealizedNetPct.toFixed(2)}%` : '—'}
-                        </span>
-                        <span className={`mono ${c.purchaseCost > 0 ? cls(c.realizedPct) : ''}`}>
-                          {c.purchaseCost > 0 ? `${sign(c.realizedPct)}${c.realizedPct.toFixed(2)}%` : '—'}
-                        </span>
-                        <span className={`mono ${cls(c.realized)}`}>{sign(c.realized)}{fmt(c.realized)}</span>
-                        <span className={`mono ${c.dividends > 0 ? 'gain-positive' : ''}`}>
-                          {c.dividends > 0 ? `+${fmt(c.dividends)}` : fmt(c.dividends)}
-                        </span>
+                        <div className="summary-expanded-cell">
+                          <span>Pure Unrealized</span>
+                          <span className={`mono ${c.invested > 0 ? cls(c.unrealized) : ''}`}>
+                            {c.invested > 0 ? `${sign(c.unrealized)}${fmt(c.unrealized)}` : '—'}
+                          </span>
+                        </div>
+                        <div className="summary-expanded-cell">
+                          <span>Final Return</span>
+                          <span className={`mono ${c.invested > 0 ? cls(c.unrealizedNet) : ''}`}>
+                            {c.invested > 0 ? `${sign(c.unrealizedNet)}${fmt(c.unrealizedNet)}` : '—'}
+                          </span>
+                        </div>
+                        <div className="summary-expanded-cell">
+                          <span>Unrealized Return %</span>
+                          <span className={`mono ${c.invested > 0 ? cls(c.unrealizedNetPct) : ''}`}>
+                            {c.invested > 0 ? `${sign(c.unrealizedNetPct)}${c.unrealizedNetPct.toFixed(2)}%` : '—'}
+                          </span>
+                        </div>
+                        <div className="summary-expanded-cell">
+                          <span>Realized Return %</span>
+                          <span className={`mono ${c.purchaseCost > 0 ? cls(c.realizedPct) : ''}`}>
+                            {c.purchaseCost > 0 ? `${sign(c.realizedPct)}${c.realizedPct.toFixed(2)}%` : '—'}
+                          </span>
+                        </div>
+                        <div className="summary-expanded-cell">
+                          <span>Realized</span>
+                          <span className={`mono ${cls(c.realized)}`}>{sign(c.realized)}{fmt(c.realized)}</span>
+                        </div>
+                        <div className="summary-expanded-cell">
+                          <span>Dividends</span>
+                          <span className={`mono ${c.dividends > 0 ? 'gain-positive' : ''}`}>
+                            {c.dividends > 0 ? `+${fmt(c.dividends)}` : fmt(c.dividends)}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </td>

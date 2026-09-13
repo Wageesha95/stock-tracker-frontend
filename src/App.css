@@ -1242,6 +1242,11 @@ button:disabled {
   font-size: 0.85rem;
 }
 
+.summary-expanded-shares {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
 .summary-expanded-line {
   display: grid;
   /* label takes the slack; the two figures stay in fixed, right-aligned columns */
@@ -1269,9 +1274,25 @@ button:disabled {
   border-top: 1px solid var(--border-input);
 }
 
-.summary-expanded-cells > span {
-  font-size: 0.85rem;
+/* Label sits beside its value; wrap only drops it onto its own line when the
+   pair genuinely will not fit. */
+.summary-expanded-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.15rem 0.4rem;
   min-width: 0;
+}
+
+.summary-expanded-cell > span:first-child {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.summary-expanded-cell > span:last-child {
+  font-size: 0.85rem;
+  margin-left: auto;
 }
 
 /* Info icon beside the By Company heading, opening the legend for those cells. */
