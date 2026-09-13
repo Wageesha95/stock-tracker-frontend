@@ -1234,9 +1234,6 @@ button:disabled {
 
 /* Summary → By Company: the tap-to-expand breakdown shown on small screens, where
    the Unrealized / Realized / Dividends columns are hidden by .hide-sm. */
-.summary-expanded-row > td {
-  background: var(--bg-thead);
-}
 
 .summary-expanded {
   display: flex;
@@ -1260,6 +1257,48 @@ button:disabled {
 .summary-expanded-line > span:not(:first-child) {
   text-align: right;
   min-width: 5.5rem;
+}
+
+/* The remaining hidden columns, as a two-up grid of label-over-value cells. */
+.summary-expanded-cells {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.4rem 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border-input);
+}
+
+.summary-expanded-cells > span {
+  font-size: 0.85rem;
+  min-width: 0;
+}
+
+/* Info icon beside the By Company heading, opening the legend for those cells. */
+.summary-legend-toggle {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #3182ce;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.summary-legend {
+  border-left: 2px solid var(--border-input);
+  padding: 0 0 0 0.75rem;
+  margin-bottom: 1rem;
+  font-size: 0.8rem;
+}
+
+.summary-legend-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  color: var(--text-muted);
 }
 
 /* Broker-to-broker transfer legs — neutral slate, since a transfer is neither a

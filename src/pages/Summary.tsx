@@ -11,6 +11,17 @@ import { SELL_COMMISSION_PCT } from '../constants';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 const SELL_PCT = Number(SELL_COMMISSION_PCT) || 0;
+
+// The expanded-row cells are bare values laid out two-up, so their meaning comes
+// from position. This list must stay in the same order as they are rendered.
+const CELL_LEGEND = [
+  'Pure Unrealized — market value − cost, before any cost of selling',
+  `Final Return — the same, after the ~${SELL_PCT}% commission to sell`,
+  'Unrealized Return % — Final Return ÷ open invested',
+  'Realized Return % — (Realized + Dividends) ÷ total purchase cost',
+  'Realized — booked gains/losses from sells & lapsed rights',
+  'Dividends — cumulative cash dividends received (net)',
+];
 const COLORS = [
   '#3182ce', '#38a169', '#d69e2e', '#e53e3e', '#805ad5',
   '#dd6b20', '#319795', '#d53f8c', '#5a67d8', '#2c7a7b',
@@ -43,6 +54,7 @@ export default function Summary() {
   const [isCompact, setIsCompact] = useState(typeof window !== 'undefined' && window.innerWidth <= 700);
   // Which company row is expanded on a compact screen. Only one at a time.
   const [expandedCode, setExpandedCode] = useState<string | null>(null);
+  const [legendOpen, setLegendOpen] = useState(false);
   const historicalMode = !!selectedDate;
 
   useEffect(() => {
@@ -268,10 +280,22 @@ export default function Summary() {
       <div className="stats-grid">
         <div className="stat-card" title="Cost basis of your current open holdings"><h3>Invested (open)</h3><p className="stat-value">{fmt(totalInvested)}</p></div>
         <div className="stat-card" title="Market value of current holdings"><h3>Current Value</h3><p className="stat-value">{fmt(currentValue)}</p></div>
-        <div className="stat-card" title="Unrealized gain/loss on open positions (current value − invested), and % of open invested">
-          <h3>Unrealized</h3>
-          <p className={`stat-value ${cls(unrealized)}`}>{sign(unrealized)}{fmt(unrealized)}</p>
-          <small className={cls(unrealized)}>{sign(unrealizedPct)}{unrealizedPct.toFixed(2)}%</small>
+        {/* Space is tight on a phone, so only the after-commission figure is shown
+            there — it is the one that reflects what selling would actually leave. */}
+        {!isMobile && (
+          <div className="stat-card" title="Unrealized gain/loss on open positions (current value − invested), before any cost of selling, and % of open invested">
+            <h3>Pure Unrealized</h3>
+            <p className={`stat-value ${cls(unrealized)}`}>{sign(unrealized)}{fmt(unrealized)}</p>
+            <small className={cls(unrealized)}>{sign(unrealizedPct)}{unrealizedPct.toFixed(2)}%</small>
+          </div>
+        )}
+        <div className="stat-card" title={`Unrealized gain/loss after deducting the ~${SELL_PCT}% commission it would cost to sell the current holding — what you would actually keep`}>
+          {/* "Unrealized − Sell Comm." is too wide for a phone-sized card, and on
+              mobile this is the only unrealized figure shown, so it gets the shorter
+              name there. */}
+          <h3>{isMobile ? 'Final Return' : <>Unrealized &minus; Sell Comm.</>}</h3>
+          <p className={`stat-value ${cls(unrealizedNetTotal)}`}>{sign(unrealizedNetTotal)}{fmt(unrealizedNetTotal)}</p>
+          <small className={cls(unrealizedNetTotal)}>{sign(unrealizedReturnPct)}{unrealizedReturnPct.toFixed(2)}%</small>
         </div>
         <div className="stat-card" title="Booked gains/losses from sells & lapsed rights (cumulative)"><h3>Realized</h3><p className={`stat-value ${cls(realizedTotal)}`}>{sign(realizedTotal)}{fmt(realizedTotal)}</p></div>
         <div className="stat-card" title="Cumulative cash dividends received (net of tax)"><h3>Dividends</h3><p className={`stat-value ${cls(dividendsTotal)}`}>{sign(dividendsTotal)}{fmt(dividendsTotal)}</p></div>
@@ -343,13 +367,34 @@ export default function Summary() {
         </table>
       </div>
 
-      <h2 style={{ margin: '2rem 0 1rem' }}>By Company ({companyRows.length})</h2>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '2rem 0 1rem' }}>
+        <h2 style={{ margin: 0 }}>By Company ({companyRows.length})</h2>
+        {isCompact && (
+          <button
+            type="button"
+            className="summary-legend-toggle"
+            aria-expanded={legendOpen}
+            title="What the values in an expanded row mean"
+            onClick={() => setLegendOpen(o => !o)}
+          >
+            &#9432;
+          </button>
+        )}
+      </div>
+      {isCompact && legendOpen && (
+        <div className="summary-legend">
+          <p style={{ margin: '0 0 0.4rem', fontWeight: 600 }}>Tap a row to expand. The values read:</p>
+          <ol className="summary-legend-list">
+            {CELL_LEGEND.map(item => <li key={item}>{item}</li>)}
+          </ol>
+        </div>
+      )}
       <div className="portfolio-table-wrap">
         <table className="portfolio-table">
           <thead>
             <tr>
               <th className="sort-header" title="Company — click a row to open its page" onClick={() => compSort.handleSort('code')}>Company{compSort.sortIcon('code')}</th>
-              <th className="sort-header text-right hide-sm" title="Unrealized gain/loss on current holdings (market value − cost)" onClick={() => compSort.handleSort('unrealized')}>Unrealized{compSort.sortIcon('unrealized')}</th>
+              <th className="sort-header text-right hide-sm" title="Unrealized gain/loss on current holdings (market value − cost), before any cost of selling" onClick={() => compSort.handleSort('unrealized')}>Pure Unrealized{compSort.sortIcon('unrealized')}</th>
               <th className="sort-header text-right hide-sm" title="Realized gain/loss from sells and lapsed rights" onClick={() => compSort.handleSort('realized')}>Realized{compSort.sortIcon('realized')}</th>
               <th className="sort-header text-right hide-sm" title="Cash dividends received (net)" onClick={() => compSort.handleSort('dividends')}>Dividends{compSort.sortIcon('dividends')}</th>
               <th className="sort-header text-right" title="Net P/L = Unrealized + Realized + Dividends" onClick={() => compSort.handleSort('net')}>Net P/L{compSort.sortIcon('net')}</th>
@@ -412,6 +457,27 @@ export default function Summary() {
                         </span>
                         <span className={`mono ${c.purchaseCost > 0 && c.dividends > 0 ? 'gain-positive' : ''}`}>
                           {c.purchaseCost > 0 ? `${sign(c.dividendPct)}${c.dividendPct.toFixed(2)}%` : '—'}
+                        </span>
+                      </div>
+                      {/* The six columns hide-sm removes on a phone, as bare values.
+                          Position carries the meaning — CELL_LEGEND documents the
+                          order and the info icon above the table shows it. */}
+                      <div className="summary-expanded-cells">
+                        <span className={`mono ${c.invested > 0 ? cls(c.unrealized) : ''}`}>
+                          {c.invested > 0 ? `${sign(c.unrealized)}${fmt(c.unrealized)}` : '—'}
+                        </span>
+                        <span className={`mono ${c.invested > 0 ? cls(c.unrealizedNet) : ''}`}>
+                          {c.invested > 0 ? `${sign(c.unrealizedNet)}${fmt(c.unrealizedNet)}` : '—'}
+                        </span>
+                        <span className={`mono ${c.invested > 0 ? cls(c.unrealizedNetPct) : ''}`}>
+                          {c.invested > 0 ? `${sign(c.unrealizedNetPct)}${c.unrealizedNetPct.toFixed(2)}%` : '—'}
+                        </span>
+                        <span className={`mono ${c.purchaseCost > 0 ? cls(c.realizedPct) : ''}`}>
+                          {c.purchaseCost > 0 ? `${sign(c.realizedPct)}${c.realizedPct.toFixed(2)}%` : '—'}
+                        </span>
+                        <span className={`mono ${cls(c.realized)}`}>{sign(c.realized)}{fmt(c.realized)}</span>
+                        <span className={`mono ${c.dividends > 0 ? 'gain-positive' : ''}`}>
+                          {c.dividends > 0 ? `+${fmt(c.dividends)}` : fmt(c.dividends)}
                         </span>
                       </div>
                     </div>
