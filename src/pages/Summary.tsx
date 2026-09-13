@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getDashboardAll, getDividends, getUserSettings, getTransactions, getCompanies, getAvailableDates, getMarketDataByDate } from '../api';
 import { PortfolioItem, RealizedGainItem, Dividend, Company, Transaction } from '../types';
@@ -38,13 +38,27 @@ export default function Summary() {
   const [sectors, setSectors] = useState<{ sector: string; currentValue: number; totalInvested: number }[]>([]);
   const [pieMetric, setPieMetric] = useState<'value' | 'invested'>('value');
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 640);
+  // Matches the `hide-sm` breakpoint in App.css, so the expandable row detail appears
+  // exactly when the columns it restates are the ones being hidden.
+  const [isCompact, setIsCompact] = useState(typeof window !== 'undefined' && window.innerWidth <= 700);
+  // Which company row is expanded on a compact screen. Only one at a time.
+  const [expandedCode, setExpandedCode] = useState<string | null>(null);
   const historicalMode = !!selectedDate;
 
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 640);
+    const onResize = () => {
+      setIsMobile(window.innerWidth < 640);
+      setIsCompact(window.innerWidth <= 700);
+    };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  // Growing back to a wide screen re-shows the columns, so a stale expansion would
+  // just duplicate them.
+  useEffect(() => {
+    if (!isCompact) setExpandedCode(null);
+  }, [isCompact]);
 
   const loadData = useCallback(() => {
     return getUserSettings().then(settings => {
@@ -90,6 +104,10 @@ export default function Summary() {
         if (t.type === 'SELL') {
           const avg = shares > 0 ? cost / shares : 0;
           cost -= avg * t.count;
+          shares -= t.count;
+        } else if (t.type === 'TRANSFER_OUT') {
+          // Not a disposal: removes exactly the cost its own price represents.
+          cost -= t.count * t.price;
           shares -= t.count;
         } else {
           cost += t.count * t.price + t.commission;
@@ -158,6 +176,14 @@ export default function Summary() {
   transactions.forEach(t => {
     if (selectedDate && t.date > selectedDate) return;
     if (t.type === 'SELL') return;
+    // The two transfer legs are symmetric — TRANSFER_IN adds the cost the shares
+    // carry across, TRANSFER_OUT removes the same amount — so a transfer leaves the
+    // total untouched, while each broker's own purchase cost still comes out right
+    // when a broker filter is applied.
+    if (t.type === 'TRANSFER_OUT') {
+      purchaseByCompany.set(t.companyCode, (purchaseByCompany.get(t.companyCode) || 0) - t.count * t.price);
+      return;
+    }
     purchaseByCompany.set(t.companyCode, (purchaseByCompany.get(t.companyCode) || 0) + (t.count * t.price + (t.commission || 0)));
   });
   const totalPurchaseCost = [...purchaseByCompany.values()].reduce((s, v) => s + v, 0);
@@ -165,6 +191,7 @@ export default function Summary() {
   const totalCommission = transactions.reduce((s, t) => (selectedDate && t.date > selectedDate ? s : s + (t.commission || 0)), 0);
   const companyRows = [...byCompany.values()].map(c => {
     const net = c.unrealized + c.realized + c.dividends;
+    const capitalGain = c.unrealized + c.realized;
     const purchaseCost = purchaseByCompany.get(c.code) || 0;
     // Unrealized gain minus the commission to sell the current holding at market value.
     const unrealizedNet = c.unrealized - (c.value * SELL_PCT) / 100;
@@ -178,6 +205,12 @@ export default function Summary() {
       // Realized return excludes unrealized (booked gains only): (realized + dividends) / cost.
       realizedPct: purchaseCost > 0 ? ((c.realized + c.dividends) / purchaseCost) * 100 : 0,
       netPct: purchaseCost > 0 ? (net / purchaseCost) * 100 : 0,
+      // Price-driven gain (unrealized + realized) split out from dividend income, so
+      // the two sources of return can be read separately. The two percentages are
+      // taken on the same base as Return %, so they add up to it.
+      capitalGain,
+      capitalGainPct: purchaseCost > 0 ? (capitalGain / purchaseCost) * 100 : 0,
+      dividendPct: purchaseCost > 0 ? (c.dividends / purchaseCost) * 100 : 0,
     };
   });
   const compSort = useTableSort(companyRows, 'net');
@@ -328,12 +361,27 @@ export default function Summary() {
           </thead>
           <tbody>
             {compSort.sorted.map(c => (
-              <tr key={c.code}>
-                <td style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${c.code}`)}>
+              <React.Fragment key={c.code}>
+              <tr
+                // On a compact screen most columns are hidden, so tapping the row opens
+                // the breakdown instead of navigating; the company page is one tap further.
+                onClick={isCompact ? () => setExpandedCode(prev => prev === c.code ? null : c.code) : undefined}
+                style={isCompact ? { cursor: 'pointer' } : undefined}
+                aria-expanded={isCompact ? expandedCode === c.code : undefined}
+              >
+                <td
+                  style={{ cursor: 'pointer' }}
+                  onClick={isCompact ? undefined : () => navigate(`/company/${c.code}`)}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <CompanyAvatar code={c.code} size={26} />
                     <span className="company-code">{c.code}</span>
                     <span className="hide-sm" style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{c.name !== c.code ? c.name : ''}</span>
+                    {isCompact && (
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+                        {expandedCode === c.code ? '▲' : '▼'}
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className={`text-right mono hide-sm ${c.invested > 0 ? cls(c.unrealized) : ''}`}>{c.invested > 0 ? `${sign(c.unrealized)}${fmt(c.unrealized)}` : '—'}</td>
@@ -345,6 +393,39 @@ export default function Summary() {
                 <td className={`text-right mono hide-sm ${c.purchaseCost > 0 ? cls(c.realizedPct) : ''}`}>{c.purchaseCost > 0 ? `${sign(c.realizedPct)}${c.realizedPct.toFixed(2)}%` : '—'}</td>
                 <td className={`text-right mono ${c.purchaseCost > 0 ? cls(c.netPct) : ''}`}>{c.purchaseCost > 0 ? `${sign(c.netPct)}${c.netPct.toFixed(2)}%` : '—'}</td>
               </tr>
+              {isCompact && expandedCode === c.code && (
+                <tr className="summary-expanded-row">
+                  {/* Spans the three columns that survive the hide-sm breakpoint. */}
+                  <td colSpan={3} style={{ padding: '0.25rem 0.5rem 0.75rem' }}>
+                    <div className="summary-expanded">
+                      <div className="summary-expanded-line">
+                        <span>Capital Gain</span>
+                        <span className={`mono ${cls(c.capitalGain)}`}>{sign(c.capitalGain)}{fmt(c.capitalGain)}</span>
+                        <span className={`mono ${c.purchaseCost > 0 ? cls(c.capitalGainPct) : ''}`}>
+                          {c.purchaseCost > 0 ? `${sign(c.capitalGainPct)}${c.capitalGainPct.toFixed(2)}%` : '—'}
+                        </span>
+                      </div>
+                      <div className="summary-expanded-line">
+                        <span>Dividend Gain</span>
+                        <span className={`mono ${c.dividends > 0 ? 'gain-positive' : ''}`}>
+                          {c.dividends > 0 ? `+${fmt(c.dividends)}` : fmt(c.dividends)}
+                        </span>
+                        <span className={`mono ${c.purchaseCost > 0 && c.dividends > 0 ? 'gain-positive' : ''}`}>
+                          {c.purchaseCost > 0 ? `${sign(c.dividendPct)}${c.dividendPct.toFixed(2)}%` : '—'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="summary-expanded-link"
+                        onClick={e => { e.stopPropagation(); navigate(`/company/${c.code}`); }}
+                      >
+                        Open {c.code}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </React.Fragment>
             ))}
           </tbody>
           <tfoot>

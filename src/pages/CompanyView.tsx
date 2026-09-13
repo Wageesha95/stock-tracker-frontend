@@ -14,6 +14,7 @@ import { SELL_COMMISSION_RATE } from '../constants';
 import { ttmWindow, resolveTtmWeeks } from '../utils/ttm';
 import { compareTxDateBuysFirst, compareEventDateBuysFirst, txDateTieBreaker } from '../utils/transactionSort';
 import { adjustedCount, adjustedPrice, adjustedHistPrice, sharesHeldAtDate } from '../utils/splits';
+import { isAcquisition, isDisposal, shareDelta, txTypeLabel, txTypePillClass } from '../utils/transactionTypes';
 import { useTableSort } from '../hooks/useTableSort';
 
 type Tab = 'transactions' | 'dividends' | 'realized' | 'payouts' | 'notes';
@@ -304,9 +305,14 @@ export default function CompanyView() {
       // Post-split basis so share counts stay continuous across a split.
       const adjCount = adjustedCount(t, shareSplits);
       const adjPrice = adjustedPrice(t, shareSplits);
-      if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+      if (isAcquisition(t.type)) {
         cumInvested += adjCount * adjPrice + t.commission;
         cumShares += adjCount;
+      } else if (t.type === 'TRANSFER_OUT') {
+        // Not a disposal: removes exactly the cost its own price represents, so an
+        // out/in pair leaves the invested line flat across the transfer.
+        cumInvested -= adjCount * adjPrice;
+        cumShares -= adjCount;
       } else if (t.type === 'SELL') {
         const avgAtSell = cumShares > 0 ? cumInvested / cumShares : 0;
         cumInvested -= avgAtSell * adjCount;
@@ -398,12 +404,14 @@ export default function CompanyView() {
         const t = ev.data;
         const adjCount = adjustedCount(t, shareSplits);
         const adjPrice = adjustedPrice(t, shareSplits);
-        if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+        if (isAcquisition(t.type)) {
           if (adjCount > 0) {
             const lotCost = adjCount * adjPrice + t.commission;
             lots.push({ count: adjCount, costPerShare: lotCost / adjCount });
           }
-        } else if (t.type === 'SELL') {
+        } else if (isDisposal(t.type)) {
+          // TRANSFER_OUT consumes lots the same way, so the out/in pair leaves the
+          // lot book balanced whether or not a broker filter is hiding one leg.
           let toSell = adjCount;
           while (toSell > 0 && lots.length > 0) {
             const lot = lots[0];
@@ -510,7 +518,8 @@ export default function CompanyView() {
   }, [transactions, marketHistory, dividends, realizedItems, shareSplits]);
 
   const firstBuyDate = useMemo(() => {
-    const buys = transactions.filter(t => t.type !== 'SELL');
+    // Only real acquisitions date the holding — a TRANSFER_OUT is not a buy.
+    const buys = transactions.filter(t => isAcquisition(t.type));
     if (buys.length === 0) return null;
     return buys.reduce((min, t) => t.date < min ? t.date : min, buys[0].date);
   }, [transactions]);
@@ -1260,8 +1269,8 @@ export default function CompanyView() {
                   <tr key={t.id}>
                     <td>{t.date}</td>
                     <td>
-                      <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : t.type === 'IPO' ? 'gain-pill-ipo' : 'gain-pill-scrip-div'}`}>
-                        {t.type === 'SCRIP_DIVIDEND' ? 'SCRIP' : t.type}
+                      <span className={`gain-pill ${txTypePillClass(t.type)}`}>
+                        {txTypeLabel(t.type)}
                       </span>
                     </td>
                     <td className="text-right mono">{t.count}</td>
@@ -1282,14 +1291,14 @@ export default function CompanyView() {
                 <tr className="portfolio-total">
                   <td colSpan={2}>Summary</td>
                   <td className="text-right mono">
-                    {transactions.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO' ? adjustedCount(t, shareSplits) : t.type === 'SELL' ? -adjustedCount(t, shareSplits) : (() => { throw new Error(`Unknown type: ${t.type}`); })()), 0)} net
+                    {transactions.reduce((s, t) => s + shareDelta(t, adjustedCount(t, shareSplits)), 0)} net
                   </td>
                   <td></td>
                   <td className="text-right mono">
                     {fmt(transactions.reduce((s, t) => s + t.commission, 0))}
                   </td>
                   <td className="text-right mono">
-                    {fmt(transactions.reduce((s, t) => s + (t.count * t.price + t.commission) * (t.type === 'SELL' ? -1 : 1), 0))}
+                    {fmt(transactions.reduce((s, t) => s + (t.count * t.price + t.commission) * (isDisposal(t.type) ? -1 : 1), 0))}
                   </td>
                   {!isReadMode && <td></td>}
                 </tr>

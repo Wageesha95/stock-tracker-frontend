@@ -69,6 +69,9 @@ export default function RightsPage({ embedded }: { embedded?: boolean }) {
       txns.forEach(t => {
         const c = t.count || 0;
         if (t.type === 'SELL') { shares -= c; }
+        // Transferred to another broker — those shares, and what was paid for
+        // them, are no longer part of this holding.
+        else if (t.type === 'TRANSFER_OUT') { shares -= c; cost -= c * t.price; bought -= c; }
         else { shares += c; cost += c * t.price + (t.commission || 0); bought += c; }
       });
       const disabled = txns.every(t => t.disabled === true);

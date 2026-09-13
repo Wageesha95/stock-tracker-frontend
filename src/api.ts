@@ -287,7 +287,7 @@ export interface InterestLot {
   remaining: number;
   costPerShare: number;
   lotCost: number;
-  status: 'held' | 'sold' | 'partial';
+  status: 'held' | 'sold' | 'partial' | 'transferred';
   endDate: string | null;
   days: number;
   interest: number;
@@ -568,6 +568,54 @@ export const updateIpo = (id: string, data: { date: string; count: number; price
   api.put<IpoData>(`/ipos/${id}`, data).then(res => { invalidate('ipos', 'transactions', 'portfolio', 'dashboard-all'); return res.data; });
 export const deleteIpo = (id: string) =>
   api.delete(`/ipos/${id}`).then(res => { invalidate('ipos', 'transactions', 'portfolio', 'dashboard-all'); return res; });
+
+// Share transfers (broker to broker)
+export interface ShareTransferData {
+  id: string;
+  companyCode: string;
+  date: string;
+  count: number;
+  // The average price both legs are booked at — set by the server, not the client.
+  price: number;
+  fromBrokerId: string;
+  toBrokerId: string;
+  note?: string | null;
+  outTransactionId: string;
+  inTransactionId: string;
+  createdAt: string;
+}
+
+export interface TransferAvailability {
+  companyCode: string;
+  brokerId: string;
+  date: string;
+  shares: number;
+  avgPrice: number;
+}
+
+// What the source broker actually holds on a date, and the price a transfer would
+// carry across. Deliberately uncached: it changes with every form keystroke.
+export const getTransferAvailability = (companyCode: string, brokerId: string, date: string) =>
+  api.get<TransferAvailability>('/share-transfers/available', { params: { companyCode, brokerId, date } })
+    .then(res => res.data);
+
+export interface ShareTransferInput {
+  companyCode: string;
+  date: string;
+  count: number;
+  fromBrokerId: string;
+  toBrokerId: string;
+  note?: string | null;
+}
+
+export const getShareTransfers = () =>
+  cached('share-transfers', () => api.get<ShareTransferData[]>('/share-transfers').then(res => res.data));
+export const createShareTransfer = (data: ShareTransferInput) =>
+  api.post<ShareTransferData>('/share-transfers', data).then(res => { invalidate('share-transfers', 'transactions', 'portfolio', 'dashboard-all'); return res.data; });
+export const updateShareTransfer = (id: string, data: Omit<ShareTransferInput, 'companyCode'>) =>
+  api.put<ShareTransferData>(`/share-transfers/${id}`, data).then(res => { invalidate('share-transfers', 'transactions', 'portfolio', 'dashboard-all'); return res.data; });
+export const deleteShareTransfer = (id: string) =>
+  api.delete(`/share-transfers/${id}`).then(res => { invalidate('share-transfers', 'transactions', 'portfolio', 'dashboard-all'); return res; });
 
 // Share Splits
 export interface ShareSplitData {

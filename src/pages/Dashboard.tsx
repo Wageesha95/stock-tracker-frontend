@@ -11,6 +11,7 @@ import CompanyAvatar from '../components/CompanyAvatar';
 import MarketDatePicker from '../components/MarketDatePicker';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine, PieChart, Pie, Cell } from 'recharts';
 import { compareTxDateBuysFirst, compareEventDateBuysFirst } from '../utils/transactionSort';
+import { isAcquisition, isDisposal } from '../utils/transactionTypes';
 
 import type { InterestBreakdownItem } from '../api';
 
@@ -101,9 +102,14 @@ export default function Dashboard() {
       const sorted = [...txns].sort(compareTxDateBuysFirst);
       let shares = 0, cost = 0, realized = 0;
       for (const t of sorted) {
-        if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+        if (isAcquisition(t.type)) {
           cost += t.count * t.price + t.commission;
           shares += t.count;
+        } else if (t.type === 'TRANSFER_OUT') {
+          // Not a disposal: removes exactly the cost its own price represents and
+          // realizes nothing, so an out/in pair leaves cost and avg untouched.
+          cost -= t.count * t.price;
+          shares -= t.count;
         } else if (t.type === 'SELL') {
           const avg = shares > 0 ? cost / shares : 0;
           const sellRev = t.count * t.price - t.commission;
@@ -153,7 +159,7 @@ export default function Dashboard() {
       remaining: number;
       costPerShare: number;
       lotCost: number;
-      status: 'held' | 'sold' | 'partial';
+      status: 'held' | 'sold' | 'partial' | 'transferred';
       endDate: string | null;
       accruedInterest: number;
     };
@@ -183,7 +189,7 @@ export default function Dashboard() {
       if (!allLotsByCode[code]) allLotsByCode[code] = [];
       if (!activeLotsByCode[code]) activeLotsByCode[code] = [];
       const open = activeLotsByCode[code];
-      if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+      if (isAcquisition(t.type)) {
         if (t.count > 0) {
           const lotCost = t.count * t.price + t.commission;
           const lot: HistLot = {
@@ -199,7 +205,10 @@ export default function Dashboard() {
           allLotsByCode[code].push(lot);
           open.push(lot);
         }
-      } else if (t.type === 'SELL') {
+      } else if (isDisposal(t.type)) {
+        // TRANSFER_OUT consumes lots the same way a SELL does, so the out/in pair
+        // stays balanced even when a broker filter hides one of the two legs.
+        const transferred = t.type === 'TRANSFER_OUT';
         let toSell = t.count;
         while (toSell > 0 && open.length > 0) {
           const lot = open[0];
@@ -207,7 +216,7 @@ export default function Dashboard() {
             toSell -= lot.remaining;
             lot.remaining = 0;
             lot.endDate = t.date;
-            lot.status = 'sold';
+            lot.status = transferred ? 'transferred' : 'sold';
             open.shift();
           } else {
             lot.remaining -= toSell;
@@ -692,12 +701,14 @@ export default function Dashboard() {
             const code = t.companyCode;
             if (!companyLots[code]) companyLots[code] = [];
             const lots = companyLots[code];
-            if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+            if (isAcquisition(t.type)) {
               if (t.count > 0) {
                 const lotCost = t.count * t.price + t.commission;
                 lots.push({ count: t.count, costPerShare: lotCost / t.count });
               }
-            } else if (t.type === 'SELL') {
+            } else if (isDisposal(t.type)) {
+              // TRANSFER_OUT consumes lots like a SELL, keeping the out/in pair
+              // balanced even when a broker filter hides one leg.
               let toSell = t.count;
               while (toSell > 0 && lots.length > 0) {
                 const lot = lots[0];
@@ -786,9 +797,13 @@ export default function Dashboard() {
             const code = t.companyCode;
             if (!companyState[code]) companyState[code] = { shares: 0, cost: 0 };
             const st = companyState[code];
-            if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+            if (isAcquisition(t.type)) {
               st.cost += t.count * t.price + t.commission;
               st.shares += t.count;
+            } else if (t.type === 'TRANSFER_OUT') {
+              // Not a disposal: removes exactly the cost its own price represents.
+              st.cost -= t.count * t.price;
+              st.shares -= t.count;
             } else if (t.type === 'SELL') {
               const avg = st.shares > 0 ? st.cost / st.shares : 0;
               st.cost -= avg * t.count;
@@ -854,7 +869,12 @@ export default function Dashboard() {
           .sort((a, b) => a.date.localeCompare(b.date));
         let netCashOut = 0;
         const chartData = sorted.map(t => {
-          if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+          // This line tracks cash, not shares. A broker-to-broker transfer moves no
+          // money, so neither leg shifts it — counting TRANSFER_IN as cash out would
+          // invent an investment that never happened.
+          if (t.type === 'TRANSFER_IN' || t.type === 'TRANSFER_OUT') {
+            // no cash movement
+          } else if (isAcquisition(t.type)) {
             netCashOut += t.count * t.price + t.commission;
           } else if (t.type === 'SELL') {
             netCashOut -= t.count * t.price - t.commission;

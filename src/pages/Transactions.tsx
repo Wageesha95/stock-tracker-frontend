@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getTransactions, getCompanies, getMarketData, getUserSettings, createTransaction, deleteTransaction } from '../api';
+import { getTransactions, getCompanies, getMarketData, getUserSettings, getBrokers, createTransaction, deleteTransaction, BrokerData } from '../api';
 import { Transaction, Company, MarketData } from '../types';
-import { filterTxByBroker } from '../utils/brokers';
+import { defaultBrokerId, filterTxByBroker } from '../utils/brokers';
 import { SELL_COMMISSION_PCT } from '../constants';
 import { useAuth } from '../context/AuthContext';
 import ActionMenu from '../components/ActionMenu';
 import CompanyAvatar from '../components/CompanyAvatar';
 import CompanySearchSelect from '../components/CompanySearchSelect';
 import { compareTxDateBuysFirst, txDateTieBreaker } from '../utils/transactionSort';
+import { isAcquisition, shareDelta, txTypeLabel, txTypePillClass } from '../utils/transactionTypes';
 
 export default function Transactions() {
   const navigate = useNavigate();
@@ -16,6 +17,8 @@ export default function Transactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [marketMap, setMarketMap] = useState<Record<string, MarketData>>({});
+  const [brokers, setBrokers] = useState<BrokerData[]>([]);
+  const [selectedBrokerIds, setSelectedBrokerIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [companyCode, setCompanyCode] = useState('');
@@ -24,13 +27,20 @@ export default function Transactions() {
   const [count, setCount] = useState('');
   const [price, setPrice] = useState('');
   const [commission, setCommission] = useState(SELL_COMMISSION_PCT);
+  const [brokerId, setBrokerId] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'group' | 'date'>('list');
 
+  const brokerName = (id: string | null | undefined) => id ? (brokers.find(b => b.id === id)?.name ?? '—') : '—';
+
   const loadData = () => {
-    Promise.all([getTransactions(), getCompanies(), getMarketData(), getUserSettings()])
-      .then(([txns, comps, md, settings]) => {
+    Promise.all([getTransactions(), getCompanies(), getMarketData(), getUserSettings(), getBrokers().catch(() => [] as BrokerData[])])
+      .then(([txns, comps, md, settings, brks]) => {
         setTransactions(filterTxByBroker(txns, settings.selectedDataBrokerIds || []));
         setCompanies(comps);
+        setBrokers(brks);
+        const sel = settings.selectedBrokerIds || [];
+        setSelectedBrokerIds(sel);
+        setBrokerId(prev => prev || defaultBrokerId(brks, sel));
         const map: Record<string, MarketData> = {};
         md.forEach(m => {
           if (!map[m.companyCode] || m.tradeDate > map[m.companyCode].tradeDate) {
@@ -58,11 +68,13 @@ export default function Transactions() {
         count: Number(count),
         price: Number(price),
         commission: Number(commission),
+        brokerId: brokerId || null,
       });
       setDate('');
       setCount('');
       setPrice('');
       setCommission('0');
+      setBrokerId(defaultBrokerId(brokers, selectedBrokerIds));
       loadData();
     } catch (err) {
       console.error('Failed to create transaction', err);
@@ -80,7 +92,13 @@ export default function Transactions() {
   };
 
   const totalCost = (Number(count) || 0) * (Number(price) || 0) + (Number(commission) || 0);
-  const canAdd = companyCode !== '' && date !== '' && count !== '' && price !== '';
+  // Brokers the user can pick from: their selected brokers when set, else all.
+  const availableBrokers = selectedBrokerIds.length > 0
+    ? brokers.filter(b => selectedBrokerIds.includes(b.id))
+    : brokers;
+  // A broker is required once the user has any, so trades stay attributable.
+  const canAdd = companyCode !== '' && date !== '' && count !== '' && price !== ''
+    && (availableBrokers.length === 0 || brokerId !== '');
 
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<'date' | 'companyCode' | 'type' | 'count' | 'price' | 'commission' | 'total'>('date');
@@ -194,6 +212,17 @@ export default function Transactions() {
                 onChange={e => setCommission(e.target.value)}
               />
             </label>
+            {availableBrokers.length > 0 && (
+              <label>
+                Broker
+                <select value={brokerId} onChange={e => setBrokerId(e.target.value)} required>
+                  <option value="">Select broker...</option>
+                  {availableBrokers.map(b => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
           <div className="form-row">
             <span className="total-cost">Total Cost: {totalCost.toFixed(2)}</span>
@@ -244,6 +273,7 @@ export default function Transactions() {
                 <th className="sort-header" onClick={() => handleSort('date')}>Date{si('date')}</th>
                 <th className="sort-header" onClick={() => handleSort('companyCode')}>Company{si('companyCode')}</th>
                 <th className="sort-header" onClick={() => handleSort('type')}>Type{si('type')}</th>
+                <th>Broker</th>
                 <th className="sort-header text-right" onClick={() => handleSort('count')}>Count{si('count')}</th>
                 <th className="sort-header text-right" onClick={() => handleSort('price')}>Price{si('price')}</th>
                 <th className="sort-header text-right" onClick={() => handleSort('commission')}>Commission{si('commission')}</th>
@@ -262,10 +292,11 @@ export default function Transactions() {
                     </div>
                   </td>
                   <td>
-                    <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : t.type === 'IPO' ? 'gain-pill-ipo' : 'gain-pill-scrip-div'}`}>
-                      {t.type === 'SCRIP_DIVIDEND' ? 'SCRIP' : t.type}
+                    <span className={`gain-pill ${txTypePillClass(t.type)}`}>
+                      {txTypeLabel(t.type)}
                     </span>
                   </td>
+                  <td>{brokerName(t.brokerId)}</td>
                   <td className="text-right mono">{t.count}</td>
                   <td className="text-right mono">{t.price.toFixed(2)}</td>
                   <td className="text-right mono">{t.commission.toFixed(2)}</td>
@@ -294,9 +325,14 @@ export default function Transactions() {
             let fifoShares = 0;
             let fifoCost = 0;
             for (const t of chronological) {
-              if (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO') {
+              if (isAcquisition(t.type)) {
                 fifoShares += t.count;
                 fifoCost += t.count * t.price + t.commission;
+              } else if (t.type === 'TRANSFER_OUT') {
+                // Not a disposal: removes exactly the cost its own price represents,
+                // mirroring what the matching TRANSFER_IN adds at the other broker.
+                fifoCost -= t.count * t.price;
+                fifoShares -= t.count;
               } else if (t.type === 'SELL') {
                 const avgAtSell = fifoShares > 0 ? fifoCost / fifoShares : 0;
                 fifoCost -= avgAtSell * t.count;
@@ -353,8 +389,8 @@ export default function Transactions() {
                       <tr key={t.id}>
                         <td>{t.date}</td>
                         <td>
-                          <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : t.type === 'IPO' ? 'gain-pill-ipo' : 'gain-pill-scrip-div'}`}>
-                            {t.type === 'SCRIP_DIVIDEND' ? 'SCRIP' : t.type}
+                          <span className={`gain-pill ${txTypePillClass(t.type)}`}>
+                            {txTypeLabel(t.type)}
                           </span>
                         </td>
                         <td className="text-right mono">{t.count}</td>
@@ -374,7 +410,7 @@ export default function Transactions() {
                   <tfoot>
                     <tr className="portfolio-total">
                       <td colSpan={2}>Total ({txns.length})</td>
-                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO' ? t.count : t.type === 'SELL' ? -t.count : (() => { throw new Error(`Unknown transaction type: ${t.type}`); })()), 0)}</td>
+                      <td className="text-right mono">{txns.reduce((s, t) => s + shareDelta(t), 0)}</td>
                       <td></td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + t.commission, 0).toFixed(2)}</td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + (t.count * t.price + t.commission), 0).toFixed(2)}</td>
@@ -435,8 +471,8 @@ export default function Transactions() {
                           </div>
                         </td>
                         <td>
-                          <span className={`gain-pill ${t.type === 'BUY' ? 'gain-pill-buy' : t.type === 'SELL' ? 'gain-pill-sell' : t.type === 'RIGHTS' ? 'gain-pill-rights' : t.type === 'IPO' ? 'gain-pill-ipo' : 'gain-pill-scrip-div'}`}>
-                            {t.type === 'SCRIP_DIVIDEND' ? 'SCRIP' : t.type}
+                          <span className={`gain-pill ${txTypePillClass(t.type)}`}>
+                            {txTypeLabel(t.type)}
                           </span>
                         </td>
                         <td className="text-right mono">{t.count}</td>
@@ -456,7 +492,7 @@ export default function Transactions() {
                   <tfoot>
                     <tr className="portfolio-total">
                       <td colSpan={2}>Total ({txns.length})</td>
-                      <td className="text-right mono">{txns.reduce((s, t) => s + (t.type === 'BUY' || t.type === 'RIGHTS' || t.type === 'SCRIP_DIVIDEND' || t.type === 'IPO' ? t.count : t.type === 'SELL' ? -t.count : (() => { throw new Error(`Unknown transaction type: ${t.type}`); })()), 0)}</td>
+                      <td className="text-right mono">{txns.reduce((s, t) => s + shareDelta(t), 0)}</td>
                       <td></td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + t.commission, 0).toFixed(2)}</td>
                       <td className="text-right mono">{txns.reduce((s, t) => s + (t.count * t.price + t.commission), 0).toFixed(2)}</td>

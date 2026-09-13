@@ -32,7 +32,10 @@ export interface Transaction {
   id: string;
   companyCode: string;
   date: string;
-  type: 'BUY' | 'SELL' | 'RIGHTS' | 'SCRIP_DIVIDEND' | 'IPO';
+  // TRANSFER_OUT / TRANSFER_IN are the two legs of a broker-to-broker transfer:
+  // same count, same price, zero commission, so they net to no change in shares,
+  // cost basis or average price. A TRANSFER_OUT never realizes a gain.
+  type: 'BUY' | 'SELL' | 'RIGHTS' | 'SCRIP_DIVIDEND' | 'IPO' | 'TRANSFER_OUT' | 'TRANSFER_IN';
   count: number;
   price: number;
   commission: number;

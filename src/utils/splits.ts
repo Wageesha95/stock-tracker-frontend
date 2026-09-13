@@ -1,3 +1,4 @@
+import { shareDelta } from './transactionTypes';
 import type { Transaction } from '../types';
 import type { ShareSplitData } from '../api';
 
@@ -67,7 +68,7 @@ export const sharesHeldAtDate = (
         count = Math.round((count * s.toShares) / s.fromShares);
       }
     }
-    held += t.type === 'SELL' ? -count : count;
+    held += shareDelta(t, count);
   }
   return held;
 };

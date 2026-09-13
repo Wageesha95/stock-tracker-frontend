@@ -16,6 +16,7 @@ import Watchlists from './pages/Watchlists';
 import RightsPage from './pages/Rights';
 import AvgCalculator from './pages/AvgCalculator';
 import IpoPage from './pages/Ipos';
+import TransfersPage from './pages/Transfers';
 import RightsAndIpo from './pages/RightsAndIpo';
 import DividendScraper from './pages/DividendScraper';
 import LoginHistory from './pages/LoginHistory';
@@ -126,15 +127,15 @@ function App() {
                 <NavLink to="/" end onClick={() => setMenuOpen(false)}>Dashboard</NavLink>
                 <NavLink to="/transactions" onClick={() => setMenuOpen(false)}>Transactions</NavLink>
                 <NavLink to="/dividends" onClick={() => setMenuOpen(false)}>Dividends</NavLink>
-                <NavLink to="/rights-ipo" onClick={() => setMenuOpen(false)}>Corporate Actions</NavLink>
+                <NavLink to="/summary" onClick={() => setMenuOpen(false)}>Summary</NavLink>
                 <NavLink to="/sectors" onClick={() => setMenuOpen(false)}>Sectors</NavLink>
-                <NavLink to="/companies" onClick={() => setMenuOpen(false)}>Companies</NavLink>
                 <NavLink to="/calculator" onClick={() => setMenuOpen(false)}>Calculator</NavLink>
                 <NavDropdown
                   label="Advanced"
                   onNavigate={() => setMenuOpen(false)}
                   items={[
-                    { to: '/summary', label: 'Summary' },
+                    { to: '/rights-ipo', label: 'Corporate Actions' },
+                    { to: '/companies', label: 'Companies' },
                     { to: '/upcoming-dividends', label: 'Upcoming Dividends' },
                     { to: '/watchlists', label: 'Watchlists' },
                     { to: '/market-data', label: 'Market Data' },
@@ -205,6 +206,7 @@ function App() {
             <Route path="/rights-ipo" element={<RightsAndIpo />} />
             <Route path="/rights" element={<RightsPage />} />
             <Route path="/ipos" element={<IpoPage />} />
+            <Route path="/transfers" element={<TransfersPage />} />
             <Route path="/calculator" element={<AvgCalculator />} />
             <Route path="/company/:code" element={<CompanyView />} />
             <Route path="/watchlists" element={<Watchlists />} />

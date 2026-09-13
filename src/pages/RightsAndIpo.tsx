@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import RightsPage from './Rights';
 import IpoPage from './Ipos';
+import TransfersPage from './Transfers';
 
 export default function RightsAndIpo() {
-  const [tab, setTab] = useState<'rights' | 'ipo'>('rights');
+  const [tab, setTab] = useState<'rights' | 'ipo' | 'transfer'>('rights');
 
   return (
     <div>
@@ -12,10 +13,12 @@ export default function RightsAndIpo() {
         <div className="segmented-control">
           <button className={tab === 'rights' ? 'active' : ''} onClick={() => setTab('rights')}>Rights</button>
           <button className={tab === 'ipo' ? 'active' : ''} onClick={() => setTab('ipo')}>IPO</button>
+          <button className={tab === 'transfer' ? 'active' : ''} onClick={() => setTab('transfer')}>Transfer</button>
         </div>
       </div>
       {tab === 'rights' && <RightsPage embedded />}
       {tab === 'ipo' && <IpoPage embedded />}
+      {tab === 'transfer' && <TransfersPage embedded />}
     </div>
   );
 }
