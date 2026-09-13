@@ -16,8 +16,8 @@ const SELL_PCT = Number(SELL_COMMISSION_PCT) || 0;
 // By Company heading. The cells carry short labels; this explains how each is derived.
 const CELL_LEGEND = [
   'Unrealized — market value − cost, before any cost of selling',
-  `Net of Comm. — the same, after the ~${SELL_PCT}% commission to sell`,
-  'Unreal. % — Net of Comm. ÷ open invested',
+  `Final Return — the same, after the ~${SELL_PCT}% commission to sell`,
+  'Unreal. % — Final Return ÷ open invested',
   'Booked % — (Realized + Dividends) ÷ total purchase cost. Non-zero even when Realized is 0, because dividends count as booked.',
   'Realized — booked gains/losses from sells & lapsed rights',
   'Dividends — cumulative cash dividends received (net)',
@@ -325,7 +325,7 @@ export default function Summary() {
           {/* "Unrealized − Sell Comm." is too wide for a phone-sized card, and on
               mobile this is the only unrealized figure shown, so it gets the shorter
               name there. */}
-          <h3>{isMobile ? 'Final Return' : <>Unrealized &minus; Sell Comm.</>}</h3>
+          <h3>Final Return</h3>
           <p className={`stat-value ${cls(unrealizedNetTotal)}`}>{sign(unrealizedNetTotal)}{fmt(unrealizedNetTotal)}</p>
           <small className={cls(unrealizedNetTotal)}>{sign(unbookedReturnPct)}{unbookedReturnPct.toFixed(2)}%</small>
         </div>
@@ -439,7 +439,7 @@ export default function Summary() {
               <th className="sort-header" title="Company — click a row to open its page" onClick={() => compSort.handleSort('code')}>Company{compSort.sortIcon('code')}</th>
               <th className="sort-header text-right hide-sm" title="Shares currently held" onClick={() => compSort.handleSort('shares')}>Shares{compSort.sortIcon('shares')}</th>
               <th className="sort-header text-right hide-sm" title="Unrealized gain/loss on current holdings (market value − cost), before any cost of selling" onClick={() => compSort.handleSort('unrealized')}>Pure Unrealized{compSort.sortIcon('unrealized')}</th>
-              <th className="sort-header text-right hide-sm" title={`Unrealized gain after deducting the ~${SELL_PCT}% commission to sell the current holding`} onClick={() => compSort.handleSort('unrealizedNet')}>Unrealized − Sell&nbsp;Comm.{compSort.sortIcon('unrealizedNet')}</th>
+              <th className="sort-header text-right hide-sm" title={`Unrealized gain after deducting the ~${SELL_PCT}% commission to sell the current holding`} onClick={() => compSort.handleSort('unrealizedNet')}>Final Return{compSort.sortIcon('unrealizedNet')}</th>
               <th className="sort-header text-right hide-sm" title="Realized gain/loss from sells and lapsed rights" onClick={() => compSort.handleSort('realized')}>Realized{compSort.sortIcon('realized')}</th>
               <th className="sort-header text-right hide-sm" title="Cash dividends received (net)" onClick={() => compSort.handleSort('dividends')}>Dividends{compSort.sortIcon('dividends')}</th>
               <th className="sort-header text-right hide-sm" title="Capital gain = Pure Unrealized + Realized (price-driven, excludes dividends)" onClick={() => compSort.handleSort('capitalGain')}>Capital Gain{compSort.sortIcon('capitalGain')}</th>
@@ -543,7 +543,7 @@ export default function Summary() {
                           </span>
                         </div>
                         <div className="summary-expanded-cell">
-                          <span>Net of Comm.</span>
+                          <span>Final Return</span>
                           <span className={`mono ${c.invested > 0 ? cls(c.unrealizedNet) : ''}`}>
                             {c.invested > 0 ? `${sign(c.unrealizedNet)}${fmt(c.unrealizedNet)}` : '—'}
                           </span>
