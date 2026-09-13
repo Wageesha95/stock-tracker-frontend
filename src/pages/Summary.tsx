@@ -18,7 +18,7 @@ const CELL_LEGEND = [
   'Unrealized — market value − cost, before any cost of selling',
   `Net of Comm. — the same, after the ~${SELL_PCT}% commission to sell`,
   'Unreal. % — Net of Comm. ÷ open invested',
-  'Real. % — (Realized + Dividends) ÷ total purchase cost',
+  'Booked % — (Realized + Dividends) ÷ total purchase cost. Non-zero even when Realized is 0, because dividends count as booked.',
   'Realized — booked gains/losses from sells & lapsed rights',
   'Dividends — cumulative cash dividends received (net)',
 ];
@@ -234,7 +234,7 @@ export default function Summary() {
       // That net unrealized gain as a % of what's invested in the open holding.
       unrealizedNetPct: c.invested > 0 ? (unrealizedNet / c.invested) * 100 : 0,
       // Realized return excludes unrealized (booked gains only): (realized + dividends) / cost.
-      realizedPct: hasBasis ? ((c.realized + c.dividends) / purchaseCost) * 100 : 0,
+      bookedPct: hasBasis ? ((c.realized + c.dividends) / purchaseCost) * 100 : 0,
       netPct: hasBasis ? (net / purchaseCost) * 100 : 0,
       // Price-driven gain (unrealized + realized) split out from dividend income, so
       // the two sources of return can be read separately. The two percentages are
@@ -436,7 +436,6 @@ export default function Summary() {
               <th className="sort-header text-right hide-sm" title="Realized gain/loss from sells and lapsed rights" onClick={() => compSort.handleSort('realized')}>Realized{compSort.sortIcon('realized')}</th>
               <th className="sort-header text-right hide-sm" title="Cash dividends received (net)" onClick={() => compSort.handleSort('dividends')}>Dividends{compSort.sortIcon('dividends')}</th>
               <th className="sort-header text-right hide-sm" title="Capital gain = Pure Unrealized + Realized (price-driven, excludes dividends)" onClick={() => compSort.handleSort('capitalGain')}>Capital Gain{compSort.sortIcon('capitalGain')}</th>
-              <th className="sort-header text-right hide-sm" title="Dividend gain = cumulative cash dividends received (net)" onClick={() => compSort.handleSort('dividends')}>Dividend Gain{compSort.sortIcon('dividends')}</th>
               <th
                 className="sort-header text-right"
                 title={isCompact
@@ -448,7 +447,7 @@ export default function Summary() {
                 {compSort.sortIcon(isCompact ? 'netAfterComm' : 'net')}
               </th>
               <th className="sort-header text-right hide-sm" title="Unrealized return = unrealized gain after sell commission ÷ open invested × 100" onClick={() => compSort.handleSort('unrealizedNetPct')}>Unrealized Return %{compSort.sortIcon('unrealizedNetPct')}</th>
-              <th className="sort-header text-right hide-sm" title="Realized return = (Realized + Dividends) ÷ total purchase cost × 100 (excludes unrealized)" onClick={() => compSort.handleSort('realizedPct')}>Realized Return %{compSort.sortIcon('realizedPct')}</th>
+              <th className="sort-header text-right hide-sm" title="Booked return = (Realized + Dividends) ÷ total purchase cost × 100. Counts everything already banked, so it is non-zero when dividends were received even if nothing was sold. Excludes unrealized." onClick={() => compSort.handleSort('bookedPct')}>Booked Return %{compSort.sortIcon('bookedPct')}</th>
               <th className="sort-header text-right" title="Return = (Unrealized + Realized + Dividends) ÷ total purchase cost × 100" onClick={() => compSort.handleSort('netPct')}>Return %{compSort.sortIcon('netPct')}</th>
               <th className="sort-header text-right hide-sm" title="Interest the money tied up in this holding could have earned instead, at the rate set in Settings" onClick={() => compSort.handleSort('opportunityCost')}>Opportunity Cost{compSort.sortIcon('opportunityCost')}</th>
             </tr>
@@ -484,12 +483,11 @@ export default function Summary() {
                 <td className={`text-right mono hide-sm ${cls(c.realized)}`}>{sign(c.realized)}{fmt(c.realized)}</td>
                 <td className={`text-right mono hide-sm ${c.dividends > 0 ? 'gain-positive' : ''}`}>{c.dividends > 0 ? `+${fmt(c.dividends)}` : '—'}</td>
                 <td className={`text-right mono hide-sm ${cls(c.capitalGain)}`}>{sign(c.capitalGain)}{fmt(c.capitalGain)}</td>
-                <td className={`text-right mono hide-sm ${c.dividends > 0 ? 'gain-positive' : ''}`}>{c.dividends > 0 ? `+${fmt(c.dividends)}` : '—'}</td>
                 <td className={`text-right mono ${cls(isCompact ? c.netAfterComm : c.net)}`} style={{ fontWeight: 700 }}>
                   {sign(isCompact ? c.netAfterComm : c.net)}{fmt(isCompact ? c.netAfterComm : c.net)}
                 </td>
                 <td className={`text-right mono hide-sm ${c.invested > 0 ? cls(c.unrealizedNetPct) : ''}`}>{c.invested > 0 ? `${sign(c.unrealizedNetPct)}${c.unrealizedNetPct.toFixed(2)}%` : '—'}</td>
-                <td className={`text-right mono hide-sm ${c.hasBasis ? cls(c.realizedPct) : ''}`}>{c.hasBasis ? `${sign(c.realizedPct)}${c.realizedPct.toFixed(2)}%` : '—'}</td>
+                <td className={`text-right mono hide-sm ${c.hasBasis ? cls(c.bookedPct) : ''}`}>{c.hasBasis ? `${sign(c.bookedPct)}${c.bookedPct.toFixed(2)}%` : '—'}</td>
                 <td className={`text-right mono ${c.hasBasis ? cls(c.netPct) : ''}`}>{c.hasBasis ? `${sign(c.netPct)}${c.netPct.toFixed(2)}%` : '—'}</td>
                 <td className={`text-right mono hide-sm ${c.opportunityCost > 0 ? 'gain-negative' : ''}`}>{c.opportunityCost > 0 ? `-${fmt(c.opportunityCost)}` : fmt(0)}</td>
               </tr>
@@ -551,9 +549,9 @@ export default function Summary() {
                           </span>
                         </div>
                         <div className="summary-expanded-cell">
-                          <span>Real. %</span>
-                          <span className={`mono ${c.hasBasis ? cls(c.realizedPct) : ''}`}>
-                            {c.hasBasis ? `${sign(c.realizedPct)}${c.realizedPct.toFixed(2)}%` : '—'}
+                          <span>Booked %</span>
+                          <span className={`mono ${c.hasBasis ? cls(c.bookedPct) : ''}`}>
+                            {c.hasBasis ? `${sign(c.bookedPct)}${c.bookedPct.toFixed(2)}%` : '—'}
                           </span>
                         </div>
                         <div className="summary-expanded-cell">
@@ -583,7 +581,6 @@ export default function Summary() {
               <td className={`text-right mono hide-sm ${cls(realizedTotal)}`}>{sign(realizedTotal)}{fmt(realizedTotal)}</td>
               <td className={`text-right mono hide-sm ${cls(dividendsTotal)}`}>{sign(dividendsTotal)}{fmt(dividendsTotal)}</td>
               <td className={`text-right mono hide-sm ${cls(unrealized + realizedTotal)}`}>{sign(unrealized + realizedTotal)}{fmt(unrealized + realizedTotal)}</td>
-              <td className={`text-right mono hide-sm ${cls(dividendsTotal)}`}>{sign(dividendsTotal)}{fmt(dividendsTotal)}</td>
               <td className={`text-right mono ${cls(isCompact ? netCumulativeAfterComm : netCumulative)}`}>
                 {sign(isCompact ? netCumulativeAfterComm : netCumulative)}{fmt(isCompact ? netCumulativeAfterComm : netCumulative)}
               </td>
