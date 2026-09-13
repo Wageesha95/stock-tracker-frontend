@@ -265,11 +265,13 @@ export default function Summary() {
   const opportunityCostTotal = Object.values(interestByCompany).reduce((s, v) => s + v, 0);
   const unrealizedPct = totalInvested > 0 ? (unrealized / totalInvested) * 100 : 0;
   const netPct = totalPurchaseCost > 0 ? (netCumulative / totalPurchaseCost) * 100 : 0;
-  const realizedReturnPct = totalPurchaseCost > 0 ? ((realizedTotal + dividendsTotal) / totalPurchaseCost) * 100 : 0;
+  // Everything already banked: booked gains plus the dividends actually received.
+  const bookedGainTotal = realizedTotal + dividendsTotal;
+  const bookedReturnPct = totalPurchaseCost > 0 ? (bookedGainTotal / totalPurchaseCost) * 100 : 0;
   const unrealizedNetTotal = unrealized - (currentValue * SELL_PCT) / 100;
   // Same total as netCumulative, with the cost of selling every open holding taken off.
   const netCumulativeAfterComm = unrealizedNetTotal + realizedTotal + dividendsTotal;
-  const unrealizedReturnPct = totalInvested > 0 ? (unrealizedNetTotal / totalInvested) * 100 : 0;
+  const unbookedReturnPct = totalInvested > 0 ? (unrealizedNetTotal / totalInvested) * 100 : 0;
 
   // Stable colour per sector (by a fixed order) so toggling Value/Invested doesn't reshuffle colours.
   const sectorColor = new Map<string, string>();
@@ -325,10 +327,15 @@ export default function Summary() {
               name there. */}
           <h3>{isMobile ? 'Final Return' : <>Unrealized &minus; Sell Comm.</>}</h3>
           <p className={`stat-value ${cls(unrealizedNetTotal)}`}>{sign(unrealizedNetTotal)}{fmt(unrealizedNetTotal)}</p>
-          <small className={cls(unrealizedNetTotal)}>{sign(unrealizedReturnPct)}{unrealizedReturnPct.toFixed(2)}%</small>
+          <small className={cls(unrealizedNetTotal)}>{sign(unbookedReturnPct)}{unbookedReturnPct.toFixed(2)}%</small>
         </div>
         <div className="stat-card" title="Booked gains/losses from sells & lapsed rights (cumulative)"><h3>Realized</h3><p className={`stat-value ${cls(realizedTotal)}`}>{sign(realizedTotal)}{fmt(realizedTotal)}</p></div>
         <div className="stat-card" title="Cumulative cash dividends received (net of tax)"><h3>Dividends</h3><p className={`stat-value ${cls(dividendsTotal)}`}>{sign(dividendsTotal)}{fmt(dividendsTotal)}</p></div>
+        <div className="stat-card" title="Everything already banked: Realized + Dividends. Excludes unrealized gains on open positions.">
+          <h3>Total Booked Gain</h3>
+          <p className={`stat-value ${cls(bookedGainTotal)}`}>{sign(bookedGainTotal)}{fmt(bookedGainTotal)}</p>
+          <small className={cls(bookedReturnPct)}>{sign(bookedReturnPct)}{bookedReturnPct.toFixed(2)}%</small>
+        </div>
         <div className="stat-card" title="Interest the money tied up in your holdings could have earned instead, at the rate set in Settings. A cost, not a gain — it is not included in Net Cumulative P/L.">
           <h3>Opportunity Cost</h3>
           <p className={`stat-value ${opportunityCostTotal > 0 ? 'gain-negative' : ''}`}>
@@ -583,8 +590,8 @@ export default function Summary() {
               <td className={`text-right mono ${cls(isCompact ? netCumulativeAfterComm : netCumulative)}`}>
                 {sign(isCompact ? netCumulativeAfterComm : netCumulative)}{fmt(isCompact ? netCumulativeAfterComm : netCumulative)}
               </td>
-              <td className={`text-right mono hide-sm ${cls(unrealizedReturnPct)}`}>{sign(unrealizedReturnPct)}{unrealizedReturnPct.toFixed(2)}%</td>
-              <td className={`text-right mono hide-sm ${cls(realizedReturnPct)}`}>{sign(realizedReturnPct)}{realizedReturnPct.toFixed(2)}%</td>
+              <td className={`text-right mono hide-sm ${cls(unbookedReturnPct)}`}>{sign(unbookedReturnPct)}{unbookedReturnPct.toFixed(2)}%</td>
+              <td className={`text-right mono hide-sm ${cls(bookedReturnPct)}`}>{sign(bookedReturnPct)}{bookedReturnPct.toFixed(2)}%</td>
               <td className={`text-right mono ${cls(netPct)}`}>{sign(netPct)}{netPct.toFixed(2)}%</td>
               <td className={`text-right mono hide-sm ${opportunityCostTotal > 0 ? 'gain-negative' : ''}`}>{opportunityCostTotal > 0 ? `-${fmt(opportunityCostTotal)}` : fmt(0)}</td>
             </tr>
