@@ -16,8 +16,8 @@ const SELL_PCT = Number(SELL_COMMISSION_PCT) || 0;
 // By Company heading. The cells carry short labels; this explains how each is derived.
 const CELL_LEGEND = [
   'Unrealized — market value − cost, before any cost of selling',
-  `Final Return — the same, after the ~${SELL_PCT}% commission to sell`,
-  'Unreal. % — Final Return ÷ open invested',
+  `Unreal. Final — the same, after the ~${SELL_PCT}% commission to sell`,
+  'Unreal. % — Unreal. Final ÷ open invested',
   'Booked % — (Realized + Dividends) ÷ total purchase cost. Non-zero even when Realized is 0, because dividends count as booked.',
   'Realized — booked gains/losses from sells & lapsed rights',
   'Dividends — cumulative cash dividends received (net)',
@@ -325,7 +325,7 @@ export default function Summary() {
           {/* "Unrealized − Sell Comm." is too wide for a phone-sized card, and on
               mobile this is the only unrealized figure shown, so it gets the shorter
               name there. */}
-          <h3>Final Return</h3>
+          <h3>Unrealized Final Return</h3>
           <p className={`stat-value ${cls(unrealizedNetTotal)}`}>{sign(unrealizedNetTotal)}{fmt(unrealizedNetTotal)}</p>
           <small className={cls(unrealizedNetTotal)}>{sign(unbookedReturnPct)}{unbookedReturnPct.toFixed(2)}%</small>
         </div>
@@ -543,7 +543,7 @@ export default function Summary() {
                           </span>
                         </div>
                         <div className="summary-expanded-cell">
-                          <span>Final Return</span>
+                          <span>Unreal. Final</span>
                           <span className={`mono ${c.invested > 0 ? cls(c.unrealizedNet) : ''}`}>
                             {c.invested > 0 ? `${sign(c.unrealizedNet)}${fmt(c.unrealizedNet)}` : '—'}
                           </span>
