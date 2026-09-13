@@ -15,10 +15,10 @@ const SELL_PCT = Number(SELL_COMMISSION_PCT) || 0;
 // Definitions for the expanded-row cells, shown behind the info icon next to the
 // By Company heading. The cells carry short labels; this explains how each is derived.
 const CELL_LEGEND = [
-  'Pure Unrealized — market value − cost, before any cost of selling',
-  `Final Return — the same, after the ~${SELL_PCT}% commission to sell`,
-  'Unrealized Return % — Final Return ÷ open invested',
-  'Realized Return % — (Realized + Dividends) ÷ total purchase cost',
+  'Unrealized — market value − cost, before any cost of selling',
+  `Net of Comm. — the same, after the ~${SELL_PCT}% commission to sell`,
+  'Unreal. % — Net of Comm. ÷ open invested',
+  'Real. % — (Realized + Dividends) ÷ total purchase cost',
   'Realized — booked gains/losses from sells & lapsed rights',
   'Dividends — cumulative cash dividends received (net)',
 ];
@@ -185,6 +185,9 @@ export default function Summary() {
   // Total purchase cost = every buy-type transaction's cost (up to the selected date). This is
   // the return-% base: (unrealized + realized + dividends) / total purchase cost × 100.
   const purchaseByCompany = new Map<string, number>();
+  // Everything that ever came in, before transfers took any of it away. Used only to
+  // judge whether what is left is a real cost base or just rounding residue.
+  const grossInflowByCompany = new Map<string, number>();
   transactions.forEach(t => {
     if (selectedDate && t.date > selectedDate) return;
     if (t.type === 'SELL') return;
@@ -196,7 +199,9 @@ export default function Summary() {
       purchaseByCompany.set(t.companyCode, (purchaseByCompany.get(t.companyCode) || 0) - t.count * t.price);
       return;
     }
-    purchaseByCompany.set(t.companyCode, (purchaseByCompany.get(t.companyCode) || 0) + (t.count * t.price + (t.commission || 0)));
+    const inflow = t.count * t.price + (t.commission || 0);
+    purchaseByCompany.set(t.companyCode, (purchaseByCompany.get(t.companyCode) || 0) + inflow);
+    grossInflowByCompany.set(t.companyCode, (grossInflowByCompany.get(t.companyCode) || 0) + inflow);
   });
   const totalPurchaseCost = [...purchaseByCompany.values()].reduce((s, v) => s + v, 0);
   // Total brokerage actually paid on all recorded transactions (buys + sells), up to the date.
@@ -205,24 +210,32 @@ export default function Summary() {
     const net = c.unrealized + c.realized + c.dividends;
     const capitalGain = c.unrealized + c.realized;
     const purchaseCost = purchaseByCompany.get(c.code) || 0;
+    // A transfer removes count × the average price, rounded to 4dp by the server, so
+    // it never cancels the original cost to the last cent. Transfer a holding out in
+    // full and what is left is residue like 0.004 — positive enough to pass a "> 0"
+    // test, small enough to turn any percentage taken against it into nonsense. Treat
+    // anything under a thousandth of what ever came in as no base at all.
+    const grossInflow = grossInflowByCompany.get(c.code) || 0;
+    const hasBasis = purchaseCost > Math.max(0.01, grossInflow * 0.001);
     // Unrealized gain minus the commission to sell the current holding at market value.
     const unrealizedNet = c.unrealized - (c.value * SELL_PCT) / 100;
     return {
       ...c,
       net,
       purchaseCost,
+      hasBasis,
       unrealizedNet,
       // That net unrealized gain as a % of what's invested in the open holding.
       unrealizedNetPct: c.invested > 0 ? (unrealizedNet / c.invested) * 100 : 0,
       // Realized return excludes unrealized (booked gains only): (realized + dividends) / cost.
-      realizedPct: purchaseCost > 0 ? ((c.realized + c.dividends) / purchaseCost) * 100 : 0,
-      netPct: purchaseCost > 0 ? (net / purchaseCost) * 100 : 0,
+      realizedPct: hasBasis ? ((c.realized + c.dividends) / purchaseCost) * 100 : 0,
+      netPct: hasBasis ? (net / purchaseCost) * 100 : 0,
       // Price-driven gain (unrealized + realized) split out from dividend income, so
       // the two sources of return can be read separately. The two percentages are
       // taken on the same base as Return %, so they add up to it.
       capitalGain,
-      capitalGainPct: purchaseCost > 0 ? (capitalGain / purchaseCost) * 100 : 0,
-      dividendPct: purchaseCost > 0 ? (c.dividends / purchaseCost) * 100 : 0,
+      capitalGainPct: hasBasis ? (capitalGain / purchaseCost) * 100 : 0,
+      dividendPct: hasBasis ? (c.dividends / purchaseCost) * 100 : 0,
     };
   });
   const compSort = useTableSort(companyRows, 'net');
@@ -325,7 +338,7 @@ export default function Summary() {
                 {pieData.map((d, i) => <Cell key={d.name} fill={sectorColor.get(d.name) || COLORS[i % COLORS.length]} />)}
               </Pie>
               <Tooltip formatter={(v: any) => {
-                const pct = pieTotal > 0 ? ((v / pieTotal) * 100).toFixed(1) : '0';
+                const pct = pieTotal > 0 ? ((v / pieTotal) * 100).toFixed(2) : '0.00';
                 return `LKR ${fmt(v)} (${pct}%)`;
               }} />
               <Legend
@@ -435,8 +448,8 @@ export default function Summary() {
                 <td className={`text-right mono ${cls(c.net)}`} style={{ fontWeight: 700 }}>{sign(c.net)}{fmt(c.net)}</td>
                 <td className={`text-right mono hide-sm ${c.invested > 0 ? cls(c.unrealizedNet) : ''}`}>{c.invested > 0 ? `${sign(c.unrealizedNet)}${fmt(c.unrealizedNet)}` : '—'}</td>
                 <td className={`text-right mono hide-sm ${c.invested > 0 ? cls(c.unrealizedNetPct) : ''}`}>{c.invested > 0 ? `${sign(c.unrealizedNetPct)}${c.unrealizedNetPct.toFixed(2)}%` : '—'}</td>
-                <td className={`text-right mono hide-sm ${c.purchaseCost > 0 ? cls(c.realizedPct) : ''}`}>{c.purchaseCost > 0 ? `${sign(c.realizedPct)}${c.realizedPct.toFixed(2)}%` : '—'}</td>
-                <td className={`text-right mono ${c.purchaseCost > 0 ? cls(c.netPct) : ''}`}>{c.purchaseCost > 0 ? `${sign(c.netPct)}${c.netPct.toFixed(2)}%` : '—'}</td>
+                <td className={`text-right mono hide-sm ${c.hasBasis ? cls(c.realizedPct) : ''}`}>{c.hasBasis ? `${sign(c.realizedPct)}${c.realizedPct.toFixed(2)}%` : '—'}</td>
+                <td className={`text-right mono ${c.hasBasis ? cls(c.netPct) : ''}`}>{c.hasBasis ? `${sign(c.netPct)}${c.netPct.toFixed(2)}%` : '—'}</td>
               </tr>
               {isCompact && expandedCode === c.code && (
                 <tr className="summary-expanded-row">
@@ -446,13 +459,13 @@ export default function Summary() {
                       {/* Shares currently held — 0 once a position is fully sold, where
                           the realized and dividend figures below still apply. */}
                       <div className="summary-expanded-shares">
-                        {c.shares > 0 ? `${c.shares.toLocaleString('en-US')} shares held` : 'No open holding'}
+                        {c.shares > 0 ? `${c.shares.toLocaleString('en-US')} shares` : 'No open holding'}
                       </div>
                       <div className="summary-expanded-line">
                         <span>Capital Gain</span>
                         <span className={`mono ${cls(c.capitalGain)}`}>{sign(c.capitalGain)}{fmt(c.capitalGain)}</span>
-                        <span className={`mono ${c.purchaseCost > 0 ? cls(c.capitalGainPct) : ''}`}>
-                          {c.purchaseCost > 0 ? `${sign(c.capitalGainPct)}${c.capitalGainPct.toFixed(2)}%` : '—'}
+                        <span className={`mono ${c.hasBasis ? cls(c.capitalGainPct) : ''}`}>
+                          {c.hasBasis ? `${sign(c.capitalGainPct)}${c.capitalGainPct.toFixed(2)}%` : '—'}
                         </span>
                       </div>
                       <div className="summary-expanded-line">
@@ -460,8 +473,8 @@ export default function Summary() {
                         <span className={`mono ${c.dividends > 0 ? 'gain-positive' : ''}`}>
                           {c.dividends > 0 ? `+${fmt(c.dividends)}` : fmt(c.dividends)}
                         </span>
-                        <span className={`mono ${c.purchaseCost > 0 && c.dividends > 0 ? 'gain-positive' : ''}`}>
-                          {c.purchaseCost > 0 ? `${sign(c.dividendPct)}${c.dividendPct.toFixed(2)}%` : '—'}
+                        <span className={`mono ${c.hasBasis && c.dividends > 0 ? 'gain-positive' : ''}`}>
+                          {c.hasBasis ? `${sign(c.dividendPct)}${c.dividendPct.toFixed(2)}%` : '—'}
                         </span>
                       </div>
                       {/* The six columns hide-sm removes on a phone. Each is labelled
@@ -469,27 +482,27 @@ export default function Summary() {
                           how they are worked out. */}
                       <div className="summary-expanded-cells">
                         <div className="summary-expanded-cell">
-                          <span>Pure Unrealized</span>
+                          <span>Unrealized</span>
                           <span className={`mono ${c.invested > 0 ? cls(c.unrealized) : ''}`}>
                             {c.invested > 0 ? `${sign(c.unrealized)}${fmt(c.unrealized)}` : '—'}
                           </span>
                         </div>
                         <div className="summary-expanded-cell">
-                          <span>Final Return</span>
+                          <span>Net of Comm.</span>
                           <span className={`mono ${c.invested > 0 ? cls(c.unrealizedNet) : ''}`}>
                             {c.invested > 0 ? `${sign(c.unrealizedNet)}${fmt(c.unrealizedNet)}` : '—'}
                           </span>
                         </div>
                         <div className="summary-expanded-cell">
-                          <span>Unrealized Return %</span>
+                          <span>Unreal. %</span>
                           <span className={`mono ${c.invested > 0 ? cls(c.unrealizedNetPct) : ''}`}>
                             {c.invested > 0 ? `${sign(c.unrealizedNetPct)}${c.unrealizedNetPct.toFixed(2)}%` : '—'}
                           </span>
                         </div>
                         <div className="summary-expanded-cell">
-                          <span>Realized Return %</span>
-                          <span className={`mono ${c.purchaseCost > 0 ? cls(c.realizedPct) : ''}`}>
-                            {c.purchaseCost > 0 ? `${sign(c.realizedPct)}${c.realizedPct.toFixed(2)}%` : '—'}
+                          <span>Real. %</span>
+                          <span className={`mono ${c.hasBasis ? cls(c.realizedPct) : ''}`}>
+                            {c.hasBasis ? `${sign(c.realizedPct)}${c.realizedPct.toFixed(2)}%` : '—'}
                           </span>
                         </div>
                         <div className="summary-expanded-cell">
