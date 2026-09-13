@@ -10,7 +10,7 @@ import NotesPanel from '../components/NotesPanel';
 import NotesView from '../components/NotesView';
 import { deleteTransaction, deleteDividend, getUserSettings, updateCompanyTtmWeeks, invalidate } from '../api';
 import { LineChart, Line, Bar, ComposedChart, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts';
-import { SELL_COMMISSION_RATE } from '../constants';
+import { SELL_COMMISSION_RATE, DEFAULT_OPPORTUNITY_COST_RATE } from '../constants';
 import { ttmWindow, resolveTtmWeeks } from '../utils/ttm';
 import { compareTxDateBuysFirst, compareEventDateBuysFirst, txDateTieBreaker } from '../utils/transactionSort';
 import { adjustedCount, adjustedPrice, adjustedHistPrice, sharesHeldAtDate } from '../utils/splits';
@@ -121,6 +121,8 @@ export default function CompanyView() {
   const chartScrollRef = useRef<HTMLDivElement>(null);
   const [ttmWeeksInput, setTtmWeeksInput] = useState<string>('');
   const [savedTtmWeeks, setSavedTtmWeeks] = useState<number | undefined>(undefined);
+  // Annual % used for this company's opportunity-cost line; set in Settings.
+  const [opportunityCostRate, setOpportunityCostRate] = useState(DEFAULT_OPPORTUNITY_COST_RATE);
   const [savingTtmWeeks, setSavingTtmWeeks] = useState(false);
   const [ttmEditorOpen, setTtmEditorOpen] = useState(false);
   const [payoutsLoaded, setPayoutsLoaded] = useState(false);
@@ -140,6 +142,7 @@ export default function CompanyView() {
       const weeks = settings.companyTtmWeeks?.[code];
       setSavedTtmWeeks(weeks);
       setTtmWeeksInput(weeks ? String(weeks) : '');
+      setOpportunityCostRate(settings.opportunityCostRate ?? DEFAULT_OPPORTUNITY_COST_RATE);
     }).catch(console.error);
     const transactionsP = getTransactionsByCompany(code).then(txns => {
       // Disabled (e.g. converted ".R") transactions are excluded from all calculations.
@@ -368,7 +371,7 @@ export default function CompanyView() {
     }
 
     // Build adjusted P&L timeline: unrealized + realized + dividends - opportunity cost
-    const annualRate = 0.065;
+    const annualRate = opportunityCostRate / 100;
     const events: { date: string; type: 'tx' | 'div' | 'realized'; data: any }[] = [];
     sortedTx.forEach(t => events.push({ date: t.date, type: 'tx', data: t }));
     dividends.filter(d => d.type === 'CASH').forEach(d => events.push({ date: d.date, type: 'div', data: d }));
@@ -515,7 +518,7 @@ export default function CompanyView() {
       }));
 
     return { valueChartData: valueData, sharesChartData: mergedTx, priceVsAvgChartData: priceVsAvgData, adjPnlChartData: mergedAdjPnl, volumeChartData: volumeData };
-  }, [transactions, marketHistory, dividends, realizedItems, shareSplits]);
+  }, [transactions, marketHistory, dividends, realizedItems, shareSplits, opportunityCostRate]);
 
   const firstBuyDate = useMemo(() => {
     // Only real acquisitions date the holding — a TRANSFER_OUT is not a buy.

@@ -168,6 +168,9 @@ export interface UserSettingsData {
   selectedDataBrokerIds?: string[];
   tableColumns: Record<string, string[]>;
   companyTtmWeeks?: Record<string, number>;
+  // Annual rate as a percentage (6.5 = 6.5%/yr) for the opportunity-cost calculation.
+  // Absent on settings saved before the rate was configurable.
+  opportunityCostRate?: number;
 }
 export const getUserSettings = () => cached('settings', () => api.get<UserSettingsData>('/settings').then(res => res.data));
 export const updateSelectedBrokers = (selectedBrokerIds: string[]) =>
@@ -176,6 +179,11 @@ export const updateSelectedDataBrokers = (selectedDataBrokerIds: string[]) =>
   api.put<UserSettingsData>('/settings/data-brokers', { selectedDataBrokerIds }).then(res => { invalidate('settings', 'dashboard-all'); return res.data; });
 export const updateTableColumns = (tableColumns: Record<string, string[]>) =>
   api.put<UserSettingsData>('/settings/table-columns', tableColumns).then(res => { invalidate('settings'); return res.data; });
+// Changing the rate changes every accrued-interest figure, so the dashboard cache
+// has to go with it.
+export const updateOpportunityCostRate = (opportunityCostRate: number) =>
+  api.put<UserSettingsData>('/settings/opportunity-cost-rate', { opportunityCostRate })
+    .then(res => { invalidate('settings', 'dashboard-all'); return res.data; });
 export const updateCompanyTtmWeeks = (companyCode: string, weeks: number | null) =>
   api.put<UserSettingsData>(`/settings/company-ttm-weeks/${companyCode}`, { weeks }).then(res => { invalidate('settings'); return res.data; });
 

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { getBrokers, getUserSettings, updateSelectedBrokers, updateSelectedDataBrokers, updateTableColumns, clearAllCache, BrokerData } from '../api';
+import { getBrokers, getUserSettings, updateSelectedBrokers, updateSelectedDataBrokers, updateTableColumns, updateOpportunityCostRate, clearAllCache, BrokerData } from '../api';
+import { DEFAULT_OPPORTUNITY_COST_RATE } from '../constants';
 import { NO_BROKER } from '../utils/brokers';
 
 interface SettingsPanelProps {
@@ -159,6 +160,9 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [dataBrokerIds, setDataBrokerIds] = useState<string[]>([]);
   const [tableColumns, setTableColumns] = useState<Record<string, string[]>>({});
+  // Held as a string so the field can be cleared mid-edit without snapping to 0.
+  const [opportunityCostRate, setOpportunityCostRate] = useState(String(DEFAULT_OPPORTUNITY_COST_RATE));
+  const [rateError, setRateError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [brokerDropdownOpen, setBrokerDropdownOpen] = useState(false);
@@ -177,6 +181,8 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         // stale NO_BROKER token from previously-saved settings.
         setDataBrokerIds((s.selectedDataBrokerIds || []).filter(id => id !== NO_BROKER));
         setTableColumns(s.tableColumns || {});
+        setOpportunityCostRate(String(s.opportunityCostRate ?? DEFAULT_OPPORTUNITY_COST_RATE));
+        setRateError(null);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -189,11 +195,18 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   };
 
   const handleSave = async () => {
+    const rate = Number(opportunityCostRate);
+    if (opportunityCostRate.trim() === '' || Number.isNaN(rate) || rate < 0 || rate > 100) {
+      setRateError('Enter an opportunity cost rate between 0 and 100.');
+      return;
+    }
+    setRateError(null);
     setSaving(true);
     try {
       await updateSelectedBrokers(selectedIds);
       await updateSelectedDataBrokers(dataBrokerIds);
       await updateTableColumns(tableColumns);
+      await updateOpportunityCostRate(rate);
       clearAllCache();
       onClose();
       window.location.reload();
@@ -312,6 +325,31 @@ export default function SettingsPanel({ open, onClose }: SettingsPanelProps) {
                     </div>
                   )}
                 </div>
+              )}
+            </div>
+
+            <div className="settings-section">
+              <h3>Opportunity Cost</h3>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '0 0 0.75rem' }}>
+                The annual return your money could have earned elsewhere. Each buy lot
+                accrues simple interest at this rate on what it cost, for exactly the
+                days it was held, and the total is deducted from your P&amp;L to give the
+                adjusted figure.
+              </p>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, display: 'block', marginBottom: '0.25rem' }}>
+                Annual Rate (%)
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                value={opportunityCostRate}
+                onChange={e => setOpportunityCostRate(e.target.value)}
+                style={{ width: '8rem' }}
+              />
+              {rateError && (
+                <div style={{ fontSize: '0.8rem', color: '#e53e3e', marginTop: '0.35rem' }}>{rateError}</div>
               )}
             </div>
 

@@ -414,13 +414,6 @@ export default function Summary() {
                           {c.purchaseCost > 0 ? `${sign(c.dividendPct)}${c.dividendPct.toFixed(2)}%` : '—'}
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        className="summary-expanded-link"
-                        onClick={e => { e.stopPropagation(); navigate(`/company/${c.code}`); }}
-                      >
-                        Open {c.code}
-                      </button>
                     </div>
                   </td>
                 </tr>

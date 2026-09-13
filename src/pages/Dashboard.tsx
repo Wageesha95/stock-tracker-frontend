@@ -5,7 +5,7 @@ import { sharesHeldAtDate } from '../utils/splits';
 import { filterTxByBroker, filterByBroker } from '../utils/brokers';
 import type { DividendPayoutData } from '../api';
 import { PortfolioItem, Dividend, RealizedGainItem, Transaction, Company } from '../types';
-import { SELL_COMMISSION_RATE } from '../constants';
+import { SELL_COMMISSION_RATE, DEFAULT_OPPORTUNITY_COST_RATE } from '../constants';
 import { DEFAULT_COLUMNS } from '../components/SettingsPanel';
 import CompanyAvatar from '../components/CompanyAvatar';
 import MarketDatePicker from '../components/MarketDatePicker';
@@ -26,6 +26,9 @@ export default function Dashboard() {
   const [origDividends, setOrigDividends] = useState<Dividend[]>([]);
   const [origRealizedItems, setOrigRealizedItems] = useState<RealizedGainItem[]>([]);
   const [opportunityCost, setOpportunityCost] = useState(0);
+  // Annual % the user reckons their money could have earned elsewhere; drives every
+  // accrued-interest figure on this page.
+  const [opportunityCostRate, setOpportunityCostRate] = useState(DEFAULT_OPPORTUNITY_COST_RATE);
   const [interestBreakdown, setInterestBreakdown] = useState<InterestBreakdownItem[]>([]);
   const sectionRef = useRef<HTMLDivElement>(null);
   const [activeSection, setActiveSection] = useState<'none' | 'holdings' | 'invested' | 'realized' | 'realizedProfit' | 'realizedLoss' | 'netRealized' | 'interest' | 'profit' | 'loss' | 'netUnrealized' | 'dayProfit' | 'dayLoss' | 'netDay' | 'cashDiv' | 'scripDiv' | 'adjustedPnl' | 'totalPnl'>('none');
@@ -58,6 +61,7 @@ export default function Dashboard() {
     // Settings first so we know the broker filter before requesting the dashboard.
     return getUserSettings().then(settings => {
       const dataBrokers = settings.selectedDataBrokerIds || [];
+      setOpportunityCostRate(settings.opportunityCostRate ?? DEFAULT_OPPORTUNITY_COST_RATE);
       return Promise.all([getDashboardAll(dataBrokers), getDividends(), getMarketData(), getTransactions(), getCompanies(), getAvailableDates(), getAllDividendPayouts().catch(() => [] as DividendPayoutData[]), getShareSplits()])
         .then(([dash, d, md, txns, comps, dates, payouts, splits]) => {
           setPortfolio(dash.portfolio);
@@ -151,7 +155,7 @@ export default function Dashboard() {
     // Per-lot FIFO opportunity cost up to the selected date — produces both
     // the total and the per-lot breakdown rendered in the Interest table, so
     // historical mode and live mode stay consistent.
-    const annualRate = 0.065;
+    const annualRate = opportunityCostRate / 100;
     const sortedAllTx = [...txUpToDate].sort(compareTxDateBuysFirst);
     type HistLot = {
       buyDate: string;
@@ -272,7 +276,7 @@ export default function Dashboard() {
     }
     histBreakdown.sort((a, b) => b.interest - a.interest);
     setInterestBreakdown(histBreakdown);
-  }, [transactions, allCompanies, origDividends, origRealizedItems]);
+  }, [transactions, allCompanies, origDividends, origRealizedItems, opportunityCostRate]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -623,7 +627,7 @@ export default function Dashboard() {
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: '#d69e2e' }} onClick={() => !loading && setActiveSection(s => s === 'interest' ? 'none' : 'interest')} title="Click to see per-transaction interest breakdown">
               <h3>{'\u231B'} Opp. Cost</h3>
               <p className="stat-value">{v(<span style={{ color: '#d69e2e' }}>LKR {fmt(opportunityCost)}</span>)}</p>
-              <small style={{ color: '#718096' }}>6.5% FD rate</small>
+              <small style={{ color: '#718096' }}>{opportunityCostRate}% FD rate</small>
             </div>
             <div className="stat-card" style={{ cursor: 'pointer', borderLeftColor: loading ? '#3182ce' : adjustedPnl >= 0 ? '#38a169' : '#e53e3e' }} onClick={() => !loading && setActiveSection(s => s === 'adjustedPnl' ? 'none' : 'adjustedPnl')} title="Click to show Adjusted P&L timeline">
               <h3>{adjustedPnl >= 0 ? '\uD83C\uDFAF' : '\u26A0\uFE0F'} Adjusted P&L</h3>
@@ -673,7 +677,7 @@ export default function Dashboard() {
         const companyLots: Record<string, { count: number; costPerShare: number }[]> = {};
         let cumRealizedGain = 0;
         let cumDividends = 0;
-        const annualRate = 0.065;
+        const annualRate = opportunityCostRate / 100;
         let cumInterest = 0;
         let lastAccrualMs: number | null = null;
 
@@ -957,7 +961,7 @@ export default function Dashboard() {
         return (
           <>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '2rem', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-              <h2 style={{ margin: 0 }}>Opportunity Cost Breakdown (6.5% Annual)</h2>
+              <h2 style={{ margin: 0 }}>Opportunity Cost Breakdown ({opportunityCostRate}% Annual)</h2>
               {tableSearchBar(Object.keys(byCode).length)}
             </div>
             {pieData.length > 0 && (
@@ -1012,7 +1016,7 @@ export default function Dashboard() {
                     <th>First Buy / Lot</th>
                     <th className="sort-header text-right" onClick={() => handleSubSort('totalAmount')}>Cost Basis{subSortIcon('totalAmount')}</th>
                     <th className="text-right">Days Held</th>
-                    <th className="sort-header text-right" onClick={() => handleSubSort('totalInterest')}>Interest @ 6.5%{subSortIcon('totalInterest')}</th>
+                    <th className="sort-header text-right" onClick={() => handleSubSort('totalInterest')}>Interest @ {opportunityCostRate}%{subSortIcon('totalInterest')}</th>
                   </tr>
                 </thead>
                 <tbody>
